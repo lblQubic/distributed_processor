@@ -6,17 +6,22 @@ module instr_ptr
       input load_enable,
       output[WIDTH-1:0] ptr_out);
     
-    reg[WIDTH-1:0] value;
+    reg[WIDTH-1:0] prev_val_inc;
+    reg[WIDTH-1:0] cur_val;
 
-    assign ptr_out = value;
+    assign ptr_out = cur_val;
+
+    //assign ptr_out = value;
 
     always @(posedge clk)
-        if(enable)
-            value <= value + 1;
+        prev_val_inc <= cur_val + 1;
 
-    always @(*)//todo: check correctness. sim appears ok.
+    always @(*)
         if(load_enable)
-            value = load_val;
+            cur_val = load_val;
+        else 
+            cur_val = prev_val_inc;
+
 
 endmodule
 
