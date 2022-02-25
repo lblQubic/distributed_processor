@@ -22,7 +22,7 @@ parameter READ_FPROC = 5'b00110;
 parameter JUMP_I_FPROC = 5'b00111;
 parameter JUMP_FPROC = 5'b00111;
 parameter INC_QCLK_I = 5'b01000;
-parameter INC_QCLK_OFFS = 5'b01001;
+parameter INC_QCLK = 5'b01001;
 parameter SYNC = 5'b01010;
 parameter REG_WRITE_I = 5'b01011;
 
