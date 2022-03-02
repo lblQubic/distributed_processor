@@ -6,11 +6,9 @@ module ctrl(
     output c_strobe_enable,
     output alu_in0_sel,
     output alu_in1_sel,
-    output alu_opcode,
     output reg_write_en,
-    output reg_write_sel,
-    output[2:0] inst_ptr_en_sel,
-    output[1:0] inst_ptr_load_en,
+    output[2:0] instr_ptr_en_sel,
+    output[1:0] instr_ptr_load_en,
     output qclk_load_en,
     output sync_out_ready,
     output fproc_out_ready);
@@ -33,7 +31,7 @@ module ctrl(
                 
             REG_WRITE_I : begin
                 reg_write_en = 1;
-                reg_write_sel = CMD_BUFFER_REGWRITE_SEL;
+                //reg_write_sel = CMD_BUFFER_REGWRITE_SEL;
                 //defaults:
                 c_strobe_enable = 0;
                 instr_ptr_load_en = 0;
@@ -47,7 +45,7 @@ module ctrl(
                 alu_in0_sel = ALU_IN0_CMD_SEL;
                 alu_in1_sel = ALU_IN1_REG_SEL;
                 reg_write_en = 1;
-                reg_write_sel = ALU_REGWRITE_SEL;
+                //reg_write_sel = ALU_REGWRITE_SEL;
                 //defaults:
                 c_strobe_enable = 0;
                 instr_ptr_load_en = 2'b0;
@@ -61,7 +59,7 @@ module ctrl(
                 alu_in0_sel = ALU_IN0_REG_SEL;
                 alu_in1_sel = ALU_IN1_REG_SEL;
                 reg_write_en = 1;
-                reg_write_sel = ALU_REGWRITE_SEL;
+                //reg_write_sel = ALU_REGWRITE_SEL;
                 //defaults:
                 c_strobe_enable = 0;
                 instr_ptr_load_en = 2'b0;

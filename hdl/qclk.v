@@ -3,7 +3,7 @@ module qclk
       input clk,
       input rst,
       input[WIDTH-1:0] in_val,
-      input load_enable
+      input load_enable,
       output out[WIDTH-1:0]);
 
     reg value[WIDTH-1:0];
