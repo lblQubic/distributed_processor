@@ -1,5 +1,5 @@
-`ifndef instr_params_vh
-`define instr_params_vh
+//`ifndef instr_params_vh
+//`define instr_params_vh
 
 //ALU parameters
 parameter ALU_ID = 3'b000;
@@ -26,4 +26,4 @@ parameter INC_QCLK = 5'b01001;
 parameter SYNC = 5'b01010;
 parameter REG_WRITE_I = 5'b01011;
 
-`endif
+//`endif

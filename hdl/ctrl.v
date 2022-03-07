@@ -1,17 +1,18 @@
-`include "instr_params.vh"
-`include "ctrl_params.vh"
 module ctrl(
     input[7:0] opcode,
-    output[2:0] alu_opcode,
-    output c_strobe_enable,
-    output alu_in0_sel,
-    output alu_in1_sel,
-    output reg_write_en,
-    output[2:0] instr_ptr_en_sel,
-    output[1:0] instr_ptr_load_en,
-    output qclk_load_en,
-    output sync_out_ready,
-    output fproc_out_ready);
+    output [2:0] alu_opcode,
+    output reg c_strobe_enable,
+    output reg alu_in0_sel,
+    output reg alu_in1_sel,
+    output reg reg_write_en,
+    output reg[1:0] instr_ptr_en_sel,
+    output reg[1:0] instr_ptr_load_en,
+    output reg qclk_load_en,
+    output reg sync_out_ready,
+    output reg fproc_out_ready);
+
+    `include "../hdl/ctrl_params.vh"
+    `include "../hdl/instr_params.vh"
 
 
     assign alu_opcode = opcode[2:0];
@@ -131,4 +132,6 @@ module ctrl(
 
         endcase
 
+    end
 
+endmodule

@@ -4,13 +4,13 @@ module qclk
       input rst,
       input[WIDTH-1:0] in_val,
       input load_enable,
-      output out[WIDTH-1:0]);
+      output[WIDTH-1:0] out);
 
-    reg value[WIDTH-1:0];
+    reg[WIDTH-1:0] value;
     assign out = value;
 
     always @(posedge clk) begin
-        if(reset)
+        if(rst)
             value <= 0;
         else if(load_enable)
             value <= in_val + 1;

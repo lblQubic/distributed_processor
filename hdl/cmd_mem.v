@@ -1,12 +1,12 @@
 module cmd_mem
-    #(parameter CMD_WIDTH,
-      parameter ADDR_WIDTH)(
+    #(parameter CMD_WIDTH=128,
+      parameter ADDR_WIDTH=8)(
       input clk,
       input write_enable,
-      input read_address[ADDR_WIDTH-1:0],
-      input write_address[ADDR_WIDTH-1:0],
-      input cmd_in[CMD_WIDTH-1:0]
-      input cmd_out[CMD_WIDTH-1:0]);
+      input[ADDR_WIDTH-1:0] read_address,
+      input[ADDR_WIDTH-1:0] write_address,
+      input[CMD_WIDTH-1:0] cmd_in,
+      output[CMD_WIDTH-1:0] cmd_out);
 
     reg[CMD_WIDTH-1:0] data[2**ADDR_WIDTH-1:0];
 
