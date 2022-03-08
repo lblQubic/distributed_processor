@@ -23,7 +23,7 @@ module ctrl(
                 c_strobe_enable = 1;
                 //defaults:
                 instr_ptr_load_en = 0;
-                instr_ptr_en_sel = INST_PTR_DEFAULT_EN;
+                instr_ptr_en_sel = INST_PTR_PULSE_EN;
                 qclk_load_en = 0;
                 sync_out_ready = 0;
                 fproc_out_ready = 0;

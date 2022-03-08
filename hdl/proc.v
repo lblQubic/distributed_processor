@@ -83,6 +83,7 @@ module proc
             INST_PTR_DEFAULT_EN : inst_ptr_enable = 1; //todo: this maybe should interact with reset logic, or separate enable input
             INST_PTR_SYNC_EN : inst_ptr_enable = sync_enable;
             INST_PTR_FPROC_EN : inst_ptr_enable = fproc_enable;
+            INST_PTR_PULSE_EN : inst_ptr_enable = cstrobe;
         endcase
     end
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;

@@ -4,6 +4,7 @@
 parameter INST_PTR_DEFAULT_EN = 2'b00;
 parameter INST_PTR_SYNC_EN = 2'b01;
 parameter INST_PTR_FPROC_EN = 2'b10;
+parameter INST_PTR_PULSE_EN = 2'b11;
 
 parameter CMD_BUFFER_REGWRITE_SEL = 0;
 parameter ALU_REGWRITE_SEL = 1;
