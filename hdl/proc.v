@@ -4,7 +4,6 @@
 //`include "../hdl/cmd_mem.v"
 //`include "../hdl/qclk.v"
 //`include "../hdl/reg_file.v"
-//`include "../hdl/ctrl.v"
 module proc
     #(parameter DATA_WIDTH=32,
       parameter CMD_WIDTH=128,
@@ -29,6 +28,7 @@ module proc
     `include "../hdl/ctrl_params.vh"
     localparam OPCODE_WIDTH = 8;
     localparam ALU_OPCODE_WIDTH = 3;
+    localparam PULSE_OUT_WIDTH = 72;
     //localparam INST_PTR_SYNC_EN = 2'b01;
     //localparam INST_PTR_FPROC_EN = 2'b10;
     //localparam INST_PTR_DEFAULT_EN = 2'b00;
@@ -68,13 +68,15 @@ module proc
     assign reg_addr_in0 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH]; //     choose between one or the other
     assign reg_addr_in1 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH]; 
     assign reg_write_addr = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-2*REG_ADDR_WIDTH]; 
+    assign cmd_out = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-PULSE_OUT_WIDTH];
+    assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH];
 
     //other datapath connections
     assign qclk_in = alu_out;
 
     //conditional assignments from control bits
-    assign alu_in0 = alu_in0_sel ? alu_cmd_data_in0 : reg_file_out0;
-    assign alu_in1 = alu_in1_sel ? qclk_out : reg_file_out1;
+    assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
+    assign alu_in1 = alu_in1_sel ? reg_file_out1 : qclk_out;
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
     always @(*) begin
         case(inst_ptr_en_sel)
@@ -102,6 +104,15 @@ module proc
               .qclk_load_en(qclk_load_en), .sync_out_ready(sync_barrier_en_out), .fproc_out_ready(fproc_en_out));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: impolement sync reset logic
+
+    `ifdef COCOTB_SIM
+    initial begin
+      $dumpfile ("proc.vcd");
+        $dumpvars (3, proc);
+      #1;
+    end
+    `endif
+
 
 
 
