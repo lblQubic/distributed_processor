@@ -109,10 +109,10 @@ async def pulse_cmd_out_test(dut):
 
 @cocotb.test()
 async def pulse_cmd_trig_test(dut):
-    n_cmd = 10
+    n_cmd = 11
     cmd_list = []
     cmd_body_list = []
-    cmd_time_list = [2, 4, 7, 8, 9, 15, 16, 18, 19, 22]
+    cmd_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
 
     for i in range(n_cmd):
         cmd_body = random.randint(0, 2**72)
@@ -140,5 +140,8 @@ async def pulse_cmd_trig_test(dut):
     dut._log.debug('command time in: {}'.format(cmd_time_list))
     dut._log.debug('command out: {}'.format(cmd_read_list))
     dut._log.debug('command time out: {}'.format(cmd_read_times))
-    assert np.all(np.asarray(cmd_body_list) == np.asarray(cmd_read_list).astype(int))
-    assert np.all(np.asarray(cmd_time_list) == np.asarray(cmd_read_times).astype(int))
+    for i in range(n_cmd):
+        assert cmd_body_list[i] == cmd_read_list[i]
+        assert cmd_time_list[i] == cmd_read_times[i]
+    #assert np.all(np.asarray(cmd_body_list) == np.asarray(cmd_read_list).astype(int))
+    #assert np.all(np.asarray(cmd_time_list) == np.asarray(cmd_read_times).astype(int))

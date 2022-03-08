@@ -8,23 +8,33 @@ module instr_ptr
       output[WIDTH-1:0] ptr_out);
     
     reg[WIDTH-1:0] prev_val_inc;
+    reg[WIDTH-1:0] prev_val;
     reg[WIDTH-1:0] cur_val;
 
     assign ptr_out = cur_val;
 
     //assign ptr_out = value;
 
-    always @(posedge clk)
-        if(reset)
+    always @(posedge clk) begin
+        if(reset) begin
             prev_val_inc <= 0;
-        else if(enable)
+            prev_val <= 0;
+        end
+
+        else begin
             prev_val_inc <= cur_val + 1;
+            prev_val <= cur_val;
+        end
+
+    end
 
     always @(*)
         if(load_enable)
             cur_val = load_val;
-        else 
+        else if(enable) 
             cur_val = prev_val_inc;
+        else
+            cur_val = prev_val;
 
 
 endmodule

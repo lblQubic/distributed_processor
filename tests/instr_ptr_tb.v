@@ -27,7 +27,7 @@ module instr_ptr_tb;
         .load_enable(load_en), .ptr_out(out));
 
     initial begin
-        $dumpfile("instr_ptr_test0.vcd");
+        $dumpfile("instr_ptr_test2.vcd");
         $dumpvars(3, instr_ptr_tb);
 
         #3
