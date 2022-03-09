@@ -145,3 +145,27 @@ async def pulse_cmd_trig_test(dut):
         assert cmd_time_list[i] == cmd_read_times[i]
     #assert np.all(np.asarray(cmd_body_list) == np.asarray(cmd_read_list).astype(int))
     #assert np.all(np.asarray(cmd_time_list) == np.asarray(cmd_read_times).astype(int))
+
+@cocotb.test()
+async def regwrite_i_test(dut):
+    reg_addr = random.randint(0,16)
+    reg_val = random.randint(0, 2**32-1)
+
+    cmd = (0b00001000 << 120) + (reg_val << 88) + (reg_addr << 80)
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, [cmd])
+
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    #await RisingEdge(dut.clk)
+
+    reg_read = dut.regs.data[reg_addr].value
+
+    assert(reg_read == reg_val)
+
+    
