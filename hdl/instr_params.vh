@@ -13,8 +13,8 @@ parameter ALU_0 = 3'b111;
 //in general: first 5 bits are opcode, followed by 3 bit ALU opcode
 parameter PULSE_I = 5'b00000;
 
-parameter REG_I_ALU = 5'b00001; //|opcode[8]|cmd_value[32]|reg_write_addr[4] 
-parameter REG_ALU = 5'b00010; //|opcode[8]|reg_addr[4]|resrv[28]|reg_addr[4]|reg_write_Addr[4]
+parameter REG_I_ALU = 5'b00001; //|opcode[8]|cmd_value[32]|reg_addr[4]|reg_write_addr[4]
+parameter REG_ALU = 5'b00010; //|opcode[8]|reg_addr[4]|resrv[28]|reg_addr[4]|reg_write_addr[4]
 parameter JUMP_I = 5'b00011; //|opcode[8]|cmd_value[32]|reg_addr[4]
 parameter JUMP_COND_I = 5'b00100; //|opcode[8]|cmd_value[32]|reg_addr[4]
 parameter JUMP_COND = 5'b00101; //jump address is always immediate

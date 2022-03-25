@@ -94,6 +94,19 @@ module ctrl(
                 reg_write_en = 0;
             end
 
+            JUMP_COND : begin //this must use a cmp opcode or bad things will happen!
+                instr_ptr_load_en = INSTR_PTR_LOAD_EN_ALU;
+                alu_in0_sel = ALU_IN0_REG_SEL;
+                alu_in1_sel = ALU_IN1_REG_SEL;
+                //defaults:
+                c_strobe_enable = 0;
+                instr_ptr_en_sel = INST_PTR_DEFAULT_EN;
+                qclk_load_en = 0;
+                sync_out_ready = 0;
+                fproc_out_ready = 0;
+                reg_write_en = 0;
+            end
+
             INC_QCLK : begin //this can use an ADD, SUB, or ID opcode
                 alu_in0_sel = ALU_IN0_REG_SEL;
                 alu_in1_sel = ALU_IN1_QCLK_SEL;
