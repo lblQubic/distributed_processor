@@ -43,6 +43,7 @@ def reg_i_alu(value, alu_op, reg_addr, reg_write_addr):
             128 bit command
     """
     opcode = (opcodes['reg_i_alu'] << 3) + alu_opcodes[alu_op]
+    print('reg_fn_opcode:', bin(opcode))
     return (opcode << 120) + (value << 88) + (reg_addr << 84) + (reg_write_addr << 80)
 
 def reg_alu(reg_addr0, alu_op, reg_addr, reg_write_addr):
