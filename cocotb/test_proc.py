@@ -5,7 +5,7 @@ from cocotb.triggers import Timer, RisingEdge
 import command_gen as cg
 
 CLK_CYCLE = 5
-N_CLKS = 150
+N_CLKS = 500
 
 async def generate_clock(dut):
     for i in range(N_CLKS):
@@ -45,7 +45,7 @@ async def cmd_mem_out_test(dut):
     await load_commands(dut, cmd_list)
     dut.reset.value = 1
     await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    #await RisingEdge(dut.clk)
     dut.reset.value = 0
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
@@ -61,10 +61,10 @@ async def cmd_mem_out_test(dut):
         await RisingEdge(dut.clk)
 
     for i in range(n_cmd):
-        #print('cmd_out {}'.format(int(cmd_list[i])))
-        #print('cmd_in {}'.format(int(cmd_read_list[i])))
-        #print(qclk_val[i])
-        #print ('..........................')
+        dut._log.debug('cmd_in {}'.format(int(cmd_list[i])))
+        dut._log.debug('cmd_out {}'.format(int(cmd_read_list[i])))
+        dut._log.debug('qclk: {}'.format(qclk_val[i]))
+        dut._log.debug ('..........................')
         assert cmd_read_list[i] == cmd_list[i]
 
     #dut._log.info("clk val {}".format(dut.clk))
@@ -173,7 +173,8 @@ async def regwrite_i_test(dut):
 async def reg_i_test(dut):
     """
     Write a value to a random register. Then, perform an operation
-    on that register and an intermediate value, and store in another register.
+    on that register and an intermediate value, and store in another register. 
+    Try this 100 times w/ random values and ops.
     """
     for i in range(100):
         cmd_list = []
@@ -225,3 +226,29 @@ async def reg_i_test(dut):
         dut._log.debug('correct val out: {}'.format(correct_val))
 
         assert reg_read_val.integer == correct_val 
+
+@cocotb.test()
+async def jump_i_test(dut):
+    cmd_list = []
+    jump_addr = random.randint(0, 2**8-1)
+    cmd_list.append(cg.jump_i(jump_addr))
+    for i in range(1, 2**8):
+        cmd_list.append(random.randint(0,2**32))
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    await RisingEdge(dut.clk)
+
+    read_command = dut.cmd_buf_out.value
+
+    dut._log.debug('jump addr: {}'.format(jump_addr))
+    dut._log.debug('cmd_in: {}'.format(cmd_list[jump_addr]))
+    dut._log.debug('cmd_read: {}'.format(read_command.integer))
+
+    assert read_command == cmd_list[jump_addr]
