@@ -175,49 +175,53 @@ async def reg_i_test(dut):
     Write a value to a random register. Then, perform an operation
     on that register and an intermediate value, and store in another register.
     """
-    cmd_list = []
-    reg_addr0 = random.randint(0,15)
-    reg_addr1 = random.randint(0,15)
-    #reg_val = random.randint(0, 2**32-1)
-    #ival = random.randint(0, 2**32-1)
-    reg_val = random.randint(-2**31, 2**31-1)
-    ival = random.randint(-2**31, 2**31-1)
-    op = random.choice(['add', 'sub', 'le', 'ge', 'eq'])
-    
-    cmd_list.append(cg.reg_i_alu(reg_val, 'id', 0, reg_addr0))
-    cmd_list.append(cg.reg_i_alu(ival, op, reg_addr0, reg_addr1))
+    for i in range(100):
+        cmd_list = []
+        reg_addr0 = random.randint(0,15)
+        reg_addr1 = random.randint(0,15)
+        #reg_val = random.randint(0, 2**32-1)
+        #ival = random.randint(0, 2**32-1)
+        reg_val = random.randint(-2**31, 2**31-1)
+        ival = random.randint(-2**31, 2**31-1)
+        op = random.choice(['add', 'sub', 'le', 'ge', 'eq'])
+        
+        cmd_list.append(cg.reg_i_alu(reg_val, 'id', 0, reg_addr0))
+        cmd_list.append(cg.reg_i_alu(ival, op, reg_addr0, reg_addr1))
 
-    dut._log.debug('cmd 0 in: {}'.format(bin(cmd_list[0])))
-    dut._log.debug('cmd 1 in: {}'.format(bin(cmd_list[1])))
+        dut._log.debug('cmd 0 in: {}'.format(bin(cmd_list[0])))
+        dut._log.debug('cmd 1 in: {}'.format(bin(cmd_list[1])))
 
-    await cocotb.start(generate_clock(dut))
-    await load_commands(dut, cmd_list)
+        await cocotb.start(generate_clock(dut))
+        await load_commands(dut, cmd_list)
 
-    dut.reset.value = 1
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-    dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+        dut.reset.value = 1
+        await RisingEdge(dut.clk)
+        await RisingEdge(dut.clk)
+        dut.reset.value = 0
+        await RisingEdge(dut.clk)
+        await RisingEdge(dut.clk)
 
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-    reg_read_val = dut.regs.data[reg_addr1].value
-    if op == 'add':
-        correct_val = reg_val + ival
-    elif op == 'sub':
-        correct_val = ival - reg_val
-    elif op == 'ge':
-        correct_val = int(ival > reg_val)
-    elif op == 'le':
-        correct_val = int(ival < reg_val)
-    elif op == 'eq':
-        correct_val = int(reg_val == ival)
+        await RisingEdge(dut.clk)
+        await RisingEdge(dut.clk)
+        reg_read_val = dut.regs.data[reg_addr1].value
+        if op == 'add':
+            correct_val = (cg.twos_complement(reg_val) + cg.twos_complement(ival)) % 2**32
+        elif op == 'sub':
+            correct_val = (cg.twos_complement(ival) + cg.twos_complement(-reg_val)) % 2**32
+        elif op == 'ge':
+            correct_val = int(ival > reg_val)
+        elif op == 'le':
+            correct_val = int(ival < reg_val)
+        elif op == 'eq':
+            correct_val = int(reg_val == ival)
 
-    dut._log.debug('reg val in: {}'.format(reg_val))
-    dut._log.debug('i val in: {}'.format(ival))
-    dut._log.debug('op: {}'.format(op))
-    dut._log.debug('val out: {}'.format(reg_read_val.signed_integer))
-    dut._log.debug('correct val out: {}'.format(correct_val))
+        #if correct_val > 0 and (correct_val >> 31) > 0:
+        #    correct_val = cg.twos_complement(correct_val, 32)
 
-    assert reg_read_val.signed_integer == correct_val
+        dut._log.debug('reg val in: {}'.format(reg_val))
+        dut._log.debug('i val in: {}'.format(ival))
+        dut._log.debug('op: {}'.format(op))
+        dut._log.debug('val out: {}'.format(reg_read_val.signed_integer))
+        dut._log.debug('correct val out: {}'.format(correct_val))
+
+        assert reg_read_val.integer == correct_val 

@@ -44,7 +44,7 @@ def reg_i_alu(value, alu_op, reg_addr, reg_write_addr):
     """
     opcode = (opcodes['reg_i_alu'] << 3) + alu_opcodes[alu_op]
     print('reg_fn_opcode:', bin(opcode))
-    return (opcode << 120) + (value << 88) + (reg_addr << 84) + (reg_write_addr << 80)
+    return (opcode << 120) + (twos_complement(value) << 88) + (reg_addr << 84) + (reg_write_addr << 80)
 
 def reg_alu(reg_addr0, alu_op, reg_addr, reg_write_addr):
     """
@@ -93,7 +93,7 @@ def jump_cond_i(value, alu_op, reg_addr, instr_ptr_addr):
     """
     assert alu_opcode == 'eq' or alu_opcode == 'le' or alu_opcode == 'ge'
     opcode = (opcodes['jump_cond_i'] << 3) + alu_opcodes[alu_op]
-    return (opcode << 120) + (value << 88) + (reg_addr << 84) + (instr_ptr_addr << 76)
+    return (opcode << 120) + (twos_complement(value) << 88) + (reg_addr << 84) + (instr_ptr_addr << 76)
 
 def jump_cond(reg_addr0, alu_op, reg_addr1, instr_ptr_addr):
     """
@@ -118,3 +118,11 @@ def jump_cond(reg_addr0, alu_op, reg_addr1, instr_ptr_addr):
     assert alu_opcode == 'eq' or alu_opcode == 'le' or alu_opcode == 'ge'
     opcode = (opcodes['jump_cond_i'] << 3) + alu_opcodes[alu_op]
     return (opcode << 120) + (reg_addr0 << 116) + (reg_addr1 << 84) + (instr_ptr_addr << 76)
+
+def twos_complement(value, nbits=32):
+    if value > (2**(nbits-1) - 1) or value < (-2**(nbits-1)):
+        raise Exception('{} out of range'.format(value))
+    elif value >= 0:
+        return value
+    else:
+        return 2**nbits + value
