@@ -252,3 +252,12 @@ async def jump_i_test(dut):
     dut._log.debug('cmd_read: {}'.format(read_command.integer))
 
     assert read_command == cmd_list[jump_addr]
+
+@cocotb.test()
+async def jump_i_cond_test(dut):
+    cmd_list = []
+
+@cocotb.test()
+async def jump_i_cond_test(dut):
+    cmd_list = []
+
