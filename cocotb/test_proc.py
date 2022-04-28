@@ -214,19 +214,8 @@ async def reg_i_test(dut):
         await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
         reg_read_val = dut.regs.data[reg_addr1].value
-        if op == 'add':
-            correct_val = (cg.twos_complement(reg_val) + cg.twos_complement(ival)) % 2**32
-        elif op == 'sub':
-            correct_val = (cg.twos_complement(ival) + cg.twos_complement(-reg_val)) % 2**32
-        elif op == 'ge':
-            correct_val = int(ival > reg_val)
-        elif op == 'le':
-            correct_val = int(ival < reg_val)
-        elif op == 'eq':
-            correct_val = int(reg_val == ival)
 
-        #if correct_val > 0 and (correct_val >> 31) > 0:
-        #    correct_val = cg.twos_complement(correct_val, 32)
+        correct_val = int(evaluate_alu_exp(ival, op, reg_val))
 
         dut._log.debug('reg val in: {}'.format(reg_val))
         dut._log.debug('i val in: {}'.format(ival))
@@ -265,8 +254,58 @@ async def jump_i_test(dut):
 @cocotb.test()
 async def jump_i_cond_test(dut):
     cmd_list = []
+    jump_addr = random.randint(0, 2**8-1)
 
-@cocotb.test()
-async def jump_i_cond_test(dut):
-    cmd_list = []
+    #register, reg_val, ival, and op used for conditional jump
+    reg_addr0 = random.randint(0,15)
+    reg_val = random.randint(-2**31, 2**31-1) 
+    ival = random.randint(-2**31, 2**31-1)
+    op = random.choice(['le', 'ge', 'eq'])
+    
+    cmd_list.append(cg.reg_i_alu(reg_val, 'id', 0, reg_addr0))
+    cmd_list.append(cg.jump_cond_i(ival, op, reg_addr0, jump_addr))
 
+    for i in range(2, 2**8):
+        cmd_list.append(random.randint(0,2**32))
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    read_command = dut.cmd_buf_out.value
+
+    if evaluate_alu_exp(ival, op, reg_val):
+        correct_cmd = cmd_list[jump_addr]
+    else:
+        correct_cmd = cmd_list[2]
+
+
+    dut._log.debug('jump addr: {}'.format(jump_addr))
+    dut._log.debug('cmd_in: {}'.format(cmd_list[jump_addr]))
+    dut._log.debug('cmd_read: {}'.format(read_command.integer))
+    dut._log.debug('jump condition: {}'.format(evaluate_alu_exp(ival, op, reg_val)))
+
+    assert read_command == correct_cmd
+
+def evaluate_alu_exp(in0, op, in1):
+    if op == 'add':
+        return (cg.twos_complement(in1) + cg.twos_complement(in0)) % 2**32
+    elif op == 'sub':
+        return (cg.twos_complement(in0) + cg.twos_complement(-in1)) % 2**32
+    elif op == 'ge':
+        return in0 > in1
+    elif op == 'le':
+        return in0 < in1
+    elif op == 'eq':
+        return in1 == in0

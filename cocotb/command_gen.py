@@ -91,7 +91,7 @@ def jump_cond_i(value, alu_op, reg_addr, instr_ptr_addr):
         cmd : int
             128 bit command
     """
-    assert alu_opcode == 'eq' or alu_opcode == 'le' or alu_opcode == 'ge'
+    assert alu_op == 'eq' or alu_op == 'le' or alu_op == 'ge'
     opcode = (opcodes['jump_cond_i'] << 3) + alu_opcodes[alu_op]
     return (opcode << 120) + (twos_complement(value) << 88) + (reg_addr << 84) + (instr_ptr_addr << 76)
 
@@ -120,6 +120,18 @@ def jump_cond(reg_addr0, alu_op, reg_addr1, instr_ptr_addr):
     return (opcode << 120) + (reg_addr0 << 116) + (reg_addr1 << 84) + (instr_ptr_addr << 76)
 
 def twos_complement(value, nbits=32):
+    """
+    Returns the nbits twos complement value of a standard signed python integer
+
+    Parameters
+    ----------
+        value : int
+        nbits : int (positive)
+
+    Returns
+    -------
+        int
+    """
     if value > (2**(nbits-1) - 1) or value < (-2**(nbits-1)):
         raise Exception('{} out of range'.format(value))
     elif value >= 0:
