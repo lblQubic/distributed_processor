@@ -53,7 +53,7 @@ module proc
     wire qclk_resetin;
     wire inst_ptr_resetin;
     wire inst_ptr_load_en;
-    reg inst_ptr_enable;
+    wire inst_ptr_enable;
 
     //cmd buffer datapath shorthands
     wire[CMD_ADDR_WIDTH-1:0] instr_ptr_load_val;
