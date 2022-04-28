@@ -1,5 +1,6 @@
 module alu
     #(parameter DATA_WIDTH=32)(
+      input clk,
       input[2:0] ctrl,
       input[DATA_WIDTH-1:0] in0,
       input[DATA_WIDTH-1:0] in1,
@@ -8,13 +9,20 @@ module alu
     wire[DATA_WIDTH-1:0] id, add, sub;
     wire eq, le, ge, sub_oflow;
 
-    assign id = in0;
-    assign add = in0 + in1;
-    assign sub = in0 - in1;
+    reg[DATA_WIDTH-1:0] in0_reg, in1_reg;
+
+    always @(posedge clk) begin
+        in0_reg <= in0;
+        in1_reg <= in1;
+    end
+
+    assign id = in0_reg;
+    assign add = in0_reg + in1_reg;
+    assign sub = in0_reg - in1_reg;
     assign eq = (sub == 0);
 
-    assign sub_oflow = (((~in0[DATA_WIDTH-1]) & in1[DATA_WIDTH-1] & sub[DATA_WIDTH-1])
-                        | (in0[DATA_WIDTH-1] & (~in1[DATA_WIDTH-1]) & (~sub[DATA_WIDTH-1])));
+    assign sub_oflow = (((~in0_reg[DATA_WIDTH-1]) & in1_reg[DATA_WIDTH-1] & sub[DATA_WIDTH-1])
+                        | (in0_reg[DATA_WIDTH-1] & (~in1_reg[DATA_WIDTH-1]) & (~sub[DATA_WIDTH-1])));
     assign le = sub[DATA_WIDTH-1] ^ sub_oflow; //this assumes twos complement!
     assign ge = ~le;
 

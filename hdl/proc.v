@@ -18,7 +18,7 @@ module proc
       input sync_enable,
       input fproc_enable,
       output[71:0] cmd_out,
-      output cstrobe,
+      output cstrobe_out,
       output[SYNC_BARRIER_WIDTH-1:0] sync_barrier,
       output sync_barrier_en_out,
       output[SYNC_BARRIER_WIDTH-1:0] fproc_id,
@@ -48,6 +48,7 @@ module proc
     wire[1:0] inst_ptr_en_sel;
     wire[1:0] inst_ptr_load_en_sel;
     wire qclk_load_en;
+    wire cstrobe;
 
     wire qclk_resetin;
     wire inst_ptr_resetin;
@@ -78,15 +79,8 @@ module proc
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
     assign alu_in1 = alu_in1_sel ? reg_file_out1 : qclk_out;
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
-    always @(*) begin
-        case(inst_ptr_en_sel)
-            INST_PTR_DEFAULT_EN : inst_ptr_enable = 1; //todo: this maybe should interact with reset logic, or separate enable input
-            INST_PTR_SYNC_EN : inst_ptr_enable = sync_enable;
-            INST_PTR_FPROC_EN : inst_ptr_enable = fproc_enable;
-            INST_PTR_PULSE_EN : inst_ptr_enable = cstrobe;
-        endcase
-    end
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
+    assign cstrobe_out = cstrobe;
 
 
     //instantiate modules
@@ -99,11 +93,12 @@ module proc
               .clk(clk), .read_addr_0(reg_addr_in0), .read_addr_1(reg_addr_in1),
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
-    ctrl ctu(.opcode(cmd_buf_out[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
-              .c_strobe_enable(c_strobe_enable), .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel),
-              .reg_write_en(reg_write_en), .instr_ptr_en_sel(inst_ptr_en_sel), .instr_ptr_load_en(inst_ptr_load_en_sel),
-              .qclk_load_en(qclk_load_en), .sync_out_ready(sync_barrier_en_out), .fproc_out_ready(fproc_en_out));
-    alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
+    ctrl ctu(.clk(clk), .reset(reset), .opcode(cmd_buf_out[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
+              .c_strobe_enable(c_strobe_enable), .fproc_enable(fproc_enable), .sync_enable(sync_enable), 
+              .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
+              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe),
+              .sync_out_ready(sync_barrier_en_out), .fproc_out_ready(fproc_en_out));
+    alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: impolement sync reset logic
 
     `ifdef COCOTB_SIM

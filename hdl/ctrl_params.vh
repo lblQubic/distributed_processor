@@ -13,6 +13,8 @@ parameter ALU_IN0_REG_SEL = 1;
 parameter ALU_IN1_QCLK_SEL = 0;
 parameter ALU_IN1_REG_SEL = 1;
 parameter INSTR_PTR_LOAD_EN_ALU = 2'b10;
+parameter INSTR_PTR_LOAD_EN_TRUE = 2'b01;
+parameter INSTR_PTR_LOAD_EN_FALSE = 2'b00;
 
 
 

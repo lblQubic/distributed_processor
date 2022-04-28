@@ -7,6 +7,11 @@ import command_gen as cg
 CLK_CYCLE = 5
 N_CLKS = 500
 
+PULSE_INSTR_TIME = 1
+ALU_INSTR_TIME = 2
+COND_JUMP_INSTR_TIME = 2
+JUMP_INSTR_TIME = 1
+
 async def generate_clock(dut):
     for i in range(N_CLKS):
         dut.clk.value = 0
@@ -58,7 +63,8 @@ async def cmd_mem_out_test(dut):
         #print('i ' + str(i))
         #print('qclk_val ' + str(dut.qclk_out))
         #print('qclk_rst ' + str(dut.myclk.rst))
-        await RisingEdge(dut.clk)
+        for j in range(ALU_INSTR_TIME):
+            await RisingEdge(dut.clk)
 
     for i in range(n_cmd):
         dut._log.debug('cmd_in {}'.format(int(cmd_list[i])))
@@ -97,7 +103,8 @@ async def pulse_cmd_out_test(dut):
     for i in range(n_cmd):
         cmd_read_list.append(dut.cmd_out.value)
         qclk_val.append(dut.qclk_out.value)
-        await RisingEdge(dut.clk)
+        for j in range(ALU_INSTR_TIME):
+            await RisingEdge(dut.clk)
 
     for i in range(n_cmd):
         cmd = cmd_list[i] >> 16
@@ -163,6 +170,7 @@ async def regwrite_i_test(dut):
     dut.reset.value = 0
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
     #await RisingEdge(dut.clk)
 
     reg_read = dut.regs.data[reg_addr].value
@@ -202,6 +210,7 @@ async def reg_i_test(dut):
         await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
 
+        await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
         reg_read_val = dut.regs.data[reg_addr1].value
