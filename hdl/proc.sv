@@ -12,9 +12,7 @@ module proc
       parameter SYNC_BARRIER_WIDTH=8)(
       input clk,
       input reset,
-      input write_prog_enable,
-      input[CMD_ADDR_WIDTH-1:0] cmd_addr,
-      input[CMD_WIDTH-1:0] cmd_data,
+      cmd_mem_iface cmd_iface,
       input sync_enable,
       input fproc_enable,
       output[71:0] cmd_out,
@@ -84,11 +82,11 @@ module proc
 
 
     //instantiate modules
-    cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
-              .clk(clk), .write_enable(write_prog_enable), .read_address(cmd_buf_read_addr),
-              .write_address(cmd_addr), .cmd_in(cmd_data), .cmd_out(cmd_buf_out));
+    //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
+    //          .clk(clk), .write_enable(write_prog_enable), .read_address(cmd_buf_read_addr),
+    //          .write_address(cmd_addr), .cmd_in(cmd_data), .cmd_out(cmd_buf_out));
     instr_ptr #(.WIDTH(CMD_ADDR_WIDTH)) instr(.clk(clk), .enable(inst_ptr_enable), .reset(reset),
-              .load_val(instr_ptr_load_val), .load_enable(inst_ptr_load_en), .ptr_out(cmd_buf_read_addr));
+              .load_val(instr_ptr_load_val), .load_enable(inst_ptr_load_en), .ptr_out(cmd_iface.instr_ptr));
     reg_file #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(REG_ADDR_WIDTH)) regs(
               .clk(clk), .read_addr_0(reg_addr_in0), .read_addr_1(reg_addr_in1),
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
