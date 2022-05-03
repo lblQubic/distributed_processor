@@ -277,10 +277,10 @@ async def jump_i_cond_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
 
-    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk) #first command
     await RisingEdge(dut.clk)
 
-    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk) #second command
     await RisingEdge(dut.clk)
 
     read_command = dut.cmd_buf_out.value
@@ -298,6 +298,9 @@ async def jump_i_cond_test(dut):
 
     assert read_command == correct_cmd
 
+async def inc_qclk_test(dut):
+    pass
+
 def evaluate_alu_exp(in0, op, in1):
     if op == 'add':
         return (cg.twos_complement(in1) + cg.twos_complement(in0)) % 2**32
@@ -309,3 +312,5 @@ def evaluate_alu_exp(in0, op, in1):
         return in0 < in1
     elif op == 'eq':
         return in1 == in0
+    elif op == 'id':
+        return in0
