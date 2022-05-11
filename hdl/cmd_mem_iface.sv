@@ -6,7 +6,7 @@ interface cmd_mem_iface#(parameter CMD_ADDR_WIDTH=8, parameter MEM_WIDTH=32, par
 
     genvar i;
     for(i = 0; i < MEM_TO_CMD; i = i + 1) begin
-        assign cmd_read[(MEM_WIDTH-1)*(i+1):MEM_WIDTH*i] = mem_bus[i];
+        assign cmd_read[MEM_WIDTH*(i+1)-1:MEM_WIDTH*i] = mem_bus[i];
     end
 
 endinterface

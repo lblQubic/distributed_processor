@@ -18,9 +18,11 @@ module toplevel_sim#(
     output[SYNC_BARRIER_WIDTH-1:0] fproc_id,
     output fproc_en_out);
 
-    //just use 128 bit buffer for now
-    cmd_mem_iface #(.CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .MEM_WIDTH(CMD_WIDTH), 
-        .MEM_TO_CMD(1)) memif();
+    localparam MEM_TO_CMD=4;
+    localparam MEM_WIDTH=32;
+
+    cmd_mem_iface #(.CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .MEM_WIDTH(MEM_WIDTH), 
+        .MEM_TO_CMD(MEM_TO_CMD)) memif();
     proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), 
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
@@ -29,8 +31,13 @@ module toplevel_sim#(
         .cstrobe_out(cstrobe_out), .sync_barrier(sync_barrier), 
         .sync_barrier_en_out(sync_barrier_en_out), .fproc_id(fproc_id),
         .fproc_en_out(fproc_en_out));
-    cmd_mem mem(.clk(clk), .write_enable(cmd_write_enable), .cmd_in(cmd_write), 
-        .write_address(cmd_write_addr), .read_address(memif.instr_ptr), 
-        .cmd_out(memif.mem_bus[0]));
+
+    genvar i;
+    generate for(i = 0; i < MEM_TO_CMD; i = i + 1) 
+        cmd_mem #(.CMD_WIDTH(MEM_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) mem(.clk(clk), 
+            .write_enable(cmd_write_enable), .cmd_in(cmd_write[MEM_WIDTH*(i+1)-1:MEM_WIDTH*i]), 
+            .write_address(cmd_write_addr), .read_address(memif.instr_ptr), 
+            .cmd_out(memif.mem_bus[i]));
+    endgenerate
 
 endmodule

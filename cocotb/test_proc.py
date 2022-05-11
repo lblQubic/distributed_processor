@@ -1,5 +1,6 @@
 import cocotb
 import random
+import ipdb
 import numpy as np
 from cocotb.triggers import Timer, RisingEdge
 import command_gen as cg
@@ -23,13 +24,13 @@ async def generate_clock(dut):
 async def load_commands(dut, cmd_list, start_addr=0):
     addr = start_addr
     for cmd in cmd_list:
-        dut.cmd_data.value = cmd
-        dut.cmd_addr.value = addr
-        dut.write_prog_enable.value = 1
+        dut.cmd_write.value = cmd
+        dut.cmd_write_addr.value = addr
+        dut.cmd_write_enable.value = 1
         await RisingEdge(dut.clk)
         addr += 1
 
-    dut.write_prog_enable.value = 0
+    dut.cmd_write_enable.value = 0
 
 @cocotb.test()
 async def cmd_mem_out_test(dut):
@@ -44,7 +45,7 @@ async def cmd_mem_out_test(dut):
 
     for i in range(n_cmd):
         cmd_list.append(random.randint(0,2**120-1) + (1<<123))
-
+    
     await cocotb.start(generate_clock(dut))
 
     await load_commands(dut, cmd_list)
@@ -58,8 +59,8 @@ async def cmd_mem_out_test(dut):
     cmd_read_list = []
     qclk_val = []
     for i in range(n_cmd):
-        cmd_read_list.append(dut.cmd_buf_out.value)
-        qclk_val.append(dut.qclk_out.value)
+        cmd_read_list.append(dut.dpr.cmd_buf_out.value)
+        qclk_val.append(dut.dpr.qclk_out.value)
         #print('i ' + str(i))
         #print('qclk_val ' + str(dut.qclk_out))
         #print('qclk_rst ' + str(dut.myclk.rst))
