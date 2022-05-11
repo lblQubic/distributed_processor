@@ -10,7 +10,7 @@ module cmd_mem
 
     reg[CMD_WIDTH-1:0] data[2**ADDR_WIDTH-1:0];
 
-    reg[2**ADDR_WIDTH-1:0] cur_read_addr;
+    reg[ADDR_WIDTH-1:0] cur_read_addr;
 
     assign cmd_out = data[cur_read_addr];
 

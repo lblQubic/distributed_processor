@@ -28,12 +28,21 @@ module alu
 
     always @(*) begin
         case(ctrl)
-            8'd0 : out = id;
-            8'd1 : out = add;
-            8'd2 : out = sub;
-            8'd3 : out = eq;
-            8'd4 : out = le;
-            8'd5 : out = ge;
+            3'd0 : out = id;
+            3'd1 : out = add;
+            3'd2 : out = sub;
+            3'd3 : begin
+                out[0] = eq;
+                out[DATA_WIDTH-1:1] = 0;
+            end
+            3'd4 : begin
+                out[0] = le;
+                out[DATA_WIDTH-1:1] = 0;
+            end
+            3'd5 : begin
+                out[0] = ge;
+                out[DATA_WIDTH-1:1] = 0;
+            end
             default : out = 0;
         endcase 
     end

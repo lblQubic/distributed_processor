@@ -1,9 +1,10 @@
 //`include "../hdl/ctrl.v"
 //`include "../hdl/alu.v"
 //`include "../hdl/instr_ptr.v"
-//`include "../hdl/cmd_mem.v"
+////`include "../hdl/cmd_mem.v"
 //`include "../hdl/qclk.v"
 //`include "../hdl/reg_file.v"
+//`include "../hdl/cmd_mem_iface.sv"
 module proc
     #(parameter DATA_WIDTH=32,
       parameter CMD_WIDTH=128,
@@ -35,6 +36,8 @@ module proc
     wire[CMD_WIDTH-1:0] cmd_buf_out;
     wire[CMD_ADDR_WIDTH-1:0] cmd_buf_read_addr;
     wire[DATA_WIDTH-1:0] alu_out, reg_file_out0, reg_file_out1, alu_in0, alu_in1, qclk_out, qclk_in;
+
+    assign cmd_buf_out = cmd_iface.cmd_read;
     
     //control wires
     wire[ALU_OPCODE_WIDTH-1:0] alu_opcode;
@@ -99,13 +102,13 @@ module proc
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: impolement sync reset logic
 
-    `ifdef COCOTB_SIM
-    initial begin
-      $dumpfile ("proc.vcd");
-        $dumpvars (3, proc);
-      #1;
-    end
-    `endif
+    //`ifdef COCOTB_SIM
+    //initial begin
+    //  $dumpfile ("proc.vcd");
+    //    $dumpvars (3, proc);
+    //  #1;
+    //end
+    //`endif
 
 
 

@@ -1,9 +1,10 @@
-SIM ?= icarus
+SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 
 VERILOG_SOURCES += $(PWD)/../hdl/*.v
-TOPLEVEL = proc
-COMPILE_ARGS += -Wall
+VERILOG_SOURCES += $(PWD)/../hdl/*.sv
+TOPLEVEL = toplevel_sim
+#COMPILE_ARGS += -Wno
 
 MODULE = test_proc
 

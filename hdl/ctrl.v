@@ -52,7 +52,7 @@ module ctrl(
             state <= next_state;
     end
 
-    always @(*) begin
+    always_latch @(*) begin
         if(state == INIT_STATE) begin
             case(opcode[7:3])
                 PULSE_I : begin
