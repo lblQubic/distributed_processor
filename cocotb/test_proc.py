@@ -103,7 +103,7 @@ async def pulse_cmd_out_test(dut):
     qclk_val = []
     for i in range(n_cmd):
         cmd_read_list.append(dut.cmd_out.value)
-        qclk_val.append(dut.qclk_out.value)
+        qclk_val.append(dut.dpr.qclk_out.value)
         for j in range(ALU_INSTR_TIME):
             await RisingEdge(dut.clk)
 
@@ -140,9 +140,9 @@ async def pulse_cmd_trig_test(dut):
     cmd_read_list = []
     cmd_read_times = []
     for i in range(25):
-        if(dut.cstrobe.value == 1):
+        if(dut.cstrobe_out.value == 1):
             cmd_read_list.append(dut.cmd_out.value)
-            cmd_read_times.append(dut.qclk_out.value)
+            cmd_read_times.append(dut.dpr.qclk_out.value)
         await RisingEdge(dut.clk)
 
     dut._log.debug('command in: {}'.format(cmd_body_list))
@@ -174,7 +174,7 @@ async def regwrite_i_test(dut):
     await RisingEdge(dut.clk)
     #await RisingEdge(dut.clk)
 
-    reg_read = dut.regs.data[reg_addr].value
+    reg_read = dut.dpr.regs.data[reg_addr].value
 
     assert(reg_read == reg_val)
 
@@ -214,7 +214,7 @@ async def reg_i_test(dut):
         await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
-        reg_read_val = dut.regs.data[reg_addr1].value
+        reg_read_val = dut.dpr.regs.data[reg_addr1].value
 
         correct_val = int(evaluate_alu_exp(ival, op, reg_val))
 
@@ -244,7 +244,7 @@ async def jump_i_test(dut):
 
     await RisingEdge(dut.clk)
 
-    read_command = dut.cmd_buf_out.value
+    read_command = dut.dpr.cmd_buf_out.value
 
     dut._log.debug('jump addr: {}'.format(jump_addr))
     dut._log.debug('cmd_in: {}'.format(cmd_list[jump_addr]))
@@ -284,7 +284,7 @@ async def jump_i_cond_test(dut):
     await RisingEdge(dut.clk) #second command
     await RisingEdge(dut.clk)
 
-    read_command = dut.cmd_buf_out.value
+    read_command = dut.dpr.cmd_buf_out.value
 
     if evaluate_alu_exp(ival, op, reg_val):
         correct_cmd = cmd_list[jump_addr]
