@@ -7,7 +7,8 @@ module toplevel_sim#(
     input clk,
     input reset,
     input sync_enable,
-    input fproc_enable,
+    input fproc_ready,
+    input[DATA_WIDTH-1:0] fproc_data,
     input[CMD_ADDR_WIDTH-1:0] cmd_write_addr,
     input[CMD_WIDTH-1:0] cmd_write,
     input cmd_write_enable,
@@ -27,10 +28,10 @@ module toplevel_sim#(
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
         .cmd_iface(memif), .sync_enable(sync_enable), 
-        .fproc_enable(fproc_enable), .cmd_out(cmd_out), 
+        .fproc_ready(fproc_ready), .cmd_out(cmd_out), 
         .cstrobe_out(cstrobe_out), .sync_barrier(sync_barrier), 
-        .sync_barrier_en_out(sync_barrier_en_out), .fproc_id(fproc_id),
-        .fproc_en_out(fproc_en_out));
+        .sync_barrier_en_out(sync_barrier_en_out), 
+        .fproc_id(fproc_id), .fproc_data(fproc_data), .fproc_en_out(fproc_en_out));
 
     genvar i;
     generate for(i = 0; i < MEM_TO_CMD; i = i + 1) 

@@ -44,7 +44,7 @@ async def cmd_mem_out_test(dut):
     cmd_list = []
 
     for i in range(n_cmd):
-        cmd_list.append(random.randint(0,2**120-1) + (1<<123))
+        cmd_list.append(random.randint(0,2**120-1) + (1<<124))
     
     await cocotb.start(generate_clock(dut))
 
@@ -87,7 +87,7 @@ async def pulse_cmd_out_test(dut):
     cmd_list = []
 
     for i in range(n_cmd):
-        cmd_list.append(random.randint(0,2**120-1) + (1<<123))
+        cmd_list.append(random.randint(0,2**120-1) + (1<<124))
 
     await cocotb.start(generate_clock(dut))
 
@@ -160,7 +160,7 @@ async def regwrite_i_test(dut):
     reg_addr = random.randint(0,15)
     reg_val = random.randint(0, 2**32-1)
 
-    cmd = (0b00001000 << 120) + (reg_val << 88) + (reg_addr << 80)
+    cmd = (0b00010000 << 120) + (reg_val << 88) + (reg_addr << 80)
 
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, [cmd])

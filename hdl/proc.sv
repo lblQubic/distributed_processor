@@ -44,7 +44,7 @@ module proc
     wire[ALU_OPCODE_WIDTH-1:0] alu_opcode;
     wire c_strobe_enable;
     wire alu_in0_sel;
-    wire alu_in1_sel;
+    wire[1:0] alu_in1_sel;
     wire reg_write_en;
     //wire reg_write_sel;
     wire[1:0] inst_ptr_en_sel;
@@ -79,14 +79,15 @@ module proc
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
-    always @(*) begin
-        if (alu_1_sel == ALU_IN1_REG_SEL)
-            alu_in1 = reg_file_out1;
-        else if(alu_1_sel == ALU_IN1_QCLK_SEL)
-            alu_in1 = qclk_out;
-        else
-            alu_in1 = fproc_data;
-    end
+    assign alu_in1 = alu_in1_sel[1] ? fproc_data : (alu_in1_sel[0] ? reg_file_out1 : qclk_out);
+    //always @(*) begin
+    //    if (alu_in1_sel == ALU_IN1_REG_SEL)
+    //        alu_in1 = reg_file_out1;
+    //    else if(alu_in1_sel == ALU_IN1_QCLK_SEL)
+    //        alu_in1 = qclk_out;
+    //    else
+    //        alu_in1 = fproc_data;
+    //end
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
     assign cstrobe_out = cstrobe;

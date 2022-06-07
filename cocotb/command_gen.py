@@ -7,18 +7,18 @@ alu_opcodes = {'id' : 0b000,
                'ge' : 0b101,
                'zero' : 0b111}
 
-opcodes = {'reg_i_alu' : 0b00001, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_write_addr[4]
-           'reg_alu' : 0b00010, #|opcode[8]|reg_addr[4]|resrv[28]|reg_addr[4]|reg_write_addr[4]
-           'jump_i' : 0b00011, #|opcode[8]|cmd_value[32]|reg_addr[4]
-           'jump_cond_i' : 0b00100, #|opcode[8]|cmd_value[32]|reg_addr[4]|instr_ptr_addr[8]
-           'jump_cond' : 0b00101, #jump address is always immediate
-           'read_fproc' : 0b00110,
-           'jump_i_fproc' : 0b00111,
-           'jump_fproc' : 0b00111,
-           'inc_qclk_i' : 0b01000,
-           'inc_qclk' : 0b01001,
-           'sync' : 0b01010,
-           'reg_write_i' : 0b01011}
+opcodes = {'reg_i_alu' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_write_addr[4]
+           'reg_alu' : 0b00011, #|opcode[8]|reg_addr[4]|resrv[28]|reg_addr[4]|reg_write_addr[4]
+           'jump_i' : 0b00100, #|opcode[8]|cmd_value[32]|reg_addr[4]
+           'jump_cond_i' : 0b00110, #|opcode[8]|cmd_value[32]|reg_addr[4]|instr_ptr_addr[8]
+           'jump_cond' : 0b00111, #jump address is always immediate
+           'alu_fproc' : 0b01001,
+           'alu_fproc_i' : 0b01000,
+           'jump_i_fproc' : 0b01010,
+           'jump_fproc' : 0b01011,
+           'inc_qclk_i' : 0b01100,
+           'inc_qclk' : 0b01101,
+           'sync' : 0b01110}
 
 
 def pulse_command():
