@@ -6,7 +6,7 @@ module alu
       input[DATA_WIDTH-1:0] in1,
       output reg[DATA_WIDTH-1:0] out);
 
-    wire[DATA_WIDTH-1:0] id, add, sub;
+    wire[DATA_WIDTH-1:0] id0, id1, add, sub;
     wire eq, le, ge, sub_oflow;
 
     reg[DATA_WIDTH-1:0] in0_reg, in1_reg;
@@ -16,7 +16,8 @@ module alu
         in1_reg <= in1;
     end
 
-    assign id = in0_reg;
+    assign id0 = in0_reg;
+    assign id1 = in0_reg;
     assign add = in0_reg + in1_reg;
     assign sub = in0_reg - in1_reg;
     assign eq = (sub == 0);
@@ -28,7 +29,7 @@ module alu
 
     always @(*) begin
         case(ctrl)
-            3'd0 : out = id;
+            3'd0 : out = id0;
             3'd1 : out = add;
             3'd2 : out = sub;
             3'd3 : begin
@@ -43,6 +44,7 @@ module alu
                 out[0] = ge;
                 out[DATA_WIDTH-1:1] = 0;
             end
+            3'd6 : out = id1;
             default : out = 0;
         endcase 
     end

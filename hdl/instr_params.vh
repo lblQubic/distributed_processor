@@ -2,7 +2,8 @@
 //`define instr_params_vh
 
 //ALU parameters
-parameter ALU_ID = 3'b000;
+parameter ALU_ID0 = 3'b000;
+parameter ALU_ID1 = 3'b110;
 parameter ALU_ADD = 3'b001;
 parameter ALU_SUB = 3'b010;
 parameter ALU_EQ = 3'b011;
@@ -18,12 +19,13 @@ parameter REG_ALU = 5'b00010; //|opcode[8]|reg_addr[4]|resrv[28]|reg_addr[4]|reg
 parameter JUMP_I = 5'b00011; //|opcode[8]|cmd_value[32]|reg_addr[4]
 parameter JUMP_COND_I = 5'b00100; //|opcode[8]|cmd_value[32]|reg_addr[4]
 parameter JUMP_COND = 5'b00101; //jump address is always immediate
-parameter READ_FPROC = 5'b00110;
+parameter ALU_FPROC = 5'b00110;
 parameter JUMP_I_FPROC = 5'b00111;
 parameter JUMP_FPROC = 5'b00111;
 parameter INC_QCLK_I = 5'b01000;
 parameter INC_QCLK = 5'b01001;
 parameter SYNC = 5'b01010;
 parameter REG_WRITE_I = 5'b01011;
+parameter ALU_FPROC_I = 5'b01100;
 
 //`endif

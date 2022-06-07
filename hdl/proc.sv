@@ -15,7 +15,8 @@ module proc
       input reset,
       cmd_mem_iface cmd_iface,
       input sync_enable,
-      input fproc_enable,
+      input fproc_ready,
+      input[DATA_WIDTH-1:0] fproc_data,
       output[71:0] cmd_out,
       output cstrobe_out,
       output[SYNC_BARRIER_WIDTH-1:0] sync_barrier,
@@ -78,7 +79,14 @@ module proc
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
-    assign alu_in1 = alu_in1_sel ? reg_file_out1 : qclk_out;
+    always @(*) begin
+        if (alu_1_sel == ALU_IN1_REG_SEL)
+            alu_in1 = reg_file_out1;
+        else if(alu_1_sel == ALU_IN1_QCLK_SEL)
+            alu_in1 = qclk_out;
+        else
+            alu_in1 = fproc_data;
+    end
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
     assign cstrobe_out = cstrobe;
@@ -95,7 +103,7 @@ module proc
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
     ctrl ctu(.clk(clk), .reset(reset), .opcode(cmd_buf_out[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
-              .c_strobe_enable(c_strobe_enable), .fproc_enable(fproc_enable), .sync_enable(sync_enable), 
+              .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc_ready), .sync_enable(sync_enable), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe),
               .sync_out_ready(sync_barrier_en_out), .fproc_out_ready(fproc_en_out));

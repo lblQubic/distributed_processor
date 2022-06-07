@@ -2,7 +2,7 @@ module ctrl(
     input clk,
     input reset,
     input[7:0] opcode,
-    input fproc_enable,
+    input fproc_ready,
     input sync_enable,
     input cstrobe_in,
     output [2:0] alu_opcode,
@@ -28,12 +28,13 @@ module ctrl(
     /*
     * states:
     *   INIT: new instruction clocked out; depending on opcode:
-    *       - halt PC and wait for cstrobe (same behavior as current); always transition to itself
-    *       - halt PC, clock in value(s) to ALU, transition to ALU_PROC_STATE state
+    *       - halt PC and wait for cstrobe (same behavior as single cycle); always transition to itself
+    *       - halt PC, read regs/set up inputs to ALU, transition to ALU_PROC_STATE 
     *       - fproc or sync; transition to fproc/sync wait states respectively
     *   ALU_PROC_STATE
-    *       - enable or load_val into PC according to opcode, clock in registers, or load qclk value
+    *       - clock in register writes and increment instr_ptr
     *   FPROC_WAIT_STATE
+    *       - check ready; if 0 stay here, if 1 regwrite or jump according to opcode
     *   SYNC_WAIT
     *   PULSE_WAIT
     *
@@ -52,7 +53,7 @@ module ctrl(
             state <= next_state;
     end
 
-    always_latch @(*) begin
+    always @(*) begin
         if(state == INIT_STATE) begin
             case(opcode[7:3])
                 PULSE_I : begin
@@ -161,6 +162,30 @@ module ctrl(
                     qclk_load_en = 0;
                 end 
 
+                ALU_FPROC, ALU_FPROC_I : begin
+                    next_state = ALU_FPROC_WAIT_STATE;
+                    fproc_out_ready = 1;
+                    //defaults:
+                    c_strobe_enable = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    instr_ptr_en = 0;
+                    sync_out_ready = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                end
+
+                JUMP_FPROC, JUMP_FPROC_I : begin
+                    next_state = JUMP_FPROC_WAIT_STATE;
+                    fproc_out_ready = 1;
+                    //defaults:
+                    c_strobe_enable = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    instr_ptr_en = 0;
+                    sync_out_ready = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                end
+
                 default : begin
                     next_state = INIT_STATE;
                 end
@@ -202,15 +227,27 @@ module ctrl(
             fproc_out_ready = 0;
         end
 
-        //else if(state == FPROC_WAIT_STATE) begin
-        //    reg_write_en = 0;
-        //    c_strobe_enable = 0;
-        //    instr_ptr_load_en = INSTR_PTR_LOAD_EN_ALU;
-        //    instr_ptr_en = 0;
-        //    qclk_load_en = 0;
-        //    sync_out_ready = 0;
-        //    fproc_out_ready = 0;
-        //end
+        else if(state == ALU_FPROC_WAIT_STATE) begin
+            if(fproc_ready)
+                next_state = ALU_PROC_STATE;
+            else
+                next_state = FPROC_WAIT_STATE;
+            
+            instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+            alu_in1_sel = ALU_IN1_FPROC_SEL;
+
+            if opcode[7:3] == ALU_FPROC
+                alu_in0_sel = ALU_IN0_REG_SEL;
+            else if opcode[7:3] == ALU_FPROC_I
+                alu_in0_sel = ALU_IN0_CMD_SEL;
+
+            reg_write_en = 0;
+            instr_ptr_en = 0;
+            c_strobe_enable = 0;
+            qclk_load_en = 0;
+            sync_out_ready = 0;
+            fproc_out_ready = 0;
+        end
         
     end
 
