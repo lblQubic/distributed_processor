@@ -66,6 +66,7 @@ module ctrl(
                     sync_out_ready = 0;
                     fproc_out_ready = 0;
                     reg_write_en = 0;
+                    qclk_load_en = 0;
                 end
 
                 REG_ALU : begin

@@ -299,8 +299,37 @@ async def jump_i_cond_test(dut):
 
     assert read_command == correct_cmd
 
-async def inc_qclk_test(dut):
-    pass
+@cocotb.test()
+async def inc_qclk_i_test(dut):
+    cmd_list = []
+    cmd_wait_range = 20
+    qclk_inc_val = random.randint(-2**31, 2**31-1)
+    qclk_wait_t = random.randint(0, cmd_wait_range)
+
+    cmd_list.append(cg.pulse_i(0, qclk_wait_t))
+    cmd_list.append(cg.inc_qclk_i(qclk_inc_val))
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    for i in range(cmd_wait_range):
+        await RisingEdge(dut.clk)
+    
+    qclk_read_val = dut.dpr.qclk_out.value
+    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range)
+
+    dut._log.debug('qclk_read_val: {}'.format(qclk_read_val))
+    dut._log.debug('qclk_inc_val: {}'.format(qclk_inc_val))
+    dut._log.debug('qclk_correct_val: {}'.format(qclk_correct_val))
+
+    assert qclk_read_val == qclk_correct_val
+
 
 def evaluate_alu_exp(in0, op, in1):
     if op == 'add':

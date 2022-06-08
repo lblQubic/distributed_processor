@@ -3,6 +3,7 @@ TOPLEVEL_LANG ?= verilog
 
 VERILOG_SOURCES += $(PWD)/../hdl/*.v
 VERILOG_SOURCES += $(PWD)/../hdl/*.sv
+EXTRA_ARGS += --trace --trace-structs
 TOPLEVEL = toplevel_sim
 #COMPILE_ARGS += -Wno
 

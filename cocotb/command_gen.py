@@ -21,8 +21,14 @@ opcodes = {'reg_i_alu' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_writ
            'sync' : 0b01110}
 
 
-def pulse_command():
-    return 0
+def pulse_i(cmd_body, cmd_time):
+    """
+    Parameters
+    ----------
+        cmd_body : 72 bit value sent to sig gen 
+            todo: figure out how to parameterize this
+    """
+    return (cmd_body << 16) + (cmd_time << 88)
 
 def reg_i_alu(value, alu_op, reg_addr, reg_write_addr):
     """
@@ -115,9 +121,17 @@ def jump_cond(reg_addr0, alu_op, reg_addr1, instr_ptr_addr):
         cmd : int
             128 bit command
     """
-    assert alu_opcode == 'eq' or alu_opcode == 'le' or alu_opcode == 'ge'
+    assert alu_op == 'eq' or alu_op == 'le' or alu_op == 'ge'
     opcode = (opcodes['jump_cond_i'] << 3) + alu_opcodes[alu_op]
     return (opcode << 120) + (reg_addr0 << 116) + (reg_addr1 << 84) + (instr_ptr_addr << 76)
+
+def inc_qclk_i(inc_val):
+    opcode = (opcodes['inc_qclk_i'] << 3) + alu_opcodes['add']
+    return (opcode << 120) + (twos_complement(inc_val) << 88)
+
+def inc_qclk(inc_reg_addr):
+    opcode = (opcodes['inc_qclk_i'] << 3) + alu_opcodes['add']
+    return (opcode << 120) + (inc_reg_addr << 116)
 
 def twos_complement(value, nbits=32):
     """
