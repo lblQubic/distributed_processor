@@ -195,7 +195,7 @@ async def reg_i_test(dut):
         ival = random.randint(-2**31, 2**31-1)
         op = random.choice(['add', 'sub', 'le', 'ge', 'eq'])
         
-        cmd_list.append(cg.reg_i_alu(reg_val, 'id', 0, reg_addr0))
+        cmd_list.append(cg.reg_i_alu(reg_val, 'id0', 0, reg_addr0))
         cmd_list.append(cg.reg_i_alu(ival, op, reg_addr0, reg_addr1))
 
         dut._log.debug('cmd 0 in: {}'.format(bin(cmd_list[0])))
@@ -263,7 +263,7 @@ async def jump_i_cond_test(dut):
     ival = random.randint(-2**31, 2**31-1)
     op = random.choice(['le', 'ge', 'eq'])
     
-    cmd_list.append(cg.reg_i_alu(reg_val, 'id', 0, reg_addr0))
+    cmd_list.append(cg.reg_i_alu(reg_val, 'id0', 0, reg_addr0))
     cmd_list.append(cg.jump_cond_i(ival, op, reg_addr0, jump_addr))
 
     for i in range(2, 2**8):
@@ -330,6 +330,41 @@ async def inc_qclk_i_test(dut):
 
     assert qclk_read_val == qclk_correct_val
 
+@cocotb.test()
+async def read_fproc_test(dut):
+    cmd_list = []
+    fproc_max_t = 20
+
+    read_reg_addr = random.randint(0, 16)
+    fproc_rval = random.randint(0, 2**32-1)
+    cmd_list.append(cg.read_fproc(0, read_reg_addr))
+
+    fproc_ready_t = random.randint(0, fproc_max_t)
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    for i in range(fproc_ready_t):
+        await RisingEdge(dut.clk)
+    
+    dut.fproc_ready.value = 1
+    dut.fproc_data.value = fproc_rval
+
+    await RisingEdge(dut.clk)
+    dut.fproc_ready.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    reg_rval_read = dut.dpr.regs.data[read_reg_addr].value
+
+    assert reg_rval_read == fproc_rval
+
+
 
 def evaluate_alu_exp(in0, op, in1):
     if op == 'add':
@@ -342,5 +377,7 @@ def evaluate_alu_exp(in0, op, in1):
         return in0 < in1
     elif op == 'eq':
         return in1 == in0
-    elif op == 'id':
+    elif op == 'id0':
         return in0
+    elif op == 'id1':
+        return in1

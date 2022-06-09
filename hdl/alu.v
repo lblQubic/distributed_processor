@@ -17,7 +17,7 @@ module alu
     end
 
     assign id0 = in0_reg;
-    assign id1 = in0_reg;
+    assign id1 = in1_reg;
     assign add = in0_reg + in1_reg;
     assign sub = in0_reg - in1_reg;
     assign eq = (sub == 0);

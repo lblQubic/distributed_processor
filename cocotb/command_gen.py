@@ -1,5 +1,6 @@
 #from instr_params.vh
-alu_opcodes = {'id' : 0b000,
+alu_opcodes = {'id0' : 0b000,
+               'id1' : 0b110,
                'add' : 0b001,
                'sub' : 0b010,
                'eq' : 0b011,
@@ -132,6 +133,16 @@ def inc_qclk_i(inc_val):
 def inc_qclk(inc_reg_addr):
     opcode = (opcodes['inc_qclk_i'] << 3) + alu_opcodes['add']
     return (opcode << 120) + (inc_reg_addr << 116)
+
+def alu_fproc(func_id, alu_reg_addr, alu_op, write_reg_addr):
+    opcode = (opcodes['alu_fproc'] << 3) + alu_opcodes[alu_op]
+    return (opcode << 120) + (alu_reg_addr << 116) + (write_reg_addr << 80) + (func_id << 68)
+
+def read_fproc(func_id, write_reg_addr):
+    """
+    This is an alias of alu_fproc
+    """
+    return alu_fproc(func_id, 0, 'id1', write_reg_addr)
 
 def twos_complement(value, nbits=32):
     """
