@@ -24,14 +24,25 @@ module toplevel_sim#(
 
     cmd_mem_iface #(.CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .MEM_WIDTH(MEM_WIDTH), 
         .MEM_TO_CMD(MEM_TO_CMD)) memif();
+    fproc_iface #(.FPROC_ID_WIDTH(SYNC_BARRIER_WIDTH), .FPROC_RESULT_WIDTH(DATA_WIDTH))
+        fproc();
+    sync_iface #(.SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH))
+        sync();
+
+    assign fproc.data = fproc_data;
+    assign fproc.ready = fproc_ready;
+    assign fproc_id = fproc.id;
+    assign fproc_en_out = fproc.enable;
+    assign sync_barrier = sync.barrier;
+    assign sync_barrier_en_out = sync.enable;
+    assign sync.ready = sync_enable;
+
+  
     proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), 
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
-        .cmd_iface(memif), .sync_enable(sync_enable), 
-        .fproc_ready(fproc_ready), .cmd_out(cmd_out), 
-        .cstrobe_out(cstrobe_out), .sync_barrier(sync_barrier), 
-        .sync_barrier_en_out(sync_barrier_en_out), 
-        .fproc_id(fproc_id), .fproc_data(fproc_data), .fproc_en_out(fproc_en_out));
+        .cmd_iface(memif), .fproc(fproc), .sync(sync), 
+        .cmd_out(cmd_out), .cstrobe_out(cstrobe_out));
 
     genvar i;
     generate for(i = 0; i < MEM_TO_CMD; i = i + 1) 

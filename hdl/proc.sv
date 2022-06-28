@@ -14,15 +14,10 @@ module proc
       input clk,
       input reset,
       cmd_mem_iface cmd_iface,
-      input sync_enable,
-      input fproc_ready,
-      input[DATA_WIDTH-1:0] fproc_data,
+      sync_iface.proc sync,
+      fproc_iface.proc fproc,
       output[71:0] cmd_out,
-      output cstrobe_out,
-      output[SYNC_BARRIER_WIDTH-1:0] sync_barrier,
-      output sync_barrier_en_out,
-      output[SYNC_BARRIER_WIDTH-1:0] fproc_id,
-      output fproc_en_out);
+      output cstrobe_out);
 
     `include "../hdl/instr_params.vh" //todo: debug includes
     `include "../hdl/ctrl_params.vh"
@@ -79,7 +74,7 @@ module proc
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
-    assign alu_in1 = alu_in1_sel[1] ? fproc_data : (alu_in1_sel[0] ? reg_file_out1 : qclk_out);
+    assign alu_in1 = alu_in1_sel[1] ? fproc.data : (alu_in1_sel[0] ? reg_file_out1 : qclk_out);
     //always @(*) begin
     //    if (alu_in1_sel == ALU_IN1_REG_SEL)
     //        alu_in1 = reg_file_out1;
@@ -104,10 +99,10 @@ module proc
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
     ctrl ctu(.clk(clk), .reset(reset), .opcode(cmd_buf_out[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
-              .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc_ready), .sync_enable(sync_enable), 
+              .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe),
-              .sync_out_ready(sync_barrier_en_out), .fproc_out_ready(fproc_en_out));
+              .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: impolement sync reset logic
 
