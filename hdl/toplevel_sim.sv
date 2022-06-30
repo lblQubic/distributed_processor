@@ -44,6 +44,7 @@ module toplevel_sim#(
         .cmd_iface(memif), .fproc(fproc), .sync(sync), 
         .cmd_out(cmd_out), .cstrobe_out(cstrobe_out));
 
+    //this just breaks the input 128-bit cmd_write into 4 separate chunks and writes simultaneously
     genvar i;
     generate for(i = 0; i < MEM_TO_CMD; i = i + 1) 
         cmd_mem #(.CMD_WIDTH(MEM_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) mem(.clk(clk), 
