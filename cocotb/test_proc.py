@@ -3,7 +3,7 @@ import random
 import ipdb
 import numpy as np
 from cocotb.triggers import Timer, RisingEdge
-import command_gen as cg
+import distproc.command_gen as cg
 
 CLK_CYCLE = 5
 N_CLKS = 500
