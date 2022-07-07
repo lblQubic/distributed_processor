@@ -41,8 +41,8 @@ module ctrl(
     *
     */
 
-    `include "../hdl/ctrl_params.vh"
-    `include "../hdl/instr_params.vh"
+    //`include "../hdl/ctrl_params.vh"
+    //`include "../hdl/instr_params.vh"
 
 
     assign alu_opcode = opcode[2:0];

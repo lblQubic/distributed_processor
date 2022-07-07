@@ -19,8 +19,8 @@ module proc
       output[71:0] cmd_out,
       output cstrobe_out);
 
-    `include "../hdl/instr_params.vh" //todo: debug includes
-    `include "../hdl/ctrl_params.vh"
+    //`include "../hdl/instr_params.vh" //todo: debug includes
+    //`include "../hdl/ctrl_params.vh"
     localparam OPCODE_WIDTH = 8;
     localparam ALU_OPCODE_WIDTH = 3;
     localparam PULSE_OUT_WIDTH = 72;
