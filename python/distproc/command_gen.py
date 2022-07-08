@@ -1,3 +1,5 @@
+import numpy as np
+import ipdb
 #from instr_params.vh
 alu_opcodes = {'id0' : 0b000,
                'id1' : 0b110,
@@ -22,14 +24,31 @@ opcodes = {'reg_i_alu' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_writ
            'sync' : 0b01110}
 
 
-def pulse_i(cmd_body, cmd_time):
+def pulse_i(freq, phase, env_start_addr, env_length, cmd_time):
     """
+    Returns 128-bit command corresponding to timed pulse output.
+    This is configured for processor in QubiC dsp_unit gateware.
+
     Parameters
     ----------
-        cmd_body : 72 bit value sent to sig gen 
-            todo: figure out how to parameterize this
+        freq : float
+            pulse carrier freq in Hz
+            range: [0, 1.e9)
+        phase : float
+            initial carrier phase in rad 
+            range: [0, 2pi)
+        env_start_addr : int
+            start address of pulse envelope
+        env_length : int
+            number of envelope samples
+        cmd_time : int
+            pulse start time, in FPGA clock units
+
     """
-    return (cmd_body << 16) + (cmd_time << 88)
+    freq_int = int((freq/1.e9) * 2**24)
+    phase_int = int((phase/(2*np.pi) * 2**14))
+    cmd_word = (env_start_addr << 50) + (env_length << 38) + (phase_int << 24) + freq_int
+    return (cmd_word << 24) + (cmd_time << 88)
 
 def reg_i_alu(value, alu_op, reg_addr, reg_write_addr):
     """
