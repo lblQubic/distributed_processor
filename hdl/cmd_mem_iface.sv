@@ -1,3 +1,14 @@
+/**
+* SystemVerilog interface for concatenating data from smaller memory banks 
+* into the full command used by the processor. Typically 4x32 bit words are
+* used to form a 128 bit command. 
+* 
+* 4x32 use case:
+* | 32b mem_bus[3] | 32b mem_bus[2] | 32b mem_bus[1] | 32b mem_bus[0] | <---instr_ptr (indexes 128b commands)
+* \-------------------------------------------------------------------/
+*                                   |
+*                              cmd_read
+*/
 interface cmd_mem_iface#(parameter CMD_ADDR_WIDTH=8, parameter MEM_WIDTH=32, parameter MEM_TO_CMD=4)();
     localparam CMD_WIDTH = MEM_WIDTH*MEM_TO_CMD;
     wire[CMD_ADDR_WIDTH-1:0] instr_ptr;
