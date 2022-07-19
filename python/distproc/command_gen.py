@@ -165,20 +165,34 @@ def read_fproc(func_id, write_reg_addr):
 
 def twos_complement(value, nbits=32):
     """
-    Returns the nbits twos complement value of a standard signed python integer
+    Returns the nbits twos complement value of a standard signed python 
+    integer or list of ints
 
     Parameters
     ----------
-        value : int
+        value : int or list of ints
         nbits : int (positive)
 
     Returns
     -------
-        int
+        int or list of ints
     """
-    if value > (2**(nbits-1) - 1) or value < (-2**(nbits-1)):
-        raise Exception('{} out of range'.format(value))
-    elif value >= 0:
-        return value
+    if isinstance(value, int):
+        value_array = np.array([value])
     else:
-        return 2**nbits + value
+        value_array = np.array(value)
+
+    if np.any((value_array > (2**(nbits-1) - 1)) | (value_array < (-2**(nbits-1)))):
+        raise Exception('{} out of range'.format(value))
+
+    posmask = value_array >= 0
+    negmask = value_array < 0
+
+    value_array[negmask] = 2**nbits + value_array[negmask]
+
+    if isinstance(value, int):
+        return value_array[0]
+    else:
+        return value_array
+
+
