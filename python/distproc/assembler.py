@@ -34,7 +34,6 @@ class SingleUnitScheduler:
             if length > len(self._env_dict[envkey]):
                 raise Exception('provided pulse length exceeds length of envelope')
         else:
-            ipdb.set_trace()
             length = len(self._env_dict[envkey])
         self._program.append({'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey})
 
@@ -53,8 +52,10 @@ class SingleUnitScheduler:
         """
         pulse_list = []
         for pulse in self._program:
+            ipdb.set_trace()
             pulse = copy.deepcopy(pulse)
-            pulse_list.append(pulse.update({'env':self._env_dict[pulse['envkey']]}))
+            pulse.update({'env':self._env_dict[pulse['env']]})
+            pulse_list.append(pulse)
 
         return pulse_list
 
