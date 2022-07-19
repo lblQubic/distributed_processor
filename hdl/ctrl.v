@@ -60,7 +60,7 @@ module ctrl(
             case(opcode[7:4])
                 PULSE_I : begin
                     next_state = INIT_STATE;
-                    c_strobe_enable = 1;
+                    c_strobe_enable = ~reset;
                     instr_ptr_load_en = 0;
                     instr_ptr_en = cstrobe_in;
                     sync_out_ready = 0;
