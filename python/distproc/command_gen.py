@@ -47,7 +47,10 @@ def pulse_i(freq, phase, env_start_addr, env_length, cmd_time):
     """
     freq_int = int((freq/1.e9) * 2**24)
     phase_int = int((phase/(2*np.pi) * 2**14))
-    cmd_word = (env_start_addr << 50) + (env_length << 38) + (phase_int << 24) + freq_int
+    #cmd_word = (env_start_addr << 50) + (env_length << 38) + (phase_int << 24) + freq_int
+    if env_length % 4 != 0:
+        raise Exception('length of envelope must be a multiple of 4!')
+    cmd_word = (env_start_addr << 50) + ((env_length//4) << 38) + (phase_int << 24) + freq_int
     return (cmd_word << 24) + (cmd_time << 88)
 
 def reg_i_alu(value, alu_op, reg_addr, reg_write_addr):

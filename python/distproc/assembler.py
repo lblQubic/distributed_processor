@@ -5,7 +5,7 @@ import ipdb
 
 ENV_BITS = 16
 
-class SingleUnitScheduler:
+class SingleUnitAssembler:
 
     def __init__(self):
         self._env_dict = {}
@@ -33,6 +33,8 @@ class SingleUnitScheduler:
         if length is not None:
             if length > len(self._env_dict[envkey]):
                 raise Exception('provided pulse length exceeds length of envelope')
+            elif length < len(self._env_dict[envkey]) and length % 4 != 0:
+                raise Exception('env length must match pulse length if end of pulse is not aligned with clock boundary') 
         else:
             length = len(self._env_dict[envkey])
         self._program.append({'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey})
@@ -41,7 +43,8 @@ class SingleUnitScheduler:
         cmd_list = []
         env_raw, env_addr_map = self._get_env_buffer()
         for pulse in self._program:
-            cmd_list.append(cg.pulse_i(pulse['freq'], pulse['phase'], env_addr_map[pulse['env']], pulse['length'], pulse['start_time']))
+            length = int(4*np.ceil(pulse['length']/4)) #quantize pulse length to multiple of 4
+            cmd_list.append(cg.pulse_i(pulse['freq'], pulse['phase'], env_addr_map[pulse['env']], length, pulse['start_time']))
 
         return cmd_list, env_raw
     
@@ -52,7 +55,6 @@ class SingleUnitScheduler:
         """
         pulse_list = []
         for pulse in self._program:
-            ipdb.set_trace()
             pulse = copy.deepcopy(pulse)
             pulse.update({'env':self._env_dict[pulse['env']]})
             pulse_list.append(pulse)
@@ -60,14 +62,34 @@ class SingleUnitScheduler:
         return pulse_list
 
     def _get_env_buffer(self):
+        """
+        Computes the raw envelope buffer along with a dictionary of addresses
+
+        Returns
+        -------
+            env_raw : np.ndarray
+                numpy array of the raw envelope buffer. Each element is a 
+                32-bit word, with a signed 16-bit I value LSB followed by
+                a signed 16-bit Q value MSB
+            env_addr_map : dict
+                dictionary of envelope addresses, to be used by pulse commands.
+                Keys are the same as used by self._env_dict.
+                The process element hardware module (element.v) has four separate
+                memory banks for the envelope, with one output value per-clock 
+                (so 4x250 MHz = 1 GHz). Addresses index these buffers, so 
+                the address here is the envelope start index in env_raw divided
+                by four.
+        """
         cur_addr = 0
         env_addr_map = {}
 
         env_raw = np.empty(0).astype(int)
 
         for envkey, env in self._env_dict.items():
+            #ipdb.set_trace()
             env_addr_map[envkey] = cur_addr
-            cur_addr += len(env)
+            env = np.pad(env, (0, (4 - len(env) % 4) % 4))
+            cur_addr += len(env)//4
 
             env_val = cg.twos_complement(np.real(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) \
                         + (cg.twos_complement(np.imag(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) << ENV_BITS)
@@ -75,9 +97,6 @@ class SingleUnitScheduler:
 
         return env_raw, env_addr_map
             
-
-
-
     def _hash_env(self, env):
         return str(hash(env.data.tobytes()))
 
