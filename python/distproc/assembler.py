@@ -12,8 +12,8 @@ class SingleUnitAssembler:
         self._program = []
 
     def add_env(self, name, env):
-        if np.any(np.real(env) > 1 or np.imag(env) > 1):
-            raise Exception('env must be < 1')
+        if np.any(np.abs(env) > 1):
+            raise Exception('env mag must be < 1')
         self._env_dict[name] = env
 
     def add_pulse(self, freq, phase, start_time, env, length=None):
