@@ -5,6 +5,37 @@ import ipdb
 
 ENV_BITS = 16
 
+class MultiUnitAssembler:
+
+    def __init__(self, n_units):
+        self.n_units = n_units
+        self.assemblers = []
+        for i in range(self.n_units):
+            self.assemblers.append(SingleUnitAssembler())
+
+    def add_env(self, unitind, name, env):
+        self.assemblers[unitind].add_env(name, env)
+
+    def add_pulse(self, unitind, freq, phase, start_time, env, length=None):
+        self.assemblers[unitind].add_pulse(freq, phase, start_time, env, length)
+
+    def get_compiled_program(self):
+        cmd_lists = []
+        env_buffers = []
+        for assembler in self.assemblers:
+            cmd_list, env_raw = assembler.get_compiled_program()
+            cmd_lists.append(cmd_list)
+            env_buffers.append(env_raw)
+
+        return cmd_lists, env_buffers
+
+    def get_sim_program(self):
+        prog = []
+        for assembler in self.assemblers:
+            prog.append(assembler.get_sim_program())
+
+        return prog
+
 class SingleUnitAssembler:
 
     def __init__(self):
