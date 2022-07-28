@@ -195,8 +195,12 @@ async def reg_i_test(dut):
         ival = random.randint(-2**31, 2**31-1)
         op = random.choice(['add', 'sub', 'le', 'ge', 'eq'])
         
+        #ipdb.set_trace()
         cmd_list.append(cg.reg_alu_i(reg_val, 'id0', 0, reg_addr0))
         cmd_list.append(cg.reg_alu_i(ival, op, reg_addr0, reg_addr1))
+        #cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_val, 'id0', 0, reg_addr0))
+        #cmd_list.append(cg.alu_cmd('reg_alu', 'i', ival, op, reg_addr0, reg_addr1))
+        cg.reg_alu_i(ival, 'id0', reg_addr0, reg_addr1)
 
         dut._log.debug('cmd 0 in: {}'.format(bin(cmd_list[0])))
         dut._log.debug('cmd 1 in: {}'.format(bin(cmd_list[1])))
@@ -306,7 +310,7 @@ async def inc_qclk_i_test(dut):
     qclk_inc_val = random.randint(-2**31, 2**31-1)
     qclk_wait_t = random.randint(0, cmd_wait_range)
 
-    cmd_list.append(cg.pulse_i(0, qclk_wait_t))
+    cmd_list.append(cg.pulse_i(10, 0, 0, 4, qclk_wait_t))
     cmd_list.append(cg.inc_qclk_i(qclk_inc_val))
 
     await cocotb.start(generate_clock(dut))
@@ -335,7 +339,7 @@ async def read_fproc_test(dut):
     cmd_list = []
     fproc_max_t = 20
 
-    read_reg_addr = random.randint(0, 16)
+    read_reg_addr = random.randint(0, 15)
     fproc_rval = random.randint(0, 2**32-1)
     cmd_list.append(cg.read_fproc(0, read_reg_addr))
 

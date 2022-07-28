@@ -176,7 +176,7 @@ def jump_fproc_i(func_id, value, alu_op, instr_ptr_addr):
     opcode = (opcodes['jump_fproc_i'] << 3) + alu_opcodes[alu_op]
     return (opcode << 120) + (value << 88) + (instr_ptr_addr << 76) + (func_id << 68)
 
-def alu_cmd(optype, im_or_reg, alu_in0, alu_op, alu_in1=None, jump_cmd_ptr=None, func_id=None):
+def alu_cmd(optype, im_or_reg, alu_in0, alu_op, alu_in1=None, write_reg_addr=None, jump_cmd_ptr=None, func_id=None):
     """
     This is a general function for generating the following types of instructions:
         reg_(i)alu, jump_cond(i), alu_fproc(i), jump_fproc(i)
@@ -199,23 +199,24 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op, alu_in1=None, jump_cmd_ptr=None,
     cmd = 0
     if optype in ['reg_alu', 'jump_cond']: #these have alu_in1 from reg
         cmd += alu_in1 << 84
-    elif optype in ['alu_fproc', 'jump_fproc']:
+    if optype in ['alu_fproc', 'jump_fproc']:
         if func_id is not None:
             cmd += func_id << 68
-    else:
-        raise Exception('invalid op type: {}'.format(optype))
-
-    if optype == 'jump_cond':
+    if optype in ['jump_cond', 'jump_fproc']:
         cmd += jump_cmd_ptr << 76
+    if optype in ['reg_alu', 'alu_fproc']:
+        cmd += write_reg_addr << 80
 
     if im_or_reg == 'i':
         opkey = optype + '_i'
-        cmd += alu_in0 << 88
+        cmd += twos_complement(alu_in0) << 88
     else:
         cmd += alu_in0 << 116
 
     opcode = (opcodes[opkey] << 3) + alu_opcodes[alu_op]
     cmd += opcode << 120
+
+    return cmd
 
 
 def twos_complement(value, nbits=32):
@@ -246,7 +247,7 @@ def twos_complement(value, nbits=32):
     value_array[negmask] = 2**nbits + value_array[negmask]
 
     if isinstance(value, int):
-        return value_array[0]
+        return int(value_array[0])
     else:
         return value_array
 
