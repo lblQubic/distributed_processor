@@ -4,6 +4,7 @@ import numpy as np
 import ipdb
 
 ENV_BITS = 16
+N_MAX_REGS = 16
 
 class MultiUnitAssembler:
 
@@ -37,17 +38,81 @@ class MultiUnitAssembler:
         return prog
 
 class SingleUnitAssembler:
-
+    """
+    Class for constructing an assembly-language level program and 
+    converting to machine code + env buffers
+    Attributes
+    ----------
+        _regs : dict
+            key: user-declared register name
+            value: register address in proc core
+    """
     def __init__(self):
         self._env_dict = {}
         self._program = []
+        self._regs = {}
 
     def add_env(self, name, env):
         if np.any(np.abs(env) > 1):
             raise Exception('env mag must be < 1')
         self._env_dict[name] = env
 
-    def add_pulse(self, freq, phase, start_time, env, length=None):
+    def declare_reg(self, name):
+        if not self._regs:
+            self._regs[name] = 0
+        else:
+            max_regind = max(self._regs.values())
+            if max_regind >= N_MAX_REGS - 1:
+                raise Exception('cannot add any more regs, limit of {} reached'.format(N_MAX_REGS))
+            self._regs[name] = max_regind + 1
+
+    def add_reg_alu(self, in0, alu_op, in1_reg, out_reg, label=None):
+        """
+        Add a command for an ALU operation on registers.
+
+        Parameters
+        ----------
+            in0 : int or str
+                First input to ALU. If int, assumed to be intermediate value. If string,
+                assumed to be named register
+            alu_op : str
+                'add', 'sub', 'id0', 'id1', 'eq', 'le', 'ge', 'zero'
+            in1_reg : str
+                Second input to ALU. Named register
+            out_reg : str
+                Reg that gets written w/ ALU output. CAN be declared implicitly.
+        """
+        assert in1_reg in self._regs.keys()
+        if isinstance(in0, str):
+            assert in0 in self._regs.keys()
+
+        if out_reg not in self._regs.keys():
+            self.declare_reg(out_reg)
+
+        cmd = {'cmdtype': 'reg_alu', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'out_reg': out_reg}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
+    def add_jump_cond(self, in0, alu_op, in1_reg, jump_label, label=None):
+        assert in1_reg in self._regs.keys()
+        if isinstance(in0, str):
+            assert in0 in self._regs.keys()
+
+        cmd = {'cmdtype': 'jump_cond', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'jump_label': jump_label}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
+    def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
+        if isinstance(in0, str):
+            assert in0 in self._regs.keys()
+        cmd = {'cmdtype': 'jump_fproc', 'in0': in0, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
+    def add_pulse(self, freq, phase, start_time, env, label=None, length=None):
         #hash the envelope to see if it's already been added
         # note: doesn't work with user added named envelopes
         if isinstance(env, np.ndarray): 
@@ -68,14 +133,27 @@ class SingleUnitAssembler:
                 raise Exception('env length must match pulse length if end of pulse is not aligned with clock boundary') 
         else:
             length = len(self._env_dict[envkey])
-        self._program.append({'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey})
+
+        cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
 
     def get_compiled_program(self):
         cmd_list = []
         env_raw, env_addr_map = self._get_env_buffer()
-        for pulse in self._program:
-            length = int(4*np.ceil(pulse['length']/4)) #quantize pulse length to multiple of 4
-            cmd_list.append(cg.pulse_i(pulse['freq'], pulse['phase'], env_addr_map[pulse['env']], length, pulse['start_time']))
+        for cmd in self._program:
+            if cmd['cmdtype'] == 'pulse':
+                length = int(4*np.ceil(pulse['length']/4)) #quantize pulse length to multiple of 4
+                cmd_list.append(cg.pulse_i(pulse['freq'], pulse['phase'], \
+                        env_addr_map[pulse['env']], length, pulse['start_time']))
+            elif cmd['cmdtype'] == 'reg_alu':
+                if isinstance(cmd['in0'], str):
+                    cmd_list.append(cg.reg_alu(self._regs[cmd['in0']], cmd['alu_op'], \
+                            self._regs[cmd['in1_reg']], self._regs[cmd['out_reg']])
+                else:
+                    cmd_list.append(cg.reg_i_alu(self._regs[cmd['in0']], cmd['alu_op'], \
+                            cmd['in1_reg'], self._regs[cmd['out_reg']])
 
         return cmd_list, env_raw
     
