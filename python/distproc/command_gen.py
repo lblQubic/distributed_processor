@@ -193,6 +193,8 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op, alu_in1=None, write_reg_addr=Non
             alu opcode
         alu_in1 : int
             alu reg addr
+        write_reg_addr : int
+            reg address to write alu output
         jump_cmd_ptr : int
         func_id : int
     """

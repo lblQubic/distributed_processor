@@ -195,11 +195,8 @@ async def reg_i_test(dut):
         ival = random.randint(-2**31, 2**31-1)
         op = random.choice(['add', 'sub', 'le', 'ge', 'eq'])
         
-        #ipdb.set_trace()
-        cmd_list.append(cg.reg_alu_i(reg_val, 'id0', 0, reg_addr0))
-        cmd_list.append(cg.reg_alu_i(ival, op, reg_addr0, reg_addr1))
-        #cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_val, 'id0', 0, reg_addr0))
-        #cmd_list.append(cg.alu_cmd('reg_alu', 'i', ival, op, reg_addr0, reg_addr1))
+        cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_val, 'id0', 0, reg_addr0))
+        cmd_list.append(cg.alu_cmd('reg_alu', 'i', ival, op, reg_addr0, reg_addr1))
         cg.reg_alu_i(ival, 'id0', reg_addr0, reg_addr1)
 
         dut._log.debug('cmd 0 in: {}'.format(bin(cmd_list[0])))
@@ -267,8 +264,8 @@ async def jump_i_cond_test(dut):
     ival = random.randint(-2**31, 2**31-1)
     op = random.choice(['le', 'ge', 'eq'])
     
-    cmd_list.append(cg.reg_alu_i(reg_val, 'id0', 0, reg_addr0))
-    cmd_list.append(cg.jump_cond_i(ival, op, reg_addr0, jump_addr))
+    cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_val, 'id0', 0, reg_addr0))
+    cmd_list.append(cg.alu_cmd('jump_cond', 'i', ival, op, reg_addr0, jump_cmd_ptr=jump_addr))
 
     for i in range(2, 2**8):
         cmd_list.append(random.randint(0,2**32))
