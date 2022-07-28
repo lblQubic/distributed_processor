@@ -144,16 +144,17 @@ class SingleUnitAssembler:
         env_raw, env_addr_map = self._get_env_buffer()
         for cmd in self._program:
             if cmd['cmdtype'] == 'pulse':
-                length = int(4*np.ceil(pulse['length']/4)) #quantize pulse length to multiple of 4
-                cmd_list.append(cg.pulse_i(pulse['freq'], pulse['phase'], \
-                        env_addr_map[pulse['env']], length, pulse['start_time']))
-            elif cmd['cmdtype'] == 'reg_alu':
+                length = int(4*np.ceil(cmd['length']/4)) #quantize pulse length to multiple of 4
+                cmd_list.append(cg.pulse_i(cmd['freq'], cmd['phase'], \
+                        env_addr_map[cmd['env']], length, cmd['start_time']))
+            elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc']:
                 if isinstance(cmd['in0'], str):
-                    cmd_list.append(cg.reg_alu(self._regs[cmd['in0']], cmd['alu_op'], \
-                            self._regs[cmd['in1_reg']], self._regs[cmd['out_reg']])
+                    in0 = self._regs[cmd['in0']]
+                    im_or_reg = 'r'
                 else:
-                    cmd_list.append(cg.reg_i_alu(self._regs[cmd['in0']], cmd['alu_op'], \
-                            cmd['in1_reg'], self._regs[cmd['out_reg']])
+                    in0 = cmd['in0']
+                    im_or_reg = 'i'
+                cmd = cg.alu_cmd(cmd['cmd_type'], im_or_reg, in0, cmd['alu_op'], )
 
         return cmd_list, env_raw
     
