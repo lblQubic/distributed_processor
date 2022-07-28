@@ -3,6 +3,7 @@ import ipdb
 #from instr_params.vh
 #TODO: consider refactoring this into fewer functions,
 #      since many ALU instructions have the same structure
+#      UPDATE: consider depracating more specific cg functions
 alu_opcodes = {'id0' : 0b000,
                'id1' : 0b110,
                'add' : 0b001,

@@ -305,7 +305,7 @@ async def inc_qclk_i_test(dut):
     cmd_list = []
     cmd_wait_range = 20
     qclk_inc_val = random.randint(-2**31, 2**31-1)
-    qclk_wait_t = random.randint(0, cmd_wait_range)
+    qclk_wait_t = random.randint(0, cmd_wait_range-1)
 
     cmd_list.append(cg.pulse_i(10, 0, 0, 4, qclk_wait_t))
     cmd_list.append(cg.inc_qclk_i(qclk_inc_val))
@@ -359,11 +359,63 @@ async def read_fproc_test(dut):
 
     await RisingEdge(dut.clk)
     dut.fproc_ready.value = 0
+    dut.fproc_data.value = 0
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     reg_rval_read = dut.dpr.regs.data[read_reg_addr].value
 
     assert reg_rval_read == fproc_rval
+
+@cocotb.test()
+async def jump_fproc_i_test(dut):
+    cmd_list = []
+    fproc_max_t = 20
+    jump_addr = random.randint(0, 2**8-1)
+
+    fproc_rval = random.randint(-2**31, 2**31-1)
+    cmp_ival = random.randint(-2**31, 2**31-1)
+    #regwrite_addr = 3
+    #cmd_list.append(cg.alu_cmd('reg_alu', 'i', cmp_ival, 'id0', 0, regwrite_addr))
+    op = random.choice(['le', 'ge', 'eq'])
+    cmd_list.append(cg.alu_cmd('jump_fproc', 'i', cmp_ival, op, jump_cmd_ptr=jump_addr))
+
+    fproc_ready_t = random.randint(0, fproc_max_t)
+
+    for i in range(1, 2**8):
+        cmd_list.append(random.randint(0,2**32))
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    for i in range(fproc_ready_t):
+        await RisingEdge(dut.clk)
+    
+    dut.fproc_ready.value = 1
+    dut.fproc_data.value = fproc_rval
+
+    await RisingEdge(dut.clk)
+    dut.fproc_ready.value = 0
+    dut.fproc_data.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    read_command = dut.dpr.cmd_buf_out.value
+
+    if evaluate_alu_exp(cmp_ival, op, fproc_rval):
+        correct_cmd = cmd_list[jump_addr]
+    else:
+        correct_cmd = cmd_list[1]
+
+    dut._log.debug('jump addr: {}'.format(jump_addr))
+    dut._log.debug('cmd_in: {}'.format(cmd_list[jump_addr]))
+    dut._log.debug('cmd_read: {}'.format(read_command.integer))
+    dut._log.debug('jump condition: {}'.format(evaluate_alu_exp(cmp_ival, op, fproc_rval)))
 
 
 
