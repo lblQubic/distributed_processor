@@ -177,10 +177,10 @@ def jump_fproc_i(func_id, value, alu_op, instr_ptr_addr):
     opcode = (opcodes['jump_fproc_i'] << 3) + alu_opcodes[alu_op]
     return (opcode << 120) + (value << 88) + (instr_ptr_addr << 76) + (func_id << 68)
 
-def alu_cmd(optype, im_or_reg, alu_in0, alu_op, alu_in1=None, write_reg_addr=None, jump_cmd_ptr=None, func_id=None):
+def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=None, write_reg_addr=None, jump_cmd_ptr=None, func_id=None):
     """
     This is a general function for generating the following types of instructions:
-        reg_(i)alu, jump_cond(i), alu_fproc(i), jump_fproc(i)
+        reg_(i)alu, jump_cond(i), alu_fproc(i), jump_fproc(i), inc_qclk(i)
 
     Parameters
     ----------
@@ -209,6 +209,9 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op, alu_in1=None, write_reg_addr=Non
         cmd += jump_cmd_ptr << 76
     if optype in ['reg_alu', 'alu_fproc']:
         cmd += write_reg_addr << 80
+    if optype == 'inc_qclk':
+        assert alu_op is None or alu_op == 'add'
+        alu_op = 'add'
 
     if im_or_reg == 'i':
         opkey = optype + '_i'

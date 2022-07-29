@@ -308,7 +308,7 @@ async def inc_qclk_i_test(dut):
     qclk_wait_t = random.randint(0, cmd_wait_range-1)
 
     cmd_list.append(cg.pulse_i(10, 0, 0, 4, qclk_wait_t))
-    cmd_list.append(cg.inc_qclk_i(qclk_inc_val))
+    cmd_list.append(cg.alu_cmd('inc_qclk', 'i', qclk_inc_val))
 
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, cmd_list)

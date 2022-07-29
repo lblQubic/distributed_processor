@@ -142,19 +142,36 @@ class SingleUnitAssembler:
     def get_compiled_program(self):
         cmd_list = []
         env_raw, env_addr_map = self._get_env_buffer()
+        cmd_label_addrmap = self._get_cmd_labelmap()
         for cmd in self._program:
             if cmd['cmdtype'] == 'pulse':
                 length = int(4*np.ceil(cmd['length']/4)) #quantize pulse length to multiple of 4
                 cmd_list.append(cg.pulse_i(cmd['freq'], cmd['phase'], \
                         env_addr_map[cmd['env']], length, cmd['start_time']))
-            elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc']:
+            elif cmd['cmdtype'] == 'sync':
+                raise Exception('sync not implemented')
+            elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
                     in0 = self._regs[cmd['in0']]
                     im_or_reg = 'r'
                 else:
                     in0 = cmd['in0']
                     im_or_reg = 'i'
-                cmd = cg.alu_cmd(cmd['cmd_type'], im_or_reg, in0, cmd['alu_op'], )
+
+                if 'out_reg' in cmd.keys():
+                    write_reg_addr = self._regs[cmd['out_reg']]
+                else:
+                    write_reg_addr = None
+
+                if 'jump_label' in cmd.keys():
+                    pass
+                    jump_addr = cmd_label_addrmap[cmd['jump_label']]
+                else:
+                    jump_addr = None
+                cmd_list.append(cg.alu_cmd(cmd['cmdtype'], im_or_reg, in0, cmd.get('alu_op', None), \
+                        cmd.get('in1_reg', None), write_reg_addr, jump_addr, cmd.get('func_id', None)))
+            else:
+                raise Exception('{} not supported'.format['cmdtype'])
 
         return cmd_list, env_raw
     
@@ -170,6 +187,13 @@ class SingleUnitAssembler:
             pulse_list.append(pulse)
 
         return pulse_list
+
+    def _get_cmd_labelmap(self):
+        labelmap = {}
+        for i, cmd in enumerate(self._program):
+            if 'label' in cmd.keys():
+                labelmap[cmd['label']] = i
+        return labelmap
 
     def _get_env_buffer(self):
         """
