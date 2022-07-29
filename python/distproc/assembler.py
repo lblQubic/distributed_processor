@@ -17,8 +17,8 @@ class MultiUnitAssembler:
     def add_env(self, unitind, name, env):
         self.assemblers[unitind].add_env(name, env)
 
-    def add_pulse(self, unitind, freq, phase, start_time, env, length=None):
-        self.assemblers[unitind].add_pulse(freq, phase, start_time, env, length)
+    def add_pulse(self, unitind, freq, phase, start_time, env, length=None, label=None):
+        self.assemblers[unitind].add_pulse(freq, phase, start_time, env, length, label)
 
     def get_compiled_program(self):
         cmd_lists = []
@@ -60,11 +60,21 @@ class SingleUnitAssembler:
     def declare_reg(self, name):
         if not self._regs:
             self._regs[name] = 0
+        elif 'name' in self._regs.keys():
+            raise Exception('Register already declared!') #maybe make this a warning?
         else:
             max_regind = max(self._regs.values())
             if max_regind >= N_MAX_REGS - 1:
                 raise Exception('cannot add any more regs, limit of {} reached'.format(N_MAX_REGS))
             self._regs[name] = max_regind + 1
+
+    def add_reg_write(self, reg_name, value, label=None):
+        """
+        Write 'value' to a named register reg_name. CAN be declared implicitly.
+        """
+        if reg_name not in self._regs.keys():
+            self.declare_reg(reg_name)
+        self.add_reg_alu(value, 'id0', reg_name, reg_name, label)
 
     def add_reg_alu(self, in0, alu_op, in1_reg, out_reg, label=None):
         """
@@ -112,7 +122,7 @@ class SingleUnitAssembler:
             cmd['label'] = label
         self._program.append(cmd)
 
-    def add_pulse(self, freq, phase, start_time, env, label=None, length=None):
+    def add_pulse(self, freq, phase, start_time, env, length=None, label=None):
         #hash the envelope to see if it's already been added
         # note: doesn't work with user added named envelopes
         if isinstance(env, np.ndarray): 
@@ -148,8 +158,6 @@ class SingleUnitAssembler:
                 length = int(4*np.ceil(cmd['length']/4)) #quantize pulse length to multiple of 4
                 cmd_list.append(cg.pulse_i(cmd['freq'], cmd['phase'], \
                         env_addr_map[cmd['env']], length, cmd['start_time']))
-            elif cmd['cmdtype'] == 'sync':
-                raise Exception('sync not implemented')
             elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
                     in0 = self._regs[cmd['in0']]
@@ -164,12 +172,17 @@ class SingleUnitAssembler:
                     write_reg_addr = None
 
                 if 'jump_label' in cmd.keys():
-                    pass
                     jump_addr = cmd_label_addrmap[cmd['jump_label']]
                 else:
-                    jump_addr = None
+                    jump_addr = None 
+
+                if 'in1_reg' in cmd.keys():
+                    in1 = self._regs[cmd['in1_reg']]
+                else:
+                    in1 = None
+
                 cmd_list.append(cg.alu_cmd(cmd['cmdtype'], im_or_reg, in0, cmd.get('alu_op', None), \
-                        cmd.get('in1_reg', None), write_reg_addr, jump_addr, cmd.get('func_id', None)))
+                        in1, write_reg_addr, jump_addr, cmd.get('func_id', None)))
             else:
                 raise Exception('{} not supported'.format['cmdtype'])
 
@@ -180,13 +193,14 @@ class SingleUnitAssembler:
         Get a pulse/command list usable by simulation tools. Currently, this is the same as 
         self._program, but with env names replaced by data
         """
-        pulse_list = []
-        for pulse in self._program:
-            pulse = copy.deepcopy(pulse)
-            pulse.update({'env':self._env_dict[pulse['env']]})
-            pulse_list.append(pulse)
+        cmd_list = []
+        for cmd in self._program:
+            cmd = copy.deepcopy(cmd)
+            if cmd['cmdtype'] == 'pulse':
+                cmd.update({'env':self._env_dict[cmd['env']]})
+            cmd_list.append(cmd)
 
-        return pulse_list
+        return cmd_list
 
     def _get_cmd_labelmap(self):
         labelmap = {}
