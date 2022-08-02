@@ -41,6 +41,10 @@ class SingleUnitAssembler:
     """
     Class for constructing an assembly-language level program and 
     converting to machine code + env buffers
+    
+    TODO: Consider replacing add_reg_write, etc with alu_cmd instruction
+    similar to command_gen
+
     Attributes
     ----------
         _regs : dict
@@ -114,6 +118,15 @@ class SingleUnitAssembler:
             cmd['label'] = label
         self._program.append(cmd)
 
+    def add_inc_qclk(self, increment, label=None):
+        if isinstance(increment, str):
+            assert increment in self._regs.keys()
+
+        cmd = {'cmdtype': 'inc_qclk', 'in0': increment}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
     def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
         if isinstance(in0, str):
             assert in0 in self._regs.keys()
@@ -150,6 +163,7 @@ class SingleUnitAssembler:
         self._program.append(cmd)
 
     def get_compiled_program(self):
+        #TODO: consider copying cmd and modifying to avoid all of these else statements
         cmd_list = []
         env_raw, env_addr_map = self._get_env_buffer()
         cmd_label_addrmap = self._get_cmd_labelmap()

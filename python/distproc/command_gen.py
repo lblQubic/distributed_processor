@@ -217,6 +217,7 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=None, write_reg_add
         opkey = optype + '_i'
         cmd += twos_complement(alu_in0) << 88
     else:
+        opkey = optype
         cmd += alu_in0 << 116
 
     opcode = (opcodes[opkey] << 3) + alu_opcodes[alu_op]
