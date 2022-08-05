@@ -9,11 +9,13 @@ module qclk
     reg[WIDTH-1:0] value;
     assign out = value;
 
+    localparam ALU_LATENCY = 2;
+
     always @(posedge clk) begin
         if(rst)
             value <= 0;
         else if(load_enable)
-            value <= in_val + 1;
+            value <= in_val + ALU_LATENCY;
         else
             value <= value + 1;
 

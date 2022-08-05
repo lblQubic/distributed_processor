@@ -317,7 +317,6 @@ async def inc_qclk_i_test(dut):
     await RisingEdge(dut.clk)
     dut.reset.value = 0
     await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
 
     for i in range(cmd_wait_range):
         await RisingEdge(dut.clk)
