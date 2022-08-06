@@ -72,7 +72,7 @@ module proc
 
     //other datapath connections
     assign qclk_in = alu_out;
-    assign fproc.id = cmd_buf_out[CMD_WIDTH-1-ALU_INPUT_SPACE-2*REG_ADDR_WIDTH:CMD_WIDTH-1-ALU_INPUT_SPACE-2*REG_ADDR_WIDTH-FPROC_ID_WIDTH];
+    assign fproc.id = cmd_buf_out[CMD_WIDTH-1-ALU_INPUT_SPACE-2*REG_ADDR_WIDTH:CMD_WIDTH-ALU_INPUT_SPACE-2*REG_ADDR_WIDTH-FPROC_ID_WIDTH];
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
