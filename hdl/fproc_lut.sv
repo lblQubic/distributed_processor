@@ -19,124 +19,17 @@ module fproc_lut #(
     input[N_MEAS-1:0] meas,
     input[N_MEAS-1:0] meas_valid);
 
-    reg[N_CORES-1:0] lut_mem[2**N_MEAS-1:0]; //addressed by measurment outcome
-    reg[N_CORES-1:0] lut_mask;
-    reg[N_CORES-1:0] lut_valid;
-    reg[N_CORES-1:0] lut_out;
-    reg[N_MEAS-1:0] lut_addr;
+    wire[N_CORES-1:0] lut_out;
     wire lut_ready;
 
-    assign lut_mask = 5'b00011; //TODO: make these writable
-    assign lut_mem[0] = 5'b00000;
-    assign lut_mem[1] = 5'b00100;
-    assign lut_mem[2] = 5'b10000;
-    assign lut_mem[3] = 5'b01000;
-
-    localparam LUT_WAIT = 0;
-    localparam LUT_READY = 1;
-    reg lut_state;
-    reg lut_next_state;
-
-    assign lut_ready = (lut_mask & lut_valid) == lut_mask;
-    assign lut_out = lut_mem[lut_addr];
-
-    always @(posedge clk) begin
-        if(reset) begin
-            lut_state = LUT_WAIT;
-            lut_valid = 0;
-            lut_addr = 0;
-        end 
-        else
-            lut_state = lut_next_state;
-    end
-
-    always @(*) begin
-        case(lut_state)
-            LUT_WAIT : begin
-                lut_valid = lut_valid | meas_valid;
-                lut_addr = lut_addr | (meas_valid & meas);
-                if(lut_ready)
-                    lut_next_state = LUT_READY;
-                else
-                    lut_next_state = LUT_WAIT;
-            end
-            LUT_READY : begin
-                lut_next_state = LUT_WAIT;
-                lut_addr = 0;
-                lut_valid = 0;
-            end
-        endcase
-    end
-
-
-    reg[1:0] core_state[N_CORES-1:0];
-    reg[1:0] core_next_state[N_CORES-1:0];
-    localparam IDLE = 2'b0;
-    localparam WAIT_MEAS = 2'b01;
-    localparam WAIT_LUT = 2'b10;
-
-
-    genvar i;
-    generate 
-        for(i = 0; i < N_CORES; i = i + 1) begin
-            always @(posedge clk) begin
-                if(reset)
-                    core_state[i] = IDLE;
-                else
-                    core_state[i] = core_next_state[i];
-            end
-
-            always @(*) begin
-                case(core_state[i])
-                    IDLE : begin
-                        core[i].ready = 0;
-                        core[i].data = 0;
-                        if(core[i].enable) begin
-                            if(core[i].id == 0)
-                                core_next_state[i] = WAIT_MEAS;
-                            else
-                                core_next_state[i] = WAIT_LUT;
-                        end
-                        else
-                            core_next_state[i] = IDLE;
-                    end
-                    
-                    WAIT_MEAS : begin
-                        if(meas_valid[i] == 1) begin
-                            core[i].ready = 1;
-                            core[i].data[0] = meas[i];
-                            core_next_state[i] = IDLE;
-                        end
-                        else begin
-                            core[i].ready = 0;
-                            core[i].data[0] = 0;
-                            core_next_state[i] = WAIT_MEAS;
-                        end
-                    end
-
-                    WAIT_LUT : begin
-                        if(lut_ready) begin
-                            core[i].ready = 1;
-                            core[i].data[0] = lut_out[i];
-                            core_next_state[i] = IDLE;
-                        end
-                        else begin
-                            core[i].ready = 0;
-                            core[i].data = 0;
-                            core_next_state[i] = WAIT_LUT;
-                        end
-                    end
-
-                    default : begin
-                        core_next_state[i] = IDLE;
-                    end
-                endcase
-            end
-        end
-    endgenerate
+    core_state_mgr #(.N_CORES(N_CORES), .N_MEAS(N_MEAS)) mgr(.clk(clk), .reset(reset), .lut_out(lut_out), 
+        .lut_ready(lut_ready), .meas(meas), .meas_valid(meas_valid), .core(core));
+    meas_lut#(.N_MEAS(N_MEAS), .N_CORES(N_CORES)) lut (.clk(clk), .reset(reset), .meas(meas), .meas_valid(meas_valid), 
+        .lut_out(lut_out), .lut_ready(lut_ready));
 
 endmodule
-                            
+
+
 
         
         
