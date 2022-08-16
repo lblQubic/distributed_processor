@@ -62,6 +62,10 @@ class SingleUnitAssembler:
         self._env_dict[name] = env
 
     def declare_reg(self, name):
+        """
+        Declare a named register that can be referenced 
+        by subsequent commands
+        """
         if not self._regs:
             self._regs[name] = 0
         elif 'name' in self._regs.keys():
@@ -168,6 +172,7 @@ class SingleUnitAssembler:
         env_raw, env_addr_map = self._get_env_buffer()
         cmd_label_addrmap = self._get_cmd_labelmap()
         for cmd in self._program:
+            cmd = copy.deepcopy(cmd) #we are modifying cmd so don't overwrite anything in self._program
             if cmd['cmdtype'] == 'pulse':
                 length = int(4*np.ceil(cmd['length']/4)) #quantize pulse length to multiple of 4
                 cmd_list.append(cg.pulse_i(cmd['freq'], cmd['phase'], \
@@ -181,22 +186,16 @@ class SingleUnitAssembler:
                     im_or_reg = 'i'
 
                 if 'out_reg' in cmd.keys():
-                    write_reg_addr = self._regs[cmd['out_reg']]
-                else:
-                    write_reg_addr = None
+                    cmd['out_reg'] = self._regs[cmd['out_reg']]
 
                 if 'jump_label' in cmd.keys():
-                    jump_addr = cmd_label_addrmap[cmd['jump_label']]
-                else:
-                    jump_addr = None 
+                    cmd['jump_addr'] = cmd_label_addrmap[cmd['jump_label']]
 
                 if 'in1_reg' in cmd.keys():
-                    in1 = self._regs[cmd['in1_reg']]
-                else:
-                    in1 = None
+                    cmd['in1_reg'] = self._regs[cmd['in1_reg']]
 
-                cmd_list.append(cg.alu_cmd(cmd['cmdtype'], im_or_reg, in0, cmd.get('alu_op', None), \
-                        in1, write_reg_addr, jump_addr, cmd.get('func_id', None)))
+                cmd_list.append(cg.alu_cmd(cmd['cmdtype'], im_or_reg, in0, cmd.get('alu_op'), \
+                        cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id')))
             else:
                 raise Exception('{} not supported'.format['cmdtype'])
 
