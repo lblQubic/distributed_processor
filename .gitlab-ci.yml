@@ -17,10 +17,11 @@
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
 image: ubuntu:20.04
 
+
 variables:
-  - PROC_DRIVER_PATH: python
-  - PROC_TEST_PATH: cocotb/proc
-  - FPROC_LUT_TEST_PATH: cocotb/fproc_lut
+  PROC_DRIVER_PATH: python
+  PROC_TEST_PATH: cocotb/proc
+  FPROC_LUT_TEST_PATH: cocotb/fproc_lut
 
 stages:          # List of stages for jobs, and their order of execution
   - build
