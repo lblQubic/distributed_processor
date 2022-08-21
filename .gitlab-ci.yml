@@ -25,17 +25,17 @@ stages:          # List of stages for jobs, and their order of execution
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
-    - sudo apt-get install git perl python3 make autoconf g++ flex bison ccache
-    - sudo apt-get install libgoogle-perftools-dev numactl perl-doc
-    - sudo apt-get install libfl2  # Ubuntu only (ignore if gives error)
-    - sudo apt-get install libfl-dev  # Ubuntu only (ignore if gives error)
-    - sudo apt-get install zlibc zlib1g zlib1g-dev  # Ubuntu only (ignore if gives error)
+    - apt-get install git perl python3 make autoconf g++ flex bison ccache
+    - apt-get install libgoogle-perftools-dev numactl perl-doc
+    - apt-get install libfl2  # Ubuntu only (ignore if gives error)
+    - apt-get install libfl-dev  # Ubuntu only (ignore if gives error)
+    - apt-get install zlibc zlib1g zlib1g-dev  # Ubuntu only (ignore if gives error)
     - git clone https://github.com/verilator/verilator --branch v4.106 --depth 1
     - cd verilator
     - autoconf
     - ./configure
     - make -j 'nproc'
-    - sudo make install
+    - make install
     - pip install cocotb numpy matplotlib ipdb
     - cd
     - ls
