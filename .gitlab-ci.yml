@@ -58,11 +58,13 @@ test-proc:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   script:
     - cd $PROC_TEST_PATH
+    - cocotb-config
     - make
 
 test-fproc-lut:
   stage: test
   script:
     - cd $FPROC_LUT_TEST_PATH
+    - cocotb-config
     - make
 
