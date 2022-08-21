@@ -19,7 +19,7 @@ image: ubuntu:20.04
 
 
 variables:
-  PROC_DRIVER_PATH: python
+  PROC_DRIVER_PATH: ./python
   PROC_TEST_PATH: cocotb/proc
   FPROC_LUT_TEST_PATH: cocotb/fproc_lut
 
@@ -34,7 +34,7 @@ configure-python:
     - apt-get update
     - apt-get install -y pip
     - pip install cocotb numpy matplotlib ipdb
-    - pip install $PROC_DRIVER_PATH
+    - pip install -e $PROC_DRIVER_PATH
 
 build-verilator:       # This job runs in the build stage, which runs first.
   stage: build
