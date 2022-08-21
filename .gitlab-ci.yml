@@ -25,6 +25,7 @@ stages:          # List of stages for jobs, and their order of execution
 configure-python:
   stage: build
   script: 
+    - apt-get update
     - apt install -y pip
     - pip install cocotb numpy matplotlib ipdb
     - pip install ./python/distproc
