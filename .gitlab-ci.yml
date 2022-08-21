@@ -35,7 +35,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - cd verilator
     - autoconf
     - ./configure
-    - make -j 'nproc'
+    - make
     - make install
     - pip install cocotb numpy matplotlib ipdb
     - cd
