@@ -30,8 +30,9 @@ stages:          # List of stages for jobs, and their order of execution
 configure-python:
   stage: build
   script: 
+    - echo $PROC_DRIVER_PATH
     - apt-get update
-    - apt install -y pip
+    - apt-get install -y pip
     - pip install cocotb numpy matplotlib ipdb
     - pip install $PROC_DRIVER_PATH
 
