@@ -25,9 +25,9 @@ stages:          # List of stages for jobs, and their order of execution
 configure-python:
   stage: build
   script: 
-    - ls
-    - pwd
+    - apt install -y pip
     - pip install cocotb numpy matplotlib ipdb
+    - pip install ./python/distproc
 
 build-verilator:       # This job runs in the build stage, which runs first.
   stage: build
