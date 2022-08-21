@@ -15,8 +15,8 @@
 # https://docs.gitlab.com/ee/development/cicd/templates.html
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
-#image: ubuntu:20.04
-image: verilator/verilator:4.106
+image: ubuntu:20.04
+#image: verilator/verilator:4.106
 
 
 variables:
@@ -38,21 +38,21 @@ configure-python:
     - pip install cocotb numpy matplotlib ipdb
     - pip install -e $PROC_DRIVER_PATH
 
-# build-verilator:       # This job runs in the build stage, which runs first.
-#   stage: build
-#   script:
-#     - apt-get update
-#     - apt-get install -y git perl python3 make autoconf g++ flex bison ccache
-#     - apt-get install -y libgoogle-perftools-dev numactl perl-doc
-#     - apt-get install -y libfl2  # Ubuntu only (ignore if gives error)
-#     - apt-get install -y libfl-dev  # Ubuntu only (ignore if gives error)
-#     - apt-get install -y zlibc zlib1g zlib1g-dev  # Ubuntu only (ignore if gives error)
-#     - git clone https://github.com/verilator/verilator --branch v4.106 --depth 1
-#     - cd verilator
-#     - autoconf
-#     - ./configure
-#     - make
-#     - make install
+build-verilator:       # This job runs in the build stage, which runs first.
+  stage: build
+  script:
+    - apt-get update
+    - apt-get install -y git perl python3 make autoconf g++ flex bison ccache
+    - apt-get install -y libgoogle-perftools-dev numactl perl-doc
+    - apt-get install -y libfl2  # Ubuntu only (ignore if gives error)
+    - apt-get install -y libfl-dev  # Ubuntu only (ignore if gives error)
+    - apt-get install -y zlibc zlib1g zlib1g-dev  # Ubuntu only (ignore if gives error)
+    - git clone https://github.com/verilator/verilator --branch v4.106 --depth 1
+    - cd verilator
+    - autoconf
+    - ./configure
+    - make
+    - make install
 
 test-proc:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
