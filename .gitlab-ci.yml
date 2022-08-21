@@ -36,6 +36,7 @@ configure-python:
     - apt-get install -y pip
     - apt-get install -y make
     - pip install cocotb numpy matplotlib ipdb
+    - cocotb-config
     - pip install -e $PROC_DRIVER_PATH
 
 build-verilator:       # This job runs in the build stage, which runs first.
