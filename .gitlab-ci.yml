@@ -25,18 +25,10 @@ variables:
   FPROC_LUT_TEST_PATH: cocotb/fproc_lut
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
-cache:
-  paths:
-    - .cache/pip
-
 stages:          # List of stages for jobs, and their order of execution
-  - build
   - test
 
-configure-python:
-  stage: build
-  script: 
-    - echo $PROC_DRIVER_PATH
+before-script:
     - pip install -e $PROC_DRIVER_PATH
 
 test-proc:   # This job runs in the test stage.
