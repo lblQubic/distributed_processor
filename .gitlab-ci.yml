@@ -23,6 +23,11 @@ variables:
   PROC_DRIVER_PATH: ./python
   PROC_TEST_PATH: cocotb/proc
   FPROC_LUT_TEST_PATH: cocotb/fproc_lut
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
 
 stages:          # List of stages for jobs, and their order of execution
   - build
