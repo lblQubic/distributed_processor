@@ -28,7 +28,7 @@ variables:
 stages:          # List of stages for jobs, and their order of execution
   - test
 
-before-script:
+before_script:
     - pip install -e $PROC_DRIVER_PATH
 
 test-proc:   # This job runs in the test stage.
