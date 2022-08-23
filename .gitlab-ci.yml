@@ -40,6 +40,5 @@ test-fproc-lut:
   stage: test
   script:
     - cd $FPROC_LUT_TEST_PATH
-    - cocotb-config -h
     - make
 
