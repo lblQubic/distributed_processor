@@ -14,7 +14,8 @@ Instruction dict format:
     measure/store instruction: 
         {'name': 'measure', 'qubit': qubitid, 'modi': gate_param_mod_dict, 'dest': var_name}
         can store measurement result in named variable var_name, to be used for branching, etc,
-        later on.
+        later on. Optional 'scope' key to specify qubits using the variable. Otherwise, scope
+        is determined automatically by compiler.
     store fproc instruction:
         {'name': 'store_fproc', 'fproc_id': function_id, 'dest': var_name}
         stores fproc result (next available from fproc_id) in variable var_name for use 
@@ -58,7 +59,7 @@ import sys
 import qubitconfig as qc
 import assembler as asm
 
-RESRV_NAMES = ['br_fproc', 'barrier', 'delay']
+RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync']
 
 class Compiler:
     def __init__(self, qubits, wiremap, qchip):
