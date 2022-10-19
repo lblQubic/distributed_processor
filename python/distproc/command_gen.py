@@ -31,6 +31,8 @@ def pulse_i(freq, phase, env_start_addr, env_length, cmd_time):
     """
     Returns 128-bit command corresponding to timed pulse output.
     This is configured for processor in QubiC dsp_unit gateware.
+    TODO: refactor this such that HW params are handled by a 
+    HWInterface abstract class.
 
     Parameters
     ----------

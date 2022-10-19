@@ -67,7 +67,10 @@ class Compiler:
         self.wiremap = wiremap
         self.qchip = qchip
         self._program = []
+        self._resolved_program = []
+        self._scheduled_program = []
         self._isscheduled = False
+        self._isresolved = False
 
         self.assemblers = {}
         for qubit in qubits:
@@ -81,20 +84,57 @@ class Compiler:
         else:
             self._program.insert(index, statement_dict)
         self._isscheduled = False
+        self._isresolved = False
 
-    def schedule(self):
-        qubit_t = {q: 0 for q in self.qubits}
-        core_t = {coreind: 0 for coreind in self.assemblers.keys()}
-        for statement in self._program:
-            if statement['name'] in RESERV_NAMES:
-                raise Exception('only gates implemented so far')
-            else:
-                if isinstance(statement['qubit'], str):
-                    gatename = statement['qubit'] + statement['name']
-                elif isinstance(statement['qubit'], list):
-                    gatename = ''.join(statement['qubit']) + statement['name']
+    def schedule(self, resolved_program):
+        qubit_last_t = {q: 0 for q in self.qubits}
+        scheduled_program = []
+        for gate in resolved_program:
+            if isinstance(gate, dict):
+                if gate['name'] == 'barrier':
+                    qubit_max_t = max([qubit_last_t[qubit] for qubit in gate['qubit']])
+                    for qubit in gate['qubit']:
+                        qubit_last_t[qubit] = qubit_max_t
+                elif gate['name'] == 'delay':
+                    if 'qubit' not in gate:
+                        gate['qubit'] = self.qubits
+                    elif isinstance(gate['qubit'], str):
+                        gate['qubit'] = [gate['qubit']]
+                    for qubit in gate['qubit']:
+                        qubit_last_t[qubit] += gate['t']
                 else:
-                    raise TypeError('unsupported type')
-                #TODO: apply gate mods here?
-                gate = self.qchip.gates[gatename].get_updated_copy(statement['modi'])
-                pulses = gate.get_pulses()
+                    raise Exception('{} not yet implemented'.format(gate['name']))
+                continue
+            pulses = gate.get_pulses()
+            min_pulse_t = [] 
+            for pulse in pulses:
+                qubit = pulse.dest[:2]
+                assert qubit in self.qubits
+                qubit_t = qubit_last_t[qubit]
+                min_pulse_t.append(qubit_t - pulse.t0)
+            gate_t = max(min_pulse_t)
+            for pulse in pulses:
+                qubit_last_t[pulse.dest[:2]] = gate_t + pulse.t0 + pulse.twidth
+            scheduled_program.append({'gate': gate, 't': gate_t})
+
+        return scheduled_program
+
+    def _resolve_gates(self, program):
+        """
+        convert gatedict references to objects
+        """
+        resolved_program = []
+        for gatedict in program:
+            if gatedict['name'] in RESRV_NAMES:
+                gate_list.append(gatedict)
+                continue
+            if isinstance(gatedict['qubit'], str):
+                gatedict['qubit'] = [gatedict['qubit']]
+            gatename = ''.join(gatedict['qubit']) + gatedict['name']
+            gate = self.qchip.gates[gatename]
+            if 'modi' in gatedict and gatedict['modi'] is not None:
+                gate = gate.get_updated_copy(gatedict['modi'])
+            resoloved_program.append(gate)
+
+        return resolved_program
+
