@@ -62,10 +62,11 @@ import assembler as asm
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync']
 
 class Compiler:
-    def __init__(self, qubits, wiremap, qchip):
+    def __init__(self, qubits, wiremap, qchip, hwconfig):
         self.qubits = qubits
         self.wiremap = wiremap
         self.qchip = qchip
+        self.hwconfig = hwconfig
         self._program = []
         self._resolved_program = []
         self._scheduled_program = []
@@ -73,7 +74,10 @@ class Compiler:
         self._isresolved = False
 
         self.assemblers = {}
+        self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
         for qubit in qubits:
+            for freqname in qchip.qubit_dict[qubit].keys()
+                self.zphase[freqname] = 0
             for chan, ind in wiremap.coredict.items():
                 if qubit in chan:
                     self.assemblers[ind] = asm.SingleUnitAssembler()
@@ -138,3 +142,14 @@ class Compiler:
 
         return resolved_program
 
+    def _resolve_virtualz_pulses(self, resolved_program):
+        for gate in program:
+            if isinstance(gate, qc.Gate):
+                for pulse in gate.get_pulses():
+                    #this is to check if pulse is Z;
+                    # TODO: fix config/encoding of these
+                    if not hasattr(pulse, 'env'): 
+                        self.zphase[pulse.fcarriername] += pulse.pcarrier
+                    else:
+                        pulse.pcarrier += self.zphase[pulse.fcarriername]
+                gate.remove_virtualz()
