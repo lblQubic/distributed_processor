@@ -14,7 +14,7 @@ def test_phase_resolve():
     compiler.add_statement({'name':'X90', 'qubit':'Q0'})
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     resolved_prog = compiler._resolve_gates(compiler._program)
-    compiler._resolve_virtualz_pulses(resolved_prog)
+    resolved_prog = compiler._resolve_virtualz_pulses(resolved_prog)
     assert resolved_prog[0].contents[0].pcarrier == 0
     assert resolved_prog[1].contents[0].pcarrier == 0
     assert resolved_prog[3].contents[0].pcarrier == np.pi/2
@@ -31,7 +31,7 @@ def test_basic_schedule():
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'read', 'qubit':'Q0'})
     resolved_prog = compiler._resolve_gates(compiler._program)
-    compiler._resolve_virtualz_pulses(resolved_prog)
+    resolved_prog = compiler._resolve_virtualz_pulses(resolved_prog)
     scheduled_prog = compiler.schedule(resolved_prog)
     assert scheduled_prog[0]['t'] == 0
     assert scheduled_prog[1]['t'] == 0

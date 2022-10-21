@@ -145,8 +145,10 @@ class Compiler:
         return resolved_program
 
     def _resolve_virtualz_pulses(self, resolved_program):
+        zresolved_program = []
         for gate in resolved_program:
             if isinstance(gate, qc.Gate):
+                gate = gate.copy()
                 for pulse in gate.contents:
                     #this is to check if pulse is Z;
                     # TODO: fix config/encoding of these
@@ -155,3 +157,9 @@ class Compiler:
                     else:
                         pulse.pcarrier += self.zphase[pulse.fcarriername]
                 gate.remove_virtualz()
+                if len(gate.contents) > 0:
+                    zresolved_program.append(gate)
+            else:
+                zresolved_program.append(gate)
+
+        return zresolved_program
