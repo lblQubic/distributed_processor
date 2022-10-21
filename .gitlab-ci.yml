@@ -29,6 +29,7 @@ before_script:
 test-software:
   stage: test
   script:
+    - pip install git+https://gitlab.com/LBL-QubiC/experiments/qubitconfig.git
     - cd $DRIVER_TEST_PATH 
     - pip install pytest
     - pytest
