@@ -16,6 +16,7 @@ image: nfruitwala/cocotb-verilator:latest
 
 variables:
   PROC_DRIVER_PATH: ./python
+  DRIVER_TEST_PATH: python/test
   PROC_TEST_PATH: cocotb/proc
   FPROC_LUT_TEST_PATH: cocotb/fproc_lut
 
@@ -24,6 +25,12 @@ stages:          # List of stages for jobs, and their order of execution
 
 before_script:
     - pip install -e $PROC_DRIVER_PATH
+
+test-software:
+  stage: test
+  script:
+    - cd $DRIVER_TEST_PATH 
+    - pytest
 
 test-proc:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
