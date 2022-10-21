@@ -30,6 +30,7 @@ test-software:
   stage: test
   script:
     - cd $DRIVER_TEST_PATH 
+    - pip install pytest
     - pytest
 
 test-proc:   # This job runs in the test stage.
