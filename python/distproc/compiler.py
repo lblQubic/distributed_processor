@@ -56,8 +56,8 @@ import matplotlib.pyplot as plt
 import os
 import sys
 
-import qubitconfig as qc
-import assembler as asm
+import qubitconfig.qchip as qc
+import distproc.assembler as asm
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync']
 
@@ -76,8 +76,8 @@ class Compiler:
         self.assemblers = {}
         self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
         for qubit in qubits:
-            for freqname in qchip.qubit_dict[qubit].keys()
-                self.zphase[freqname] = 0
+            for freqname in qchip.qubit_dict[qubit].keys():
+                self.zphase[qubit + '.' + freqname] = 0
             for chan, ind in wiremap.coredict.items():
                 if qubit in chan:
                     self.assemblers[ind] = asm.SingleUnitAssembler()
@@ -125,7 +125,8 @@ class Compiler:
 
     def _resolve_gates(self, program):
         """
-        convert gatedict references to objects
+        convert gatedict references to objects, then dereference (i.e.
+        all gate.contents elements are GatePulse objects)
         """
         resolved_program = []
         for gatedict in program:
@@ -135,17 +136,18 @@ class Compiler:
             if isinstance(gatedict['qubit'], str):
                 gatedict['qubit'] = [gatedict['qubit']]
             gatename = ''.join(gatedict['qubit']) + gatedict['name']
-            gate = self.qchip.gates[gatename]
+            gate = self.qchip.gates[gatename].copy()
             if 'modi' in gatedict and gatedict['modi'] is not None:
                 gate = gate.get_updated_copy(gatedict['modi'])
-            resoloved_program.append(gate)
+            gate.dereference()
+            resolved_program.append(gate)
 
         return resolved_program
 
     def _resolve_virtualz_pulses(self, resolved_program):
-        for gate in program:
+        for gate in resolved_program:
             if isinstance(gate, qc.Gate):
-                for pulse in gate.get_pulses():
+                for pulse in gate.contents:
                     #this is to check if pulse is Z;
                     # TODO: fix config/encoding of these
                     if not hasattr(pulse, 'env'): 
