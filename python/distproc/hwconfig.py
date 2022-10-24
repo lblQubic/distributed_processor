@@ -1,6 +1,8 @@
 """
 """
 from abc import ABC, abstractmethod
+import distproc.command_gen as cg
+import numpy as np
 
 class HardwareConfig(ABC):
 
@@ -11,6 +13,7 @@ class HardwareConfig(ABC):
         self.nclks_alu = 2
         self.nclks_br_fproc = 2
         self.nclks_read_fproc = 2
+        self.env_n_bits = 16
 
     @property
     def dac_sample_period(self):
@@ -41,5 +44,15 @@ class HardwareConfig(ABC):
         pass
 
     @abstractmethod
-    def get_env_addr(self, env_ind):
+    def get_length_word(self, length):
         pass
+
+    # TODO: maybe change these to abstract?
+    def get_env_addr(self, env_ind):
+        return env_ind//self.dac_samples_per_clk
+
+    def get_env_buffer(self, env_samples):
+        env_samples = np.pad(env_samples, (0, (self.dac_samples_per_clk - len(env_samples) \
+                % self.dac_samples_per_clk) % self.dac_samples_per_clk))
+        return cg.twos_complement(np.real(env_samples*2**(self.env_n_bits-1)).astype(int), nbits=self.env_n_bits) \
+                    + (cg.twos_complement(np.imag(env_samples*2**(self.env_n_bits-1)).astype(int), nbits=self.env_n_bits) << self.env_n_bits)

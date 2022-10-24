@@ -14,6 +14,8 @@ class HWConfigTest(hw.HardwareConfig):
         return 0
     def get_env_addr(self):
         return 0
+    def get_length_word(self):
+        return 0
 
 def test_phase_resolve():
     wiremap = wm.Wiremap('wiremap_test0.json')

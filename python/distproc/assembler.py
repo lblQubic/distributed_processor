@@ -9,11 +9,11 @@ N_MAX_REGS = 16
 
 class MultiUnitAssembler:
 
-    def __init__(self, n_units):
+    def __init__(self, n_units, hwconfig):
         self.n_units = n_units
         self.assemblers = []
         for i in range(self.n_units):
-            self.assemblers.append(SingleUnitAssembler())
+            self.assemblers.append(SingleUnitAssembler(hwconfig))
 
     def add_env(self, unitind, name, env):
         self.assemblers[unitind].add_env(name, env)
@@ -176,9 +176,9 @@ class SingleUnitAssembler:
         for cmd in self._program:
             cmd = copy.deepcopy(cmd) #we are modifying cmd so don't overwrite anything in self._program
             if cmd['cmdtype'] == 'pulse':
-                length = int(self._hwconfig.dac_samples_per_clk*np.ceil(cmd['length']/self._hwconfig.dac_samples_per_clk)) #quantize pulse length to multiple of 4
-                cmd_list.append(cg.pulse_i(self._hwconfig.get_freq_word(cmd['freq']), self._hwconfig.get_phse_word(cmd['phase']), \
-                        self._hwconfig.get_env_addr(env_addr_map[cmd['env']]), length, cmd['start_time']))
+                #length = int(self._hwconfig.dac_samples_per_clk*np.ceil(cmd['length']/self._hwconfig.dac_samples_per_clk)) #quantize pulse length to multiple of 4
+                cmd_list.append(cg.pulse_i(self._hwconfig.get_freq_word(cmd['freq']), self._hwconfig.get_phase_word(cmd['phase']), \
+                        env_addr_map[cmd['env']], self._hwconfig.get_length_word(cmd['length']), cmd['start_time']))
             elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
                     in0 = self._regs[cmd['in0']]
@@ -243,7 +243,7 @@ class SingleUnitAssembler:
                 the address here is the envelope start index in env_raw divided
                 by four.
         """
-        cur_addr = 0
+        cur_env_ind = 0
         env_addr_map = {}
 
         env_raw = np.empty(0).astype(int)
@@ -252,12 +252,15 @@ class SingleUnitAssembler:
             #ipdb.set_trace()
             #TODO: how much of this do we move to hwconfig re: env padding and bit packing
             env_addr_map[envkey] = self._hwconfig.get_env_addr(cur_env_ind)
-            env = np.pad(env, (0, (self._hwconfig.dac_samples_per_clk - len(env) % self._hwconfig.dac_samples_per_clk) % self._hwconfig.dac_samples_per_clk))
-            cur_env_ind += len(env)//self._hwconfig.dac_samples_per_clk
+            #env = np.pad(env, (0, (self._hwconfig.dac_samples_per_clk - len(env) % self._hwconfig.dac_samples_per_clk) % self._hwconfig.dac_samples_per_clk))
+            #cur_env_ind += len(env)//self._hwconfig.dac_samples_per_clk
 
-            env_val = cg.twos_complement(np.real(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) \
-                        + (cg.twos_complement(np.imag(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) << ENV_BITS)
-            env_raw = np.append(env_raw, env_val)
+            #env_val = cg.twos_complement(np.real(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) \
+            #            + (cg.twos_complement(np.imag(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) << ENV_BITS)
+            #env_raw = np.append(env_raw, env_val)
+            env = self._hwconfig.get_env_buffer(env)
+            cur_env_ind += len(env)
+            env_raw = np.append(env_raw, env)
 
         return env_raw, env_addr_map
             
