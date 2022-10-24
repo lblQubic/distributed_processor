@@ -249,15 +249,7 @@ class SingleUnitAssembler:
         env_raw = np.empty(0).astype(int)
 
         for envkey, env in self._env_dict.items():
-            #ipdb.set_trace()
-            #TODO: how much of this do we move to hwconfig re: env padding and bit packing
             env_addr_map[envkey] = self._hwconfig.get_env_addr(cur_env_ind)
-            #env = np.pad(env, (0, (self._hwconfig.dac_samples_per_clk - len(env) % self._hwconfig.dac_samples_per_clk) % self._hwconfig.dac_samples_per_clk))
-            #cur_env_ind += len(env)//self._hwconfig.dac_samples_per_clk
-
-            #env_val = cg.twos_complement(np.real(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) \
-            #            + (cg.twos_complement(np.imag(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) << ENV_BITS)
-            #env_raw = np.append(env_raw, env_val)
             env = self._hwconfig.get_env_buffer(env)
             cur_env_ind += len(env)
             env_raw = np.append(env_raw, env)

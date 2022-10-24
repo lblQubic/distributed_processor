@@ -26,7 +26,7 @@ stages:          # List of stages for jobs, and their order of execution
 before_script:
     - pip install -e $PROC_DRIVER_PATH
 
-test-software:
+test-compiler:
   stage: test
   script:
     - pip install git+https://gitlab.com/LBL-QubiC/experiments/qubitconfig.git
