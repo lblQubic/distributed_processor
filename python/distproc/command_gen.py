@@ -27,7 +27,7 @@ opcodes = {'reg_alu_i' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_writ
            'sync' : 0b01110}
 
 
-def pulse_i(freq, phase, env_start_addr, env_length, cmd_time):
+def pulse_i(freq_word, phase_word, env_start_addr, env_nclks, cmd_time):
     """
     Returns 128-bit command corresponding to timed pulse output.
     This is configured for processor in QubiC dsp_unit gateware.
@@ -50,12 +50,12 @@ def pulse_i(freq, phase, env_start_addr, env_length, cmd_time):
             pulse start time, in FPGA clock units
 
     """
-    freq_int = int((freq/1.e9) * 2**24)
-    phase_int = int((phase/(2*np.pi) * 2**14))
-    #cmd_word = (env_start_addr << 50) + (env_length << 38) + (phase_int << 24) + freq_int
-    if env_length % 4 != 0:
-        raise Exception('length of envelope must be a multiple of 4!')
-    cmd_word = (env_start_addr << 50) + ((env_length//4) << 38) + (phase_int << 24) + freq_int
+    #freq_int = int((freq/1.e9) * 2**24)
+    #phase_int = int((phase/(2*np.pi) * 2**14))
+    ##cmd_word = (env_start_addr << 50) + (env_length << 38) + (phase_int << 24) + freq_int
+    #if env_length % 4 != 0:
+    #    raise Exception('length of envelope must be a multiple of 4!')
+    cmd_word = (env_start_addr << 50) + (env_nclks << 38) + (phase_word << 24) + freq_word
     return (cmd_word << 24) + (cmd_time << 88)
 
 def reg_alu_i(value, alu_op, reg_addr, reg_write_addr):

@@ -2,6 +2,7 @@ import distproc.command_gen as cg
 import copy
 import numpy as np
 import ipdb
+import distproc.hwconfig as hw
 
 ENV_BITS = 16
 N_MAX_REGS = 16
@@ -51,10 +52,11 @@ class SingleUnitAssembler:
             key: user-declared register name
             value: register address in proc core
     """
-    def __init__(self):
+    def __init__(self, hwconfig):
         self._env_dict = {}
         self._program = []
         self._regs = {}
+        self._hwconfig = hwconfig
 
     def add_env(self, name, env):
         if np.any(np.abs(env) > 1):
@@ -174,9 +176,9 @@ class SingleUnitAssembler:
         for cmd in self._program:
             cmd = copy.deepcopy(cmd) #we are modifying cmd so don't overwrite anything in self._program
             if cmd['cmdtype'] == 'pulse':
-                length = int(4*np.ceil(cmd['length']/4)) #quantize pulse length to multiple of 4
-                cmd_list.append(cg.pulse_i(cmd['freq'], cmd['phase'], \
-                        env_addr_map[cmd['env']], length, cmd['start_time']))
+                length = int(self._hwconfig.dac_samples_per_clk*np.ceil(cmd['length']/self._hwconfig.dac_samples_per_clk)) #quantize pulse length to multiple of 4
+                cmd_list.append(cg.pulse_i(self._hwconfig.get_freq_word(cmd['freq']), self._hwconfig.get_phse_word(cmd['phase']), \
+                        self._hwconfig.get_env_addr(env_addr_map[cmd['env']]), length, cmd['start_time']))
             elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
                     in0 = self._regs[cmd['in0']]
@@ -248,9 +250,10 @@ class SingleUnitAssembler:
 
         for envkey, env in self._env_dict.items():
             #ipdb.set_trace()
-            env_addr_map[envkey] = cur_addr
-            env = np.pad(env, (0, (4 - len(env) % 4) % 4))
-            cur_addr += len(env)//4
+            #TODO: how much of this do we move to hwconfig re: env padding and bit packing
+            env_addr_map[envkey] = self._hwconfig.get_env_addr(cur_env_ind)
+            env = np.pad(env, (0, (self._hwconfig.dac_samples_per_clk - len(env) % self._hwconfig.dac_samples_per_clk) % self._hwconfig.dac_samples_per_clk))
+            cur_env_ind += len(env)//self._hwconfig.dac_samples_per_clk
 
             env_val = cg.twos_complement(np.real(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) \
                         + (cg.twos_complement(np.imag(env*2**(ENV_BITS-1)).astype(int), nbits=ENV_BITS) << ENV_BITS)

@@ -1,13 +1,24 @@
 import pytest
 import numpy as np
 import distproc.compiler as cm
+import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
 import qubitconfig.wiremap as wm
+
+class HWConfigTest(hw.HardwareConfig):
+    def __init__(self):
+        super().__init__(4.e-9, 4, 4)
+    def get_freq_word(self):
+        return 0
+    def get_phase_word(self):
+        return 0
+    def get_env_addr(self):
+        return 0
 
 def test_phase_resolve():
     wiremap = wm.Wiremap('wiremap_test0.json')
     qchip = qc.QChip('qubitcfg.json')
-    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, None)
+    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, HWConfigTest())
     compiler.add_statement({'name':'X90', 'qubit':'Q0'})
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
@@ -23,7 +34,7 @@ def test_phase_resolve():
 def test_basic_schedule():
     wiremap = wm.Wiremap('wiremap_test0.json')
     qchip = qc.QChip('qubitcfg.json')
-    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, None)
+    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, HWConfigTest())
     compiler.add_statement({'name':'X90', 'qubit':'Q0'})
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})

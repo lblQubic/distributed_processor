@@ -80,7 +80,7 @@ class Compiler:
                 self.zphase[qubit + '.' + freqname] = 0
             for chan, ind in wiremap.coredict.items():
                 if qubit in chan:
-                    self.assemblers[ind] = asm.SingleUnitAssembler()
+                    self.assemblers[ind] = asm.SingleUnitAssembler(hwconfig)
 
     def add_statement(self, statement_dict, index=-1):
         if index==-1:
@@ -163,3 +163,7 @@ class Compiler:
                 zresolved_program.append(gate)
 
         return zresolved_program
+
+    def quantize_schedule(self, scheduled_program):
+        for gate in scheduled_program:
+            pass
