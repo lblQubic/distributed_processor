@@ -165,5 +165,21 @@ class Compiler:
         return zresolved_program
 
     def compile(self):
-        pass
+        if not self._isresolved:
+            self._resolved_program = self._resolve_gates(self._program)
+            self._resolved_program = self._resolve_virtualz_pulses(self._resolved_program)
+            self._scheduled_program = self.schedule(self._resolved_program)
+            self._isresolved = True
+            self._isscheduled = True
+        elif not self._isscheduled:
+            self._scheduled_program = self.schedule(self._resolved_program)
+            self._isscheduled = True
+        for instr in self._scheduled_program:
+            if 'gate' in instr.keys():
+                for pulse in instr['gate'].get_pulses():
+                    coreind = self.wiremap.coredict[pulse.dest]
+                    self.assemblers[coreind].add_pulse(pulse.fcarrier, pulse.pcarrier, instr['t'], \
+                            pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1])
+            else:
+                raise Exception('{} not yet implemented'.format(instr['name']))
 

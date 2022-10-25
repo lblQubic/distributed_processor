@@ -60,3 +60,17 @@ def test_basic_schedule():
     assert scheduled_prog[4]['t'] == 4 #scheduled_prog[1]['gate'].contents[0].twidth
     assert scheduled_prog[5]['t'] == 24 #scheduled_prog[0]['gate'].contents[0].twidth \
                 #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
+
+def test_basic_compile():
+    #can we compile without errors
+    wiremap = wm.Wiremap('wiremap_test0.json')
+    qchip = qc.QChip('qubitcfg.json')
+    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, HWConfigTest())
+    compiler.add_statement({'name':'X90', 'qubit':'Q0'})
+    compiler.add_statement({'name':'X90', 'qubit':'Q1'})
+    compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
+    compiler.add_statement({'name':'X90', 'qubit':'Q0'})
+    compiler.add_statement({'name':'X90', 'qubit':'Q1'})
+    compiler.add_statement({'name':'read', 'qubit':'Q0'})
+    compiler.compile()
+    assert True
