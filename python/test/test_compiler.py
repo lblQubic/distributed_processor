@@ -20,6 +20,8 @@ class HWConfigTest(hw.HardwareConfig):
         return 0
     def get_env_addr(self, env_ind):
         return 0
+    def length_nclks(self, tlength):
+        return int(np.ceil(tlength/self.fpga_clk_period))
 
 def test_phase_resolve():
     wiremap = wm.Wiremap('wiremap_test0.json')
@@ -52,9 +54,9 @@ def test_basic_schedule():
     scheduled_prog = compiler.schedule(resolved_prog)
     assert scheduled_prog[0]['t'] == 0
     assert scheduled_prog[1]['t'] == 0
-    assert scheduled_prog[2]['t'] == scheduled_prog[0]['gate'].contents[0].twidth
-    assert scheduled_prog[3]['t'] == scheduled_prog[0]['gate'].contents[0].twidth \
-            + scheduled_prog[2]['gate'].contents[0].twidth
-    assert scheduled_prog[4]['t'] == scheduled_prog[1]['gate'].contents[0].twidth
-    assert scheduled_prog[5]['t'] == scheduled_prog[0]['gate'].contents[0].twidth \
-                + scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
+    assert scheduled_prog[2]['t'] == 8 #scheduled_prog[0]['gate'].contents[0].twidth
+    assert scheduled_prog[3]['t'] == 16 #scheduled_prog[0]['gate'].contents[0].twidth \
+            #+ scheduled_prog[2]['gate'].contents[0].twidth
+    assert scheduled_prog[4]['t'] == 4 #scheduled_prog[1]['gate'].contents[0].twidth
+    assert scheduled_prog[5]['t'] == 24 #scheduled_prog[0]['gate'].contents[0].twidth \
+                #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth

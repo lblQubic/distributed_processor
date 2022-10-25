@@ -44,6 +44,19 @@ class HardwareConfig(ABC):
 
     @abstractmethod
     def get_length_word(self, length):
+        """
+        Returns the length word to be used in pulse
+        command.
+
+        Parameters
+        ----------
+            length: int
+                pulse length in DAC samples
+        """
+        pass
+
+    @abstractmethod
+    def length_nclks(self, tlength):
         pass
 
     @abstractmethod

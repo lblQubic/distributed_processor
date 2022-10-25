@@ -115,10 +115,10 @@ class Compiler:
                 qubit = pulse.dest[:2]
                 assert qubit in self.qubits
                 qubit_t = qubit_last_t[qubit]
-                min_pulse_t.append(qubit_t - pulse.t0)
+                min_pulse_t.append(qubit_t - self.hwconfig.length_nclks(pulse.t0))
             gate_t = max(min_pulse_t)
             for pulse in pulses:
-                qubit_last_t[pulse.dest[:2]] = gate_t + pulse.t0 + pulse.twidth
+                qubit_last_t[pulse.dest[:2]] = gate_t + self.hwconfig.length_nclks(pulse.t0) + self.hwconfig.length_nclks(pulse.twidth)
             scheduled_program.append({'gate': gate, 't': gate_t})
 
         return scheduled_program
@@ -164,6 +164,6 @@ class Compiler:
 
         return zresolved_program
 
-    def quantize_schedule(self, scheduled_program):
-        for gate in scheduled_program:
-            pass
+    def compile(self):
+        pass
+
