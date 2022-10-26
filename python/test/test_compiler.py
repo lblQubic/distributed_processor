@@ -73,4 +73,5 @@ def test_basic_compile():
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'read', 'qubit':'Q0'})
     compiler.compile()
+    compiler.generate_sim_output()
     assert True

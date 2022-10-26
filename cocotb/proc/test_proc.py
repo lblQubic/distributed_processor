@@ -239,6 +239,7 @@ async def jump_i_test(dut):
 
     dut.reset.value = 1
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
     dut.reset.value = 0
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
@@ -274,6 +275,7 @@ async def jump_i_cond_test(dut):
     await load_commands(dut, cmd_list)
 
     dut.reset.value = 1
+    await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
     await RisingEdge(dut.clk)

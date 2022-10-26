@@ -17,7 +17,7 @@ module instr_ptr
 
     always @(posedge clk) begin
         if(reset) begin
-            prev_val_inc <= 0;
+            prev_val_inc <= 1;
             prev_val <= 0;
         end
 

@@ -72,6 +72,7 @@ class Compiler:
         self._scheduled_program = []
         self._isscheduled = False
         self._isresolved = False
+        self.coredict = {}
 
         self.assemblers = {}
         self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
@@ -81,6 +82,7 @@ class Compiler:
             for chan, ind in wiremap.coredict.items():
                 if qubit in chan:
                     self.assemblers[ind] = asm.SingleUnitAssembler(hwconfig)
+                    self.coredict[chan] = ind
 
     def add_statement(self, statement_dict, index=-1):
         if index==-1:
@@ -182,4 +184,24 @@ class Compiler:
                             pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1])
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
+
+    def generate_sim_output(self, n_samples=5000):
+        destdict = {}
+        for chan, ind in self.coredict.items():
+            destdict[ind] = np.zeros((2, n_samples))
+        for instr in self._scheduled_program:
+            if 'gate' in instr.keys():
+                for pulse in instr['gate'].get_pulses():
+                    pulse_env = pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1]
+                    sample_inds = np.arange(0, len(pulse_env))
+                    phases = pulse.pcarrier + 2*np.pi*pulse.fcarrier*self.hwconfig.dac_sample_period*sample_inds
+                    scale_factor = 2**15 #TODO: fix hardcoding
+                    pulse_i = scale_factor*(np.real(pulse_env)*np.cos(phases) - np.imag(pulse_env)*np.sin(phases))
+                    pulse_q = scale_factor*(np.imag(pulse_env)*np.cos(phases) + np.real(pulse_env)*np.sin(phases))
+                    start_time = instr['t']*self.hwconfig.dac_samples_per_clk
+                    destdict[self.wiremap.coredict[pulse.dest]][0, start_time:start_time+len(pulse_env)] = pulse_i
+                    destdict[self.wiremap.coredict[pulse.dest]][1, start_time:start_time+len(pulse_env)] = pulse_q
+            else:
+                raise Exception('{} not yet implemented'.format(instr['name']))
+        return destdict
 
