@@ -5,6 +5,7 @@
 //`include "../hdl/qclk.v"
 //`include "../hdl/reg_file.v"
 //`include "../hdl/cmd_mem_iface.sv"
+//NOTE: reset should be asserted for at least two clock cycles!
 module proc
     #(parameter DATA_WIDTH=32,
       parameter CMD_WIDTH=128,
