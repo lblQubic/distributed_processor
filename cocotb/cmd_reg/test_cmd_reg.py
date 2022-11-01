@@ -28,21 +28,21 @@ async def test_cmd_reg(dut):
 
     dut.phase_offs_in.value = int(phase*2**PHASE_WIDTH/(2*np.pi))
     dut.freq_in.value = int(freq*2**FREQ_WIDTH/1.e9)
-    dut.env_addr_in.value = env_start_addr
+    dut.env_word_in.value = env_start_addr
     dut.phase_write_en.value = 1
     dut.freq_write_en.value = 1
-    dut.env_addr_write_en.value = 1
+    dut.env_word_write_en.value = 1
     dut.tref.value = tref_start
 
     await(RisingEdge(dut.clk))
     await(ReadWrite())
     phase_out = int(dut.phase.value)
     freq_out = int(dut.freq.value)
-    env_addr_out = int(dut.env_addr.value)
+    env_word_out = int(dut.env_word.value)
 
     assert phase_out == int(phase*2**PHASE_WIDTH/(2*np.pi))
     assert freq_out == int(freq*2**FREQ_WIDTH/1.e9)
-    assert env_addr_out == env_start_addr
+    assert env_word_out == env_start_addr
 
 @cocotb.test()
 async def test_phase_acc(dut):
