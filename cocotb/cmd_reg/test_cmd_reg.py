@@ -26,14 +26,13 @@ async def test_cmd_reg(dut):
 
     tref_start = 0
 
-    await(RisingEdge(dut.clk))
     dut.phase_offs_in.value = int(phase*2**PHASE_WIDTH/(2*np.pi))
     dut.freq_in.value = int(freq*2**FREQ_WIDTH/1.e9)
     dut.env_addr_in.value = env_start_addr
     dut.phase_write_en.value = 1
     dut.freq_write_en.value = 1
     dut.env_addr_write_en.value = 1
-    dut.tref.value = 0
+    dut.tref.value = tref_start
 
     await(RisingEdge(dut.clk))
     await(ReadWrite())
@@ -44,3 +43,60 @@ async def test_cmd_reg(dut):
     assert phase_out == int(phase*2**PHASE_WIDTH/(2*np.pi))
     assert freq_out == int(freq*2**FREQ_WIDTH/1.e9)
     assert env_addr_out == env_start_addr
+
+@cocotb.test()
+async def test_phase_acc(dut):
+    """
+    test phase accumulation from tref
+    """
+    cocotb.start_soon(generate_clock(dut))
+    phase = np.pi/2
+    freq = 200.e6
+
+    await(RisingEdge(dut.clk))
+    dut.phase_offs_in.value = int(phase*2**PHASE_WIDTH/(2*np.pi))
+    dut.freq_in.value = int(freq*2**FREQ_WIDTH/1.e9)
+    dut.tref.value = 0
+    dut.phase_write_en.value = 1
+    dut.freq_write_en.value = 1
+
+    await(RisingEdge(dut.clk))
+    dut.phase_write_en = 0
+    dut.freq_write_en.value = 0
+    dut.phase_offs_in.value = 0
+    dut.freq_in.value = 0
+    await(ReadWrite())
+    phase_out = int(dut.phase.value)
+    assert phase_out == int(phase*2**PHASE_WIDTH/(2*np.pi))
+
+    tref_in = 1
+    dut.tref.value = tref_in
+    phase += 2*np.pi*freq*4.e-9
+    phase %= 2*np.pi
+    await(RisingEdge(dut.clk))
+    phase_out = int(dut.phase.value)
+    assert phase_out == int(phase*2**PHASE_WIDTH/(2*np.pi))
+
+    tref_in += 4
+    dut.tref.value = tref_in
+    phase += 2*np.pi*freq*4*4.e-9
+    phase %= 2*np.pi
+    await(RisingEdge(dut.clk))
+    phase_out = int(dut.phase.value)
+    assert np.abs(phase_out - int(phase*2**PHASE_WIDTH/(2*np.pi))) <= 1
+
+    tref_in += 1
+    dut.tref.value = tref_in
+    phase += 2*np.pi*freq*1*4.e-9
+    phase %= 2*np.pi
+    await(RisingEdge(dut.clk))
+    phase_out = int(dut.phase.value)
+    assert np.abs(phase_out - int(phase*2**PHASE_WIDTH/(2*np.pi))) <= 1
+
+    tref_in += 100
+    dut.tref.value = tref_in
+    phase += 2*np.pi*freq*100*4.e-9
+    phase %= 2*np.pi
+    await(RisingEdge(dut.clk))
+    phase_out = int(dut.phase.value)
+    assert np.abs(phase_out - int(phase*2**PHASE_WIDTH/(2*np.pi))) <= 1
