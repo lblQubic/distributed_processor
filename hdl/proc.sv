@@ -11,13 +11,19 @@ module proc
       parameter CMD_WIDTH=128,
       parameter CMD_ADDR_WIDTH=8,
       parameter REG_ADDR_WIDTH=4,
+      parameter ENV_WORD_WIDTH = 24;
+      parameter PHASE_WORD_WIDTH = 14;
+      parameter FREQ_WORD_WIDTH = 24;       
       parameter SYNC_BARRIER_WIDTH=8)(
       input clk,
       input reset,
+      input[FREQ_WORD_WIDTH-1:0] phase_tref,
       cmd_mem_iface cmd_iface,
       sync_iface.proc sync,
       fproc_iface.proc fproc,
-      output[71:0] cmd_out,
+      output[FREQ_WORD_WIDTH-1:0] freq_out,
+      output[PHASE_WORD_WIDTH-1:0] phase_out,
+      output[ENV_WORD_WIDTH-1:0] env_addr_out,
       output cstrobe_out);
 
     //`include "../hdl/instr_params.vh" //todo: debug includes
@@ -25,7 +31,8 @@ module proc
     localparam OPCODE_WIDTH = 8;
     localparam FPROC_ID_WIDTH = 8;
     localparam ALU_OPCODE_WIDTH = 3;
-    localparam PULSE_OUT_WIDTH = 72;
+    //localparam PULSE_OUT_WIDTH = 72;
+    localparam PULSE_CMD_I_WIDTH = ENV_WORD_WIDTH + PHASE_WORD_WIDTH + FREQ_WORD_WIDTH + 6;
     //localparam INST_PTR_SYNC_EN = 2'b01;
     //localparam INST_PTR_FPROC_EN = 2'b10;
     //localparam INST_PTR_DEFAULT_EN = 2'b00;
@@ -34,6 +41,17 @@ module proc
     wire[CMD_WIDTH-1:0] cmd_buf_out;
     wire[CMD_ADDR_WIDTH-1:0] cmd_buf_read_addr;
     wire[DATA_WIDTH-1:0] alu_out, reg_file_out0, reg_file_out1, alu_in0, alu_in1, qclk_out, qclk_in;
+
+    //pulse datapath wires
+    wire[FREQ_WORD_WIDTH-1:0] freq_i_in, freq_in;
+    wire[ENV_WORD_WIDTH-1:0] env_i_in, env_in;
+    wire[PHASE_WORD_WIDTH-1:0] phase_i_in, phase_in;
+    wire phase_write_en;
+    wire freq_write_en;
+    wire env_write_en;
+    wire phase_in_sel; //0 for i, 1 for r
+    wire freq_in_sel;
+    wire env_in_sel;
 
     assign cmd_buf_out = cmd_iface.cmd_read;
     
@@ -68,8 +86,33 @@ module proc
     assign reg_addr_in0 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH]; //     choose between one or the other
     assign reg_addr_in1 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH]; 
     assign reg_write_addr = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-2*REG_ADDR_WIDTH]; 
-    assign cmd_out = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-PULSE_OUT_WIDTH];
-    assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH];
+    //assign cmd_out = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-PULSE_OUT_WIDTH];
+
+    //pulse datapath
+    assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_I_CMD_WIDTH:
+                            CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_I_CMD_WIDTH-DATA_WIDTH];
+    localparam ENV_INPUT_MSB = CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-2;
+    localparam ENV_INPUT_LSB = CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-2-ENV_WORD_WIDTH;
+    localparam PHASE_INPUT_MSB = ENV_INPUT_LSB-1-2;
+    localparam PHASE_INPUT_LSB = ENV_INPUT_LSB-PHASE_WIDTH-2;
+    localparam FREQ_INPUT_MSB = PHASE_INPUT_LSB-1-2;
+    localparam FREQ_INPUT_LSB = PHASE_INPUT_LSB-FREQ_WIDTH-2;
+
+    assign freq_i_in = cmd_buf_out[FREQ_INPUT_MSB:FREQ_INPUT_LSB];
+    assign phase_i_in = cmd_buf_out[PHASE_INPUT_MSB:PHASE_INPUT_LSB];
+    assign env_i_in = cmd_buf_out[ENV_INPUT_MSB:ENV_INPUT_LSB];
+
+    assign freq_in_en_cmd = cmd_buf_out[FREQ_INPUT_MSB+2];
+    assign phase_in_en_cmd = cmd_buf_out[PHASE_INPUT_MSB+2];
+    assign env_in_en_cmd = cmd_buf_out[ENV_INPUT_MSB+2];
+
+    assign freq_in_reg = cmd_buf_out[FREQ_INPUT_MSB+1];
+    assign phase_in_reg = cmd_buf_out[PHASE_INPUT_MSB+1];
+    assign env_in_reg = cmd_buf_out[ENV_INPUT_MSB+1];
+
+    freq_in = freq_in_reg ? reg_file_out0[FREQ_WIDTH-1:0] : freq_i_in
+    phase_in = phase_in_reg ? reg_file_out0[PHASE_WIDTH-1:0] : phase_i_in
+    env_in = env_in_reg ? reg_file_out0[ENV_WIDTH-1:0] : env_i_in
 
     //other datapath connections
     assign qclk_in = alu_out;

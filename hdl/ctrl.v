@@ -14,7 +14,8 @@ module ctrl(
     output reg[1:0] instr_ptr_load_en,
     output reg qclk_load_en,
     output reg sync_out_ready,
-    output reg fproc_out_ready);
+    output reg fproc_out_ready,
+    output reg write_pulse_en);
 
     reg[3:0] state, next_state;
 
@@ -31,6 +32,7 @@ module ctrl(
     *   INIT: new instruction clocked out; depending on opcode:
     *       - halt PC and wait for cstrobe (same behavior as single cycle); always transition to itself
     *       - halt PC, read regs/set up inputs to ALU, transition to ALU_PROC_STATE 
+    *       - pulse_write: enable pulse_write regs, enable PC, transition to itself
     *       - fproc or sync; transition to fproc/sync wait states respectively
     *   ALU_PROC_STATE
     *       - clock in register writes and increment instr_ptr
@@ -58,15 +60,39 @@ module ctrl(
     always @(*) begin
         if(state == INIT_STATE) begin
             case(opcode[7:4])
-                PULSE_I : begin
+                //PULSE_I : begin
+                //    next_state = INIT_STATE;
+                //    c_strobe_enable = ~reset;
+                //    instr_ptr_load_en = 0;
+                //    instr_ptr_en = cstrobe_in;
+                //    sync_out_ready = 0;
+                //    fproc_out_ready = 0;
+                //    reg_write_en = 0;
+                //    qclk_load_en = 0;
+                //end
+
+                PULSE_WRITE : begin
+                    next_state = INIT_STATE;
+                    c_strobe_enable = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    instr_ptr_en = 1;
+                    sync_out_ready = 0;
+                    fproc_out_ready = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                    write_pulse_en = 1;
+                end
+
+                PULSE_WRITE_TRIG : begin
                     next_state = INIT_STATE;
                     c_strobe_enable = ~reset;
-                    instr_ptr_load_en = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = cstrobe_in;
                     sync_out_ready = 0;
                     fproc_out_ready = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
+                    write_pulse_en = 1;
                 end
 
                 REG_ALU : begin
@@ -75,11 +101,12 @@ module ctrl(
                     //defaults:
                     reg_write_en = 0;
                     c_strobe_enable = 0;
-                    instr_ptr_load_en = 2'b0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     qclk_load_en = 0;
                     sync_out_ready = 0;
                     fproc_out_ready = 0;
+                    write_pulse_en = 0;
                 end
 
                 JUMP_I : begin
@@ -92,6 +119,7 @@ module ctrl(
                     qclk_load_en = 0;
                     sync_out_ready = 0;
                     fproc_out_ready = 0;
+                    write_pulse_en = 0;
                 end
 
                 JUMP_COND : begin //this must use a cmp opcode or bad things will happen!
@@ -105,6 +133,7 @@ module ctrl(
                     qclk_load_en = 0;
                     sync_out_ready = 0;
                     fproc_out_ready = 0;
+                    write_pulse_en = 0;
                 end
 
                 INC_QCLK : begin //this can use an ADD, SUB, or ID opcode
@@ -118,6 +147,7 @@ module ctrl(
                     fproc_out_ready = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
+                    write_pulse_en = 0;
                 end
 
                 ALU_FPROC : begin
@@ -130,6 +160,7 @@ module ctrl(
                     sync_out_ready = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
+                    write_pulse_en = 0;
                 end
 
                 JUMP_FPROC : begin
@@ -142,10 +173,19 @@ module ctrl(
                     sync_out_ready = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
+                    write_pulse_en = 0;
                 end
 
                 default : begin
                     next_state = INIT_STATE;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    write_pulse_en = 0;
+                    instr_ptr_en = 0;
+                    sync_out_ready = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                    c_strobe_enable = 0;
+                    fproc_out_ready = 0;
                 end
 
             endcase
@@ -161,6 +201,7 @@ module ctrl(
             qclk_load_en = 0;
             sync_out_ready = 0;
             fproc_out_ready = 0;
+            write_pulse_en = 0;
         end
 
         else if(state == INC_QCLK_STATE) begin
@@ -172,6 +213,7 @@ module ctrl(
             qclk_load_en = 1;
             sync_out_ready = 0;
             fproc_out_ready = 0;
+            write_pulse_en = 0;
         end
 
         else if(state == JUMP_COND_STATE) begin
@@ -183,6 +225,7 @@ module ctrl(
             qclk_load_en = 0;
             sync_out_ready = 0;
             fproc_out_ready = 0;
+            write_pulse_en = 0;
         end
 
         else if(state == ALU_FPROC_WAIT_STATE) begin
@@ -200,6 +243,7 @@ module ctrl(
             qclk_load_en = 0;
             sync_out_ready = 0;
             fproc_out_ready = 0;
+            write_pulse_en = 0;
         end
 
         else if(state == JUMP_FPROC_WAIT_STATE) begin
@@ -217,6 +261,7 @@ module ctrl(
             qclk_load_en = 0;
             sync_out_ready = 0;
             fproc_out_ready = 0;
+            write_pulse_en = 0;
         end
         
     end
