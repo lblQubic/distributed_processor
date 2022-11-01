@@ -1,4 +1,4 @@
-module cmd_reg #(
+module pulse_reg #(
     parameter PHASE_WIDTH=14,
     parameter FREQ_WIDTH=24,
     parameter SAMPLES_PER_CLK=4,

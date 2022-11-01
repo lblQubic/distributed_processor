@@ -11,19 +11,19 @@ module proc
       parameter CMD_WIDTH=128,
       parameter CMD_ADDR_WIDTH=8,
       parameter REG_ADDR_WIDTH=4,
-      parameter ENV_WORD_WIDTH = 24;
-      parameter PHASE_WORD_WIDTH = 14;
-      parameter FREQ_WORD_WIDTH = 24;       
+      parameter ENV_WIDTH = 24,
+      parameter PHASE_WIDTH = 14,
+      parameter FREQ_WIDTH = 24,
       parameter SYNC_BARRIER_WIDTH=8)(
       input clk,
       input reset,
-      input[FREQ_WORD_WIDTH-1:0] phase_tref,
+      input[FREQ_WIDTH-1:0] phase_tref,
       cmd_mem_iface cmd_iface,
       sync_iface.proc sync,
       fproc_iface.proc fproc,
-      output[FREQ_WORD_WIDTH-1:0] freq_out,
-      output[PHASE_WORD_WIDTH-1:0] phase_out,
-      output[ENV_WORD_WIDTH-1:0] env_addr_out,
+      output[FREQ_WIDTH-1:0] freq_out,
+      output[PHASE_WIDTH-1:0] phase_out,
+      output[ENV_WIDTH-1:0] env_addr_out,
       output cstrobe_out);
 
     //`include "../hdl/instr_params.vh" //todo: debug includes
@@ -32,7 +32,7 @@ module proc
     localparam FPROC_ID_WIDTH = 8;
     localparam ALU_OPCODE_WIDTH = 3;
     //localparam PULSE_OUT_WIDTH = 72;
-    localparam PULSE_CMD_I_WIDTH = ENV_WORD_WIDTH + PHASE_WORD_WIDTH + FREQ_WORD_WIDTH + 6;
+    localparam PULSE_CMD_I_WIDTH = ENV_WIDTH + PHASE_WIDTH + FREQ_WIDTH + 6;
     //localparam INST_PTR_SYNC_EN = 2'b01;
     //localparam INST_PTR_FPROC_EN = 2'b10;
     //localparam INST_PTR_DEFAULT_EN = 2'b00;
@@ -43,15 +43,16 @@ module proc
     wire[DATA_WIDTH-1:0] alu_out, reg_file_out0, reg_file_out1, alu_in0, alu_in1, qclk_out, qclk_in;
 
     //pulse datapath wires
-    wire[FREQ_WORD_WIDTH-1:0] freq_i_in, freq_in;
-    wire[ENV_WORD_WIDTH-1:0] env_i_in, env_in;
-    wire[PHASE_WORD_WIDTH-1:0] phase_i_in, phase_in;
-    wire phase_write_en;
-    wire freq_write_en;
-    wire env_write_en;
-    wire phase_in_sel; //0 for i, 1 for r
-    wire freq_in_sel;
-    wire env_in_sel;
+    wire[FREQ_WIDTH-1:0] freq_i_in, freq_in; //i is from cmd_buffer, freq_in is actual input (could be r val)
+    wire[ENV_WIDTH-1:0] env_i_in, env_in;
+    wire[PHASE_WIDTH-1:0] phase_i_in, phase_in;
+    wire phase_write_en, phase_write_en_cmd;
+    wire freq_write_en, freq_write_en_cmd;
+    wire env_write_en, env_write_en_cmd;
+    wire phase_write_sel; //0 for i, 1 for r
+    wire freq_write_sel;
+    wire env_write_sel;
+    wire write_pulse_en;
 
     assign cmd_buf_out = cmd_iface.cmd_read;
     
@@ -89,10 +90,10 @@ module proc
     //assign cmd_out = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-PULSE_OUT_WIDTH];
 
     //pulse datapath
-    assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_I_CMD_WIDTH:
-                            CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_I_CMD_WIDTH-DATA_WIDTH];
+    assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH:
+                            CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH-DATA_WIDTH];
     localparam ENV_INPUT_MSB = CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-2;
-    localparam ENV_INPUT_LSB = CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-2-ENV_WORD_WIDTH;
+    localparam ENV_INPUT_LSB = CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-2-ENV_WIDTH;
     localparam PHASE_INPUT_MSB = ENV_INPUT_LSB-1-2;
     localparam PHASE_INPUT_LSB = ENV_INPUT_LSB-PHASE_WIDTH-2;
     localparam FREQ_INPUT_MSB = PHASE_INPUT_LSB-1-2;
@@ -102,17 +103,17 @@ module proc
     assign phase_i_in = cmd_buf_out[PHASE_INPUT_MSB:PHASE_INPUT_LSB];
     assign env_i_in = cmd_buf_out[ENV_INPUT_MSB:ENV_INPUT_LSB];
 
-    assign freq_in_en_cmd = cmd_buf_out[FREQ_INPUT_MSB+2];
-    assign phase_in_en_cmd = cmd_buf_out[PHASE_INPUT_MSB+2];
-    assign env_in_en_cmd = cmd_buf_out[ENV_INPUT_MSB+2];
+    assign freq_write_en_cmd = cmd_buf_out[FREQ_INPUT_MSB+2];
+    assign phase_write_en_cmd = cmd_buf_out[PHASE_INPUT_MSB+2];
+    assign env_write_en_cmd = cmd_buf_out[ENV_INPUT_MSB+2];
 
-    assign freq_in_reg = cmd_buf_out[FREQ_INPUT_MSB+1];
-    assign phase_in_reg = cmd_buf_out[PHASE_INPUT_MSB+1];
-    assign env_in_reg = cmd_buf_out[ENV_INPUT_MSB+1];
+    assign freq_write_sel = cmd_buf_out[FREQ_INPUT_MSB+1];
+    assign phase_write_sel = cmd_buf_out[PHASE_INPUT_MSB+1];
+    assign env_write_sel = cmd_buf_out[ENV_INPUT_MSB+1];
 
-    freq_in = freq_in_reg ? reg_file_out0[FREQ_WIDTH-1:0] : freq_i_in
-    phase_in = phase_in_reg ? reg_file_out0[PHASE_WIDTH-1:0] : phase_i_in
-    env_in = env_in_reg ? reg_file_out0[ENV_WIDTH-1:0] : env_i_in
+    assign freq_in = freq_write_sel ? reg_file_out0[FREQ_WIDTH-1:0] : freq_i_in;
+    assign phase_in = phase_write_sel ? reg_file_out0[PHASE_WIDTH-1:0] : phase_i_in;
+    assign env_in = env_write_sel ? reg_file_out0[ENV_WIDTH-1:0] : env_i_in;
 
     //other datapath connections
     assign qclk_in = alu_out;
@@ -133,6 +134,9 @@ module proc
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
     assign cstrobe_out = cstrobe;
 
+    assign freq_write_en = freq_write_en_cmd & write_pulse_en;
+    assign phase_write_en = phase_write_en_cmd & write_pulse_en;
+    assign env_write_en = env_write_en_cmd & write_pulse_en;
 
     //instantiate modules
     //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
@@ -148,9 +152,9 @@ module proc
               .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe),
-              .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable));
+              .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable), .write_pulse_en(write_pulse_en));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
-    qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: impolement sync reset logic
+    qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
 
     //`ifdef COCOTB_SIM
     //initial begin
