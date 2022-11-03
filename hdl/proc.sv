@@ -14,7 +14,8 @@ module proc
       parameter ENV_WIDTH = 24,
       parameter PHASE_WIDTH = 14,
       parameter FREQ_WIDTH = 24,
-      parameter SYNC_BARRIER_WIDTH=8)(
+      parameter SYNC_BARRIER_WIDTH=8,
+      parameter DAC_SAMPLES_PER_CLK=4)(
       input clk,
       input reset,
       input[FREQ_WIDTH-1:0] phase_tref,
@@ -23,7 +24,7 @@ module proc
       fproc_iface.proc fproc,
       output[FREQ_WIDTH-1:0] freq_out,
       output[PHASE_WIDTH-1:0] phase_out,
-      output[ENV_WIDTH-1:0] env_addr_out,
+      output[ENV_WIDTH-1:0] env_word_out,
       output cstrobe_out);
 
     //`include "../hdl/instr_params.vh" //todo: debug includes
@@ -132,7 +133,7 @@ module proc
     //end
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
-    assign cstrobe_out = cstrobe;
+    //assign cstrobe_out = cstrobe;
 
     assign freq_write_en = freq_write_en_cmd & write_pulse_en;
     assign phase_write_en = phase_write_en_cmd & write_pulse_en;
@@ -155,6 +156,10 @@ module proc
               .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable), .write_pulse_en(write_pulse_en));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
+    pulse_reg #(.PHASE_WIDTH(PHASE_WIDTH), .FREQ_WIDTH(FREQ_WIDTH), .SAMPLES_PER_CLK(DAC_SAMPLES_PER_CLK), .TREF_WIDTH(FREQ_WIDTH), 
+        .ENV_WORD_WIDTH(ENV_WIDTH)) pulsereg(.clk(clk), .phase_offs_in(phase_in), .freq_in(freq_in), .tref(phase_tref), 
+        .env_word_in(env_in), .phase_write_en(phase_write_en), .freq_write_en(freq_write_en), .env_word_write_en(env_write_en),
+        .cstrobe_in(cstrobe), .phase(phase_out), .freq(freq_out), .env_word(env_word_out), .cstrobe(cstrobe_out));
 
     //`ifdef COCOTB_SIM
     //initial begin
