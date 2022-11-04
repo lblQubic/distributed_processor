@@ -31,8 +31,6 @@ def pulse_i(freq_word, phase_word, env_start_addr, env_nclks, cmd_time):
     """
     Returns 128-bit command corresponding to timed pulse output.
     This is configured for processor in QubiC dsp_unit gateware.
-    TODO: refactor this such that HW params are handled by a 
-    HWInterface abstract class.
 
     Parameters
     ----------
@@ -57,6 +55,52 @@ def pulse_i(freq_word, phase_word, env_start_addr, env_nclks, cmd_time):
     #    raise Exception('length of envelope must be a multiple of 4!')
     cmd_word = (env_start_addr << 50) + (env_nclks << 38) + (phase_word << 24) + freq_word
     return (cmd_word << 24) + (cmd_time << 88)
+
+def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=None,
+        env_word=None, env_regaddr=None, cmd_time=None):
+    """
+    General form for a pulse command. This instruction can execute the following actions
+    (in one instruction cycle):
+        1. Load parameters into pulse register. All parameters can be loaded simultaneosly, 
+           with up to one parameter at a time coming from a proc register.
+        2. Independently of (1), trigger pulse according to cmd_time. Triggered pulse
+           will always have the most recently loaded parameters.
+
+    The phase, freq, and env words to load should in general be provided by an HWConfig 
+    instance, but can be found manually.
+
+    TODO: consider refactoring to not have hardcoded parameter widths/positions...
+    i.e. if different siggen blocks needed more/less bits
+
+    Parameters
+    ----------
+        freq_word : int
+            word encoding the pulse carrier frequency 
+            (usually (f/sample_rate)*2**NBITS)
+        phase : float
+            word encoding initial carrier phase 
+        env_start_addr : int
+            start address of pulse envelope
+        env_word : int
+            word describing env address and duration
+            (initial version is 12 bit MSB ...)
+
+    """
+    cmd = 0
+    if freq_word is not None:
+        assert freq_regaddr is None
+        cmd += (freq_word + 2**25) << 48
+    if phase_word is not None:
+        assert phase_regaddr is None
+        cmd += (phase_word + 2**15) << (48 + 26)
+    if env_word is not None:
+        assert env_regaddr is None
+        cmd += (env_word + 2**25) << (48 + 26 + 16)
+    if freq_regaddr is not None:
+        assert phase_regaddr is None and env_regaddr is None
+        assert freq_regaddr < 16
+        cmd += freq_regaddr + 
+
 
 def reg_alu_i(value, alu_op, reg_addr, reg_write_addr):
     """
