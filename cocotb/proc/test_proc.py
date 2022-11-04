@@ -121,6 +121,53 @@ async def pulse_freq_trig_test(dut):
     #assert np.all(np.asarray(cmd_time_list) == np.asarray(cmd_read_times).astype(int))
 
 @cocotb.test()
+async def pulse_i_test(dut):
+    n_cmd = 11
+    cmd_list = []
+    freq_word_list = []
+    phase_word_list = []
+    env_word_list = []
+    pulse_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
+
+    for i in range(n_cmd):
+        freq_word = random.randint(0, 2**24)
+        phase_word = random.randint(0, 2**14)
+        env_word = random.randint(0, 2**24)
+        freq_word_list.append(freq_word)
+        phase_word_list.append(phase_word)
+        env_word_list.append(env_word)
+        cmd_list.append(cg.pulse_i(freq_word, phase_word, env_word, pulse_time_list[i]))
+    
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    freq_read_list = []
+    phase_read_list = []
+    env_read_list = []
+    pulse_read_times = []
+
+    for i in range(25):
+        if(dut.cstrobe_out.value == 1):
+            freq_read_list.append(dut.freq.value)
+            phase_read_list.append(dut.phase.value)
+            env_read_list.append(dut.env_word.value)
+            pulse_read_times.append(dut.dpr.qclk_out.value)
+        await RisingEdge(dut.clk)
+
+    for i in range(n_cmd):
+        assert freq_word_list[i] == freq_read_list[i]
+        #ipdb.set_trace()
+        assert phase_read_list[i] == (((pulse_time_list[i] + CSTROBE_DELAY)*freq_word_list[i]*4 >> 10) + phase_word_list[i]) % 2**14
+        assert env_word_list[i] == env_read_list[i]
+        assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
+
+@cocotb.test()
 async def regwrite_i_test(dut):
     reg_addr = random.randint(0,15)
     reg_val = random.randint(0, 2**32-1)
