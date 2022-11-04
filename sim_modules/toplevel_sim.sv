@@ -3,7 +3,11 @@ module toplevel_sim#(
     parameter CMD_WIDTH=128,
     parameter CMD_ADDR_WIDTH=8,
     parameter REG_ADDR_WIDTH=4,
-    parameter SYNC_BARRIER_WIDTH=8)(
+    parameter ENV_WIDTH = 24,
+    parameter PHASE_WIDTH = 14,
+    parameter FREQ_WIDTH = 24,
+    parameter SYNC_BARRIER_WIDTH=8,
+    parameter DAC_SAMPLES_PER_CLK=4)(
     input clk,
     input reset,
     input sync_enable,
@@ -12,7 +16,9 @@ module toplevel_sim#(
     input[CMD_ADDR_WIDTH-1:0] cmd_write_addr,
     input[CMD_WIDTH-1:0] cmd_write,
     input cmd_write_enable,
-    output[71:0] cmd_out,
+    output[ENV_WIDTH-1:0] env_word,
+    output[PHASE_WIDTH-1:0] phase,
+    output[FREQ_WIDTH-1:0] freq,
     output cstrobe_out,
     output[SYNC_BARRIER_WIDTH-1:0] sync_barrier,
     output sync_barrier_en_out,
@@ -21,6 +27,16 @@ module toplevel_sim#(
 
     localparam MEM_TO_CMD=4;
     localparam MEM_WIDTH=32;
+
+    reg[FREQ_WIDTH-1:0] phase_tref;
+    always @(posedge clk) begin
+        if(reset)
+            phase_tref <= 0;
+        else
+            phase_tref <= phase_tref + 1;
+    end
+
+    //phase_tref counter
 
     cmd_mem_iface #(.CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .MEM_WIDTH(MEM_WIDTH), 
         .MEM_TO_CMD(MEM_TO_CMD)) memif();
@@ -41,8 +57,9 @@ module toplevel_sim#(
     proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), 
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
-        .cmd_iface(memif), .fproc(fproc), .sync(sync), 
-        .cmd_out(cmd_out), .cstrobe_out(cstrobe_out));
+        .cmd_iface(memif), .fproc(fproc), .sync(sync), .phase_tref(phase_tref),
+        .env_word_out(env_word), .freq_out(freq), .phase_out(phase),
+        .cstrobe_out(cstrobe_out));
 
     //this just breaks the input 128-bit cmd_write into 4 separate chunks and writes simultaneously
     genvar i;

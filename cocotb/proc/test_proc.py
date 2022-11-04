@@ -12,6 +12,7 @@ PULSE_INSTR_TIME = 1
 ALU_INSTR_TIME = 2
 COND_JUMP_INSTR_TIME = 2
 JUMP_INSTR_TIME = 1
+CSTROBE_DELAY = 1
 
 async def generate_clock(dut):
     for i in range(N_CLKS):
@@ -51,7 +52,7 @@ async def cmd_mem_out_test(dut):
     await load_commands(dut, cmd_list)
     dut.reset.value = 1
     await RisingEdge(dut.clk)
-    #await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
     dut.reset.value = 0
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
@@ -76,57 +77,61 @@ async def cmd_mem_out_test(dut):
 
     #dut._log.info("clk val {}".format(dut.clk))
 
+#@cocotb.test()
+#async def pulse_cmd_out_test(dut):
+#    """
+#    same as cmd_mem_out_test, but check the cmd_out
+#    port instead of the output of the command memory
+#    directly
+#    """
+#    n_cmd = 20
+#    cmd_list = []
+#
+#    for i in range(n_cmd):
+#        cmd_list.append(random.randint(0,2**120-1) + (1<<124))
+#
+#    await cocotb.start(generate_clock(dut))
+#
+#    await load_commands(dut, cmd_list)
+#    dut.reset.value = 1
+#    await RisingEdge(dut.clk)
+#    await RisingEdge(dut.clk)
+#    dut.reset.value = 0
+#    await RisingEdge(dut.clk)
+#    await RisingEdge(dut.clk)
+#
+#    cmd_read_list = []
+#    qclk_val = []
+#    for i in range(n_cmd):
+#        cmd_read_list.append(dut.cmd_out.value)
+#        qclk_val.append(dut.dpr.qclk_out.value)
+#        for j in range(ALU_INSTR_TIME):
+#            await RisingEdge(dut.clk)
+#
+#    for i in range(n_cmd):
+#        cmd = cmd_list[i] >> 16
+#        cmd = cmd%(2**72)
+#        #print('........................................')
+#        #print('cmd_out {:0b}'.format(int(cmd_list[i])))
+#        #print('cmd_cut_out {:0b}'.format(int(cmd)))
+#        #print('cmd_in {:0b}'.format(int(cmd_read_list[i])))
+#        assert cmd_read_list[i] == cmd
+
 @cocotb.test()
-async def pulse_cmd_out_test(dut):
+async def pulse_freq_trig_test(dut):
     """
-    same as cmd_mem_out_test, but check the cmd_out
-    port instead of the output of the command memory
-    directly
+    run a series of commands to write freq val to cmd reg, then clock them out
     """
-    n_cmd = 20
-    cmd_list = []
-
-    for i in range(n_cmd):
-        cmd_list.append(random.randint(0,2**120-1) + (1<<124))
-
-    await cocotb.start(generate_clock(dut))
-
-    await load_commands(dut, cmd_list)
-    dut.reset.value = 1
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-    dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-
-    cmd_read_list = []
-    qclk_val = []
-    for i in range(n_cmd):
-        cmd_read_list.append(dut.cmd_out.value)
-        qclk_val.append(dut.dpr.qclk_out.value)
-        for j in range(ALU_INSTR_TIME):
-            await RisingEdge(dut.clk)
-
-    for i in range(n_cmd):
-        cmd = cmd_list[i] >> 16
-        cmd = cmd%(2**72)
-        #print('........................................')
-        #print('cmd_out {:0b}'.format(int(cmd_list[i])))
-        #print('cmd_cut_out {:0b}'.format(int(cmd)))
-        #print('cmd_in {:0b}'.format(int(cmd_read_list[i])))
-        assert cmd_read_list[i] == cmd
-
-@cocotb.test()
-async def pulse_cmd_trig_test(dut):
     n_cmd = 11
     cmd_list = []
-    cmd_body_list = []
-    cmd_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
+    freq_word_list = []
+    pulse_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
+    pulse_i_opcode = 0b10010000
 
     for i in range(n_cmd):
-        cmd_body = random.randint(0, 2**72)
-        cmd_body_list.append(cmd_body)
-        cmd_list.append((cmd_body << 16) + (cmd_time_list[i] << (16 + 72)))
+        freq_word = random.randint(0, 2**24)
+        freq_word_list.append(freq_word)
+        cmd_list.append((pulse_i_opcode << 120) + ((freq_word + 2**25) << 48) + (pulse_time_list[i] << (16)))
     
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, cmd_list)
@@ -137,21 +142,22 @@ async def pulse_cmd_trig_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
 
-    cmd_read_list = []
-    cmd_read_times = []
+    freq_read_list = []
+    freq_read_times = []
     for i in range(25):
         if(dut.cstrobe_out.value == 1):
-            cmd_read_list.append(dut.cmd_out.value)
-            cmd_read_times.append(dut.dpr.qclk_out.value)
+            freq_read_list.append(dut.freq.value)
+            freq_read_times.append(dut.dpr.qclk_out.value)
         await RisingEdge(dut.clk)
 
-    dut._log.debug('command in: {}'.format(cmd_body_list))
-    dut._log.debug('command time in: {}'.format(cmd_time_list))
-    dut._log.debug('command out: {}'.format(cmd_read_list))
-    dut._log.debug('command time out: {}'.format(cmd_read_times))
+    dut._log.debug('command in: {}'.format(freq_word_list))
+    dut._log.debug('command time in: {}'.format(pulse_time_list))
+    dut._log.debug('command out: {}'.format(freq_read_list))
+    dut._log.debug('command time out: {}'.format(freq_read_times))
+    ipdb.set_trace()
     for i in range(n_cmd):
-        assert cmd_body_list[i] == cmd_read_list[i]
-        assert cmd_time_list[i] == cmd_read_times[i]
+        assert freq_word_list[i] == freq_read_list[i]
+        assert pulse_time_list[i] == freq_read_times[i] - CSTROBE_DELAY
     #assert np.all(np.asarray(cmd_body_list) == np.asarray(cmd_read_list).astype(int))
     #assert np.all(np.asarray(cmd_time_list) == np.asarray(cmd_read_times).astype(int))
 
