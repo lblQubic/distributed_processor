@@ -98,14 +98,17 @@ def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=
         assert phase_regaddr is None and env_regaddr is None
         assert freq_regaddr < 16
         cmd += freq_regaddr << 116
+        cmd += 0b11 << (48 + 24) #enable write + reg_mux
     if phase_regaddr is not None:
         assert freq_regaddr is None and env_regaddr is None
         assert phase_regaddr < 16
         cmd += phase_regaddr << 116
+        cmd += 0b11 << (48 + 26 + 14)
     if env_regaddr is not None:
         assert freq_regaddr is None and phase_regaddr is None
         assert env_regaddr < 16
         cmd += env_regaddr << 116
+        cmd += 0b11 << (48 + 26 + 16 + 24)
 
     if cmd_time is not None:
         cmd += cmd_time << 16

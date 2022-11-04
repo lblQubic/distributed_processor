@@ -240,6 +240,64 @@ async def reg_i_test(dut):
         assert reg_read_val.integer == correct_val 
 
 @cocotb.test()
+async def pulse_reg_test(dut):
+    n_cmd = 3
+    cmd_list = []
+    freq_word_list = []
+    phase_word_list = []
+    env_word_list = []
+    pulse_time_list = [9, 15, 16]
+
+    reg_word = 0x000000a3
+    reg_addr = 2
+
+    cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_word, 'id0', 0, write_reg_addr=reg_addr))
+
+    for i in range(n_cmd):
+        freq_word = random.randint(0, 2**24)
+        phase_word = random.randint(0, 2**14)
+        env_word = random.randint(0, 2**24)
+        if i==0:
+            freq_word = reg_word
+            cmd_list.append(cg.pulse_cmd(freq_regaddr=reg_addr, phase_word=phase_word, env_word=env_word, cmd_time=pulse_time_list[i]))
+        elif i==1:
+            phase_word = reg_word
+            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_regaddr=reg_addr, env_word=env_word, cmd_time=pulse_time_list[i]))
+        elif i==2:
+            env_word = reg_word
+            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_word=phase_word, env_regaddr=reg_addr, cmd_time=pulse_time_list[i]))
+        phase_word_list.append(phase_word)
+        freq_word_list.append(freq_word)
+        env_word_list.append(env_word)
+    
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
+    freq_read_list = []
+    phase_read_list = []
+    env_read_list = []
+    pulse_read_times = []
+
+    for i in range(25):
+        if(dut.cstrobe_out.value == 1):
+            freq_read_list.append(dut.freq.value)
+            phase_read_list.append(dut.phase.value)
+            env_read_list.append(dut.env_word.value)
+            pulse_read_times.append(dut.dpr.qclk_out.value)
+        await RisingEdge(dut.clk)
+
+    for i in range(n_cmd):
+        assert freq_word_list[i] == freq_read_list[i]
+        assert phase_read_list[i] == (((pulse_time_list[i] + CSTROBE_DELAY)*freq_word_list[i]*4 >> 10) + phase_word_list[i]) % 2**14
+        assert env_word_list[i] == env_read_list[i]
+        assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
+@cocotb.test()
 async def jump_i_test(dut):
     cmd_list = []
     jump_addr = random.randint(0, 2**8-1)
