@@ -77,46 +77,6 @@ async def cmd_mem_out_test(dut):
 
     #dut._log.info("clk val {}".format(dut.clk))
 
-#@cocotb.test()
-#async def pulse_cmd_out_test(dut):
-#    """
-#    same as cmd_mem_out_test, but check the cmd_out
-#    port instead of the output of the command memory
-#    directly
-#    """
-#    n_cmd = 20
-#    cmd_list = []
-#
-#    for i in range(n_cmd):
-#        cmd_list.append(random.randint(0,2**120-1) + (1<<124))
-#
-#    await cocotb.start(generate_clock(dut))
-#
-#    await load_commands(dut, cmd_list)
-#    dut.reset.value = 1
-#    await RisingEdge(dut.clk)
-#    await RisingEdge(dut.clk)
-#    dut.reset.value = 0
-#    await RisingEdge(dut.clk)
-#    await RisingEdge(dut.clk)
-#
-#    cmd_read_list = []
-#    qclk_val = []
-#    for i in range(n_cmd):
-#        cmd_read_list.append(dut.cmd_out.value)
-#        qclk_val.append(dut.dpr.qclk_out.value)
-#        for j in range(ALU_INSTR_TIME):
-#            await RisingEdge(dut.clk)
-#
-#    for i in range(n_cmd):
-#        cmd = cmd_list[i] >> 16
-#        cmd = cmd%(2**72)
-#        #print('........................................')
-#        #print('cmd_out {:0b}'.format(int(cmd_list[i])))
-#        #print('cmd_cut_out {:0b}'.format(int(cmd)))
-#        #print('cmd_in {:0b}'.format(int(cmd_read_list[i])))
-#        assert cmd_read_list[i] == cmd
-
 @cocotb.test()
 async def pulse_freq_trig_test(dut):
     """
@@ -154,7 +114,6 @@ async def pulse_freq_trig_test(dut):
     dut._log.debug('command time in: {}'.format(pulse_time_list))
     dut._log.debug('command out: {}'.format(freq_read_list))
     dut._log.debug('command time out: {}'.format(freq_read_times))
-    ipdb.set_trace()
     for i in range(n_cmd):
         assert freq_word_list[i] == freq_read_list[i]
         assert pulse_time_list[i] == freq_read_times[i] - CSTROBE_DELAY
@@ -315,7 +274,7 @@ async def inc_qclk_i_test(dut):
     qclk_inc_val = random.randint(-2**31, 2**31-1)
     qclk_wait_t = random.randint(0, cmd_wait_range-1)
 
-    cmd_list.append(cg.pulse_i(10, 0, 0, 4, qclk_wait_t))
+    cmd_list.append(cg.pulse_i(10, 0, 4, qclk_wait_t))
     cmd_list.append(cg.alu_cmd('inc_qclk', 'i', qclk_inc_val))
 
     await cocotb.start(generate_clock(dut))

@@ -13,7 +13,9 @@ alu_opcodes = {'id0' : 0b000,
                'ge' : 0b101,
                'zero' : 0b111}
 
-opcodes = {'reg_alu_i' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_write_addr[4]
+opcodes = {'pulse_write' : 0b10000,
+           'pulse_write_trig' : 0b10010,
+           'reg_alu_i' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_write_addr[4]
            'reg_alu' : 0b00011, #|opcode[8]|reg_addr[4]|resrv[28]|reg_addr[4]|reg_write_addr[4]
            'jump_i' : 0b00100, #|opcode[8]|cmd_value[32]|reg_addr[4]
            'jump_cond_i' : 0b00110, #|opcode[8]|cmd_value[32]|reg_addr[4]|instr_ptr_addr[8]
@@ -27,25 +29,21 @@ opcodes = {'reg_alu_i' : 0b00010, #|opcode[8]|cmd_value[32]|reg_addr[4]|reg_writ
            'sync' : 0b01110}
 
 
-def pulse_i(freq_word, phase_word, env_start_addr, env_nclks, cmd_time):
+def pulse_i(freq_word, phase_word, env_word, cmd_time):
     """
-    Returns 128-bit command corresponding to timed pulse output.
-    This is configured for processor in QubiC dsp_unit gateware.
+    Simplest type of pulse: pulse parameters and trigger time
+    are all immediate values.
 
     Parameters
     ----------
-        freq : float
-            pulse carrier freq in Hz
-            range: [0, 1.e9)
+        freq_word : int
+            word encoding the pulse carrier frequency 
+            (usually (f/sample_rate)*2**NBITS)
         phase : float
-            initial carrier phase in rad 
-            range: [0, 2pi)
-        env_start_addr : int
-            start address of pulse envelope
-        env_length : int
-            number of envelope samples
-        cmd_time : int
-            pulse start time, in FPGA clock units
+            word encoding initial carrier phase 
+        env_word : int
+            word describing env address and duration
+            (initial version is 12 bit MSB ...)
 
     """
     #freq_int = int((freq/1.e9) * 2**24)
@@ -53,8 +51,8 @@ def pulse_i(freq_word, phase_word, env_start_addr, env_nclks, cmd_time):
     ##cmd_word = (env_start_addr << 50) + (env_length << 38) + (phase_int << 24) + freq_int
     #if env_length % 4 != 0:
     #    raise Exception('length of envelope must be a multiple of 4!')
-    cmd_word = (env_start_addr << 50) + (env_nclks << 38) + (phase_word << 24) + freq_word
-    return (cmd_word << 24) + (cmd_time << 88)
+    return pulse_cmd(freq_word=freq_word, phase_word=phase_word, 
+            env_word=env_word, cmd_time=cmd_time)
 
 def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=None,
         env_word=None, env_regaddr=None, cmd_time=None):
@@ -99,7 +97,24 @@ def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=
     if freq_regaddr is not None:
         assert phase_regaddr is None and env_regaddr is None
         assert freq_regaddr < 16
-        cmd += freq_regaddr + 
+        cmd += freq_regaddr << 116
+    if phase_regaddr is not None:
+        assert freq_regaddr is None and env_regaddr is None
+        assert phase_regaddr < 16
+        cmd += phase_regaddr << 116
+    if env_regaddr is not None:
+        assert freq_regaddr is None and phase_regaddr is None
+        assert env_regaddr < 16
+        cmd += env_regaddr << 116
+
+    if cmd_time is not None:
+        cmd += cmd_time << 16
+        opcode = opcodes['pulse_write_trig']
+    else:
+        opcode = opcodes['pulse_write']
+
+    cmd += (opcode << 123)
+    return cmd
 
 
 def reg_alu_i(value, alu_op, reg_addr, reg_write_addr):
