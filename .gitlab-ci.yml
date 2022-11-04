@@ -19,7 +19,7 @@ variables:
   DRIVER_TEST_PATH: python/test
   PROC_TEST_PATH: cocotb/proc
   FPROC_LUT_TEST_PATH: cocotb/fproc_lut
-  CMD_REG_TEST_PATH: cocotb/cmd_reg
+  PULSE_REG_TEST_PATH: cocotb/pulse_reg
 
 stages:          # List of stages for jobs, and their order of execution
   - test
@@ -47,9 +47,9 @@ test-fproc-lut:
     - cd $FPROC_LUT_TEST_PATH
     - make
 
-test-cmd-reg:
+test-pulse-reg:
   stage: test
   script:
-    - cd $CMD_REG_TEST_PATH
+    - cd $PULSE_REG_TEST_PATH
     - make
 
