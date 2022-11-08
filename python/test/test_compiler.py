@@ -14,11 +14,9 @@ class HWConfigTest(hw.HardwareConfig):
         return 0
     def get_env_addr(self):
         return 0
-    def get_length_word(self):
-        return 0
     def get_env_buffer(self, env):
         return 0
-    def get_env_addr(self, env_ind):
+    def get_env_word(self, env_ind, env_length):
         return 0
     def length_nclks(self, tlength):
         return int(np.ceil(tlength/self.fpga_clk_period))

@@ -43,24 +43,11 @@ class HardwareConfig(ABC):
         pass
 
     @abstractmethod
-    def get_length_word(self, length):
-        """
-        Returns the length word to be used in pulse
-        command.
-
-        Parameters
-        ----------
-            length: int
-                pulse length in DAC samples
-        """
-        pass
-
-    @abstractmethod
     def length_nclks(self, tlength):
         pass
 
     @abstractmethod
-    def get_env_addr(self, env_ind):
+    def get_env_word(self, env_start_ind, env_length):
         pass
 
     @abstractmethod

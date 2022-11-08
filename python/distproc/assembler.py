@@ -142,8 +142,27 @@ class SingleUnitAssembler:
         self._program.append(cmd)
 
     def add_pulse(self, freq, phase, start_time, env, length=None, label=None):
-        #hash the envelope to see if it's already been added
-        # note: doesn't work with user added named envelopes
+        """
+        Add a pulse command to the program. 'freq' and 'phase' can be specified by 
+        named registers or immediate values.
+
+        Parameters
+        ----------
+            freq : float, int, str
+                If numerical, pulse frequency in Hz; if string, named register
+                to use. Register must be declared beforehand.
+            phase : float, str
+                If numerical, pulse phase in radians; if string, named register
+                to use. Register must be declared beforehand.
+            env : np.ndarray, str
+                Either an array of envelope samples, or a string specifying 
+                named envelope to use. Envelope array is hashed to see if it's 
+                already been added. Note: doesn't work with user added named envelopes
+            length : int
+                pulse length in samples. If None, use len(env)
+            label : str
+                label for this program instruction. Useful (required) for jumps.
+        """
         if isinstance(env, np.ndarray): 
             if np.any((np.abs(np.real(env)) > 1) | (np.abs(np.imag(env)) > 1)):
                 raise Exception('env must be < 1')
@@ -154,16 +173,27 @@ class SingleUnitAssembler:
             envkey = env
         else:
             raise Exception('env must be string or np array')
-
+        
         if length is not None:
             if length > len(self._env_dict[envkey]):
                 raise Exception('provided pulse length exceeds length of envelope')
-            elif length < len(self._env_dict[envkey]) and length % 4 != 0:
+            elif length < len(self._env_dict[envkey]) and length % self._hwconfig.dac_samples_per_clk != 0:
                 raise Exception('env length must match pulse length if end of pulse is not aligned with clock boundary') 
         else:
             length = len(self._env_dict[envkey])
 
-        cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey}
+        if isinstance(freq, str):
+            assert freq in self._regs.keys()
+        if isinstance(phase, str):
+            assert phase in self._regs.keys()
+
+        if isinstance(freq, str) and isisnstance(phase, str):
+            #can only do one pulse_reg write at a time so use two instructions
+            self._program.append({'cmdtype': 'pulse', 'freq': freq})
+            cmd = {'cmdtype': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey}
+        else:
+            cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey}
+
         if label is not None:
             cmd['label'] = label
         self._program.append(cmd)
@@ -171,14 +201,34 @@ class SingleUnitAssembler:
     def get_compiled_program(self):
         #TODO: consider copying cmd and modifying to avoid all of these else statements
         cmd_list = []
-        env_raw, env_addr_map = self._get_env_buffer()
+        env_raw, env_ind_map = self._get_env_buffer()
         cmd_label_addrmap = self._get_cmd_labelmap()
         for cmd in self._program:
             cmd = copy.deepcopy(cmd) #we are modifying cmd so don't overwrite anything in self._program
+
             if cmd['cmdtype'] == 'pulse':
-                #length = int(self._hwconfig.dac_samples_per_clk*np.ceil(cmd['length']/self._hwconfig.dac_samples_per_clk)) #quantize pulse length to multiple of 4
-                cmd_list.append(cg.pulse_i(self._hwconfig.get_freq_word(cmd['freq']), self._hwconfig.get_phase_word(cmd['phase']), \
-                        env_addr_map[cmd['env']], self._hwconfig.get_length_word(cmd['length']), cmd['start_time']))
+                pulseargs = {}
+
+                if 'freq' in cmd.keys():
+                    if isinstance(cmd['freq'], str):
+                        pulseargs['freq_regaddr'] = self._regs[cmd['freq']]
+                    else:
+                        pulseargs['freq_word'] = self._hwconfig.get_freq_word(cmd['freq'])
+
+                if 'phase' in cmd.keys():
+                    if isinstance(cmd['phase'], str):
+                        pulseargs['phase_regaddr'] = self._regs[cmd['phase']]
+                    else:
+                        pulseargs['phase_word'] = self._hwconfig.get_phase_word(cmd['phase'])
+
+                if 'env' in cmd.keys():
+                    pulseargs['env_word'] = self._hwconfig.get_env_word(env_ind_map[cmd['env']], cmd['length'])
+
+                if 'start_time' in cmd.keys():
+                    pulseargs['cmd_time'] = cmd['start_time']
+                    
+                cmd_list.append(cg.pulse_cmd(**pulseargs))
+
             elif cmd['cmdtype'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
                     in0 = self._regs[cmd['in0']]
@@ -198,6 +248,7 @@ class SingleUnitAssembler:
 
                 cmd_list.append(cg.alu_cmd(cmd['cmdtype'], im_or_reg, in0, cmd.get('alu_op'), \
                         cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id')))
+
             else:
                 raise Exception('{} not supported'.format['cmdtype'])
 
@@ -244,17 +295,17 @@ class SingleUnitAssembler:
                 by four.
         """
         cur_env_ind = 0
-        env_addr_map = {}
+        env_ind_map = {}
 
         env_raw = np.empty(0).astype(int)
 
         for envkey, env in self._env_dict.items():
-            env_addr_map[envkey] = self._hwconfig.get_env_addr(cur_env_ind)
+            env_ind_map[envkey] = cur_env_ind
             env = self._hwconfig.get_env_buffer(env)
             cur_env_ind += len(env)
             env_raw = np.append(env_raw, env)
 
-        return env_raw, env_addr_map
+        return env_raw, env_ind_map
             
     def _hash_env(self, env):
         return str(hash(env.data.tobytes()))
