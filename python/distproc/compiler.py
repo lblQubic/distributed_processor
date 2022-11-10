@@ -180,7 +180,8 @@ class Compiler:
             if 'gate' in instr.keys():
                 for pulse in instr['gate'].get_pulses():
                     coreind = self.wiremap.coredict[pulse.dest]
-                    self.assemblers[coreind].add_pulse(pulse.fcarrier, pulse.pcarrier, instr['t'], \
+                    lofreq = self.wiremap.lofreq[pulse.dest]
+                    self.assemblers[coreind].add_pulse(pulse.fcarrier - lofreq, pulse.pcarrier, instr['t'], \
                             pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1])
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
@@ -194,7 +195,8 @@ class Compiler:
                 for pulse in instr['gate'].get_pulses():
                     pulse_env = pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1]
                     sample_inds = np.arange(0, len(pulse_env))
-                    phases = pulse.pcarrier + 2*np.pi*pulse.fcarrier*self.hwconfig.dac_sample_period*sample_inds
+                    lofreq = self.wiremap.lofreq[pulse.dest]
+                    phases = pulse.pcarrier + 2*np.pi*(pulse.fcarrier-lofreq)*self.hwconfig.dac_sample_period*(sample_inds + 4*(instr['t']+1))
                     scale_factor = 2**15 #TODO: fix hardcoding
                     pulse_i = scale_factor*(np.real(pulse_env)*np.cos(phases) - np.imag(pulse_env)*np.sin(phases))
                     pulse_q = scale_factor*(np.imag(pulse_env)*np.cos(phases) + np.real(pulse_env)*np.sin(phases))
