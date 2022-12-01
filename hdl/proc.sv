@@ -12,8 +12,10 @@ module proc
       parameter CMD_ADDR_WIDTH=8,
       parameter REG_ADDR_WIDTH=4,
       parameter ENV_WIDTH = 24,
-      parameter PHASE_WIDTH = 14,
-      parameter FREQ_WIDTH = 24,
+      parameter PHASE_WIDTH = 17,
+      parameter FREQ_WIDTH = 9,
+      parameter AMP_WIDTH = 16,
+      parameter CFG_WIDTH = 4,
       parameter SYNC_BARRIER_WIDTH=8,
       parameter DAC_SAMPLES_PER_CLK=4)(
       input clk,
@@ -33,7 +35,7 @@ module proc
     localparam FPROC_ID_WIDTH = 8;
     localparam ALU_OPCODE_WIDTH = 3;
     //localparam PULSE_OUT_WIDTH = 72;
-    localparam PULSE_CMD_I_WIDTH = ENV_WIDTH + PHASE_WIDTH + FREQ_WIDTH + 6;
+    localparam PULSE_CMD_I_WIDTH = ENV_WIDTH + PHASE_WIDTH + FREQ_WIDTH + AMP_WIDTH + CFG_WIDTH + 9;
     //localparam INST_PTR_SYNC_EN = 2'b01;
     //localparam INST_PTR_FPROC_EN = 2'b10;
     //localparam INST_PTR_DEFAULT_EN = 2'b00;
@@ -93,28 +95,6 @@ module proc
     //pulse datapath
     assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH:
                             CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH-DATA_WIDTH];
-    localparam ENV_INPUT_MSB = CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-2;
-    localparam ENV_INPUT_LSB = CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-2-ENV_WIDTH;
-    localparam PHASE_INPUT_MSB = ENV_INPUT_LSB-1-2;
-    localparam PHASE_INPUT_LSB = ENV_INPUT_LSB-PHASE_WIDTH-2;
-    localparam FREQ_INPUT_MSB = PHASE_INPUT_LSB-1-2;
-    localparam FREQ_INPUT_LSB = PHASE_INPUT_LSB-FREQ_WIDTH-2;
-
-    assign freq_i_in = cmd_buf_out[FREQ_INPUT_MSB:FREQ_INPUT_LSB];
-    assign phase_i_in = cmd_buf_out[PHASE_INPUT_MSB:PHASE_INPUT_LSB];
-    assign env_i_in = cmd_buf_out[ENV_INPUT_MSB:ENV_INPUT_LSB];
-
-    assign freq_write_en_cmd = cmd_buf_out[FREQ_INPUT_MSB+2];
-    assign phase_write_en_cmd = cmd_buf_out[PHASE_INPUT_MSB+2];
-    assign env_write_en_cmd = cmd_buf_out[ENV_INPUT_MSB+2];
-
-    assign freq_write_sel = cmd_buf_out[FREQ_INPUT_MSB+1];
-    assign phase_write_sel = cmd_buf_out[PHASE_INPUT_MSB+1];
-    assign env_write_sel = cmd_buf_out[ENV_INPUT_MSB+1];
-
-    assign freq_in = freq_write_sel ? reg_file_out0[FREQ_WIDTH-1:0] : freq_i_in;
-    assign phase_in = phase_write_sel ? reg_file_out0[PHASE_WIDTH-1:0] : phase_i_in;
-    assign env_in = env_write_sel ? reg_file_out0[ENV_WIDTH-1:0] : env_i_in;
 
     //other datapath connections
     assign qclk_in = alu_out;
@@ -135,9 +115,6 @@ module proc
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
     //assign cstrobe_out = cstrobe;
 
-    assign freq_write_en = freq_write_en_cmd & write_pulse_en;
-    assign phase_write_en = phase_write_en_cmd & write_pulse_en;
-    assign env_write_en = env_write_en_cmd & write_pulse_en;
 
     //instantiate modules
     //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
