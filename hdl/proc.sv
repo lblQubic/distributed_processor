@@ -27,6 +27,8 @@ module proc
       output[FREQ_WIDTH-1:0] freq_out,
       output[PHASE_WIDTH-1:0] phase_out,
       output[ENV_WIDTH-1:0] env_word_out,
+      output[AMP_WIDTH-1:0] amp_out,
+      output[CFG_WIDTH-1:0] cfg_out,
       output cstrobe_out);
 
     //`include "../hdl/instr_params.vh" //todo: debug includes
@@ -44,6 +46,7 @@ module proc
     wire[CMD_WIDTH-1:0] cmd_buf_out;
     wire[CMD_ADDR_WIDTH-1:0] cmd_buf_read_addr;
     wire[DATA_WIDTH-1:0] alu_out, reg_file_out0, reg_file_out1, alu_in0, alu_in1, qclk_out, qclk_in;
+    wire[PULSE_CMD_I_WIDTH-1:0] pulse_cmd_i;
 
     //pulse datapath wires
     wire[FREQ_WIDTH-1:0] freq_i_in, freq_in; //i is from cmd_buffer, freq_in is actual input (could be r val)
@@ -95,6 +98,7 @@ module proc
     //pulse datapath
     assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH:
                             CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH-DATA_WIDTH];
+    assign pulse_cmd_i = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH];
 
     //other datapath connections
     assign qclk_in = alu_out;
@@ -133,10 +137,10 @@ module proc
               .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable), .write_pulse_en(write_pulse_en));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
-    pulse_reg #(.PHASE_WIDTH(PHASE_WIDTH), .FREQ_WIDTH(FREQ_WIDTH), .SAMPLES_PER_CLK(DAC_SAMPLES_PER_CLK), .TREF_WIDTH(FREQ_WIDTH), 
-        .ENV_WORD_WIDTH(ENV_WIDTH)) pulsereg(.clk(clk), .phase_offs_in(phase_in), .freq_in(freq_in), .tref(phase_tref), 
-        .env_word_in(env_in), .phase_write_en(phase_write_en), .freq_write_en(freq_write_en), .env_word_write_en(env_write_en),
-        .cstrobe_in(cstrobe), .phase(phase_out), .freq(freq_out), .env_word(env_word_out), .cstrobe(cstrobe_out));
+    pulse_reg #(.DATA_WIDTH(DATA_WIDTH), .PHASE_WIDTH(PHASE_WIDTH), .FREQ_WIDTH(FREQ_WIDTH), .AMP_WIDTH(AMP_WIDTH), 
+        .CFG_WIDTH(CFG_WIDTH), .ENV_WORD_WIDTH(ENV_WIDTH)) pulsereg(.clk(clk), .pulse_cmd_in(pulse_cmd_i), .reg_in(reg_file_out0), 
+        .pulse_write_en(write_pulse_en), .cstrobe_in(cstrobe), .phase(phase_out), .freq(freq_out), .amp(amp_out), 
+        .env_word(env_word_out), .cfg(cfg_out), .cstrobe(cstrobe_out));
 
     //`ifdef COCOTB_SIM
     //initial begin
