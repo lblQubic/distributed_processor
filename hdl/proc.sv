@@ -33,7 +33,6 @@ module proc
     //`include "../hdl/instr_params.vh" //todo: debug includes
     //`include "../hdl/ctrl_params.vh"
     localparam OPCODE_WIDTH = 8;
-    localparam FPROC_ID_WIDTH = 8;
     localparam ALU_OPCODE_WIDTH = 3;
     //localparam PULSE_OUT_WIDTH = 72;
     localparam PULSE_CMD_I_WIDTH = ENV_WIDTH + PHASE_WIDTH + FREQ_WIDTH + AMP_WIDTH + CFG_WIDTH + 9;
@@ -104,7 +103,7 @@ module proc
 
     //other datapath connections
     assign qclk_in = alu_out;
-    assign fproc.id = cmd_buf_out[FPROC_LSB + FPROC_ID_WIDTH - 1 : FPROC_LSB];
+    assign fproc.id = cmd_buf_out[FPROC_LSB + fproc.FPROC_ID_WIDTH - 1 : FPROC_LSB];
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
