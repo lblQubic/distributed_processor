@@ -86,8 +86,11 @@ module proc
     wire[REG_ADDR_WIDTH-1:0] reg_addr_in1;
     wire[REG_ADDR_WIDTH-1:0] reg_write_addr;
 
+    localparam INSTR_PTR_LSB = CMD_WIDTH-ALU_INPUT_SPACE-16;
+    localparam FPROC_LSB = CMD_WIDTH-ALU_INPUT_SPACE-32;
+
     localparam ALU_INPUT_SPACE = OPCODE_WIDTH + DATA_WIDTH + REG_ADDR_WIDTH; //datapath reserved for ALU inputs (both immediate and reg addressed)
-    assign instr_ptr_load_val = cmd_buf_out[CMD_WIDTH-1-ALU_INPUT_SPACE:CMD_WIDTH-ALU_INPUT_SPACE-CMD_ADDR_WIDTH];
+    assign instr_ptr_load_val = cmd_buf_out[INSTR_PTR_LSB + CMD_ADDR_WIDTH - 1 : INSTR_PTR_LSB];
     assign alu_cmd_data_in0 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH]; // data_in0 and addr_in0 overlap since you always 
     assign reg_addr_in0 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH]; //     choose between one or the other
     assign reg_addr_in1 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH]; 
@@ -101,7 +104,7 @@ module proc
 
     //other datapath connections
     assign qclk_in = alu_out;
-    assign fproc.id = cmd_buf_out[CMD_WIDTH-1-ALU_INPUT_SPACE-2*REG_ADDR_WIDTH:CMD_WIDTH-ALU_INPUT_SPACE-2*REG_ADDR_WIDTH-FPROC_ID_WIDTH];
+    assign fproc.id = cmd_buf_out[FPROC_LSB + FPROC_ID_WIDTH - 1 : FPROC_LSB];
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;

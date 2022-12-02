@@ -1,7 +1,7 @@
 module toplevel_sim#(
     parameter DATA_WIDTH=32,
     parameter CMD_WIDTH=128,
-    parameter CMD_ADDR_WIDTH=8,
+    parameter CMD_ADDR_WIDTH=16,
     parameter REG_ADDR_WIDTH=4,
     parameter ENV_WIDTH = 24,
     parameter PHASE_WIDTH = 17,

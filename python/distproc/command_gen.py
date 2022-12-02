@@ -191,7 +191,7 @@ def reg_alu(reg_addr0, alu_op, reg_addr1, reg_write_addr):
 
 def jump_i(instr_ptr_addr):
     opcode = opcodes['jump_i'] << 3
-    return (opcode << 120) + (instr_ptr_addr << 76)
+    return (opcode << 120) + (instr_ptr_addr << 68)
 
 def jump_cond_i(value, alu_op, reg_addr, instr_ptr_addr):
     """
@@ -215,7 +215,7 @@ def jump_cond_i(value, alu_op, reg_addr, instr_ptr_addr):
     """
     assert alu_op == 'eq' or alu_op == 'le' or alu_op == 'ge'
     opcode = (opcodes['jump_cond_i'] << 3) + alu_opcodes[alu_op]
-    return (opcode << 120) + (twos_complement(value) << 88) + (reg_addr << 84) + (instr_ptr_addr << 76)
+    return (opcode << 120) + (twos_complement(value) << 88) + (reg_addr << 84) + (instr_ptr_addr << 68)
 
 def jump_cond(reg_addr0, alu_op, reg_addr1, instr_ptr_addr):
     """
@@ -239,7 +239,7 @@ def jump_cond(reg_addr0, alu_op, reg_addr1, instr_ptr_addr):
     """
     assert alu_op == 'eq' or alu_op == 'le' or alu_op == 'ge'
     opcode = (opcodes['jump_cond_i'] << 3) + alu_opcodes[alu_op]
-    return (opcode << 120) + (reg_addr0 << 116) + (reg_addr1 << 84) + (instr_ptr_addr << 76)
+    return (opcode << 120) + (reg_addr0 << 116) + (reg_addr1 << 84) + (instr_ptr_addr << 68)
 
 def inc_qclk_i(inc_val):
     opcode = (opcodes['inc_qclk_i'] << 3) + alu_opcodes['add']
@@ -251,7 +251,7 @@ def inc_qclk(inc_reg_addr):
 
 def alu_fproc(func_id, alu_reg_addr, alu_op, write_reg_addr):
     opcode = (opcodes['alu_fproc'] << 3) + alu_opcodes[alu_op]
-    return (opcode << 120) + (alu_reg_addr << 116) + (write_reg_addr << 80) + (func_id << 68)
+    return (opcode << 120) + (alu_reg_addr << 116) + (write_reg_addr << 80) + (func_id << 52)
 
 def read_fproc(func_id, write_reg_addr):
     """
@@ -261,11 +261,11 @@ def read_fproc(func_id, write_reg_addr):
 
 def jump_fproc(func_id, alu_reg_addr, alu_op, instr_ptr_addr):
     opcode = (opcodes['jump_fproc'] << 3) + alu_opcodes[alu_op]
-    return (opcode << 120) + (alu_reg_addr << 116) + (instr_ptr_addr << 76) + (func_id << 68)
+    return (opcode << 120) + (alu_reg_addr << 116) + (instr_ptr_addr << 76) + (func_id << 52)
 
 def jump_fproc_i(func_id, value, alu_op, instr_ptr_addr):
     opcode = (opcodes['jump_fproc_i'] << 3) + alu_opcodes[alu_op]
-    return (opcode << 120) + (value << 88) + (instr_ptr_addr << 76) + (func_id << 68)
+    return (opcode << 120) + (value << 88) + (instr_ptr_addr << 76) + (func_id << 52)
 
 def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=None, write_reg_addr=None, jump_cmd_ptr=None, func_id=None):
     """
@@ -294,10 +294,10 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=None, write_reg_add
         cmd += alu_in1 << 84
     if optype in ['alu_fproc', 'jump_fproc']:
         if func_id is not None:
-            cmd += func_id << 68
+            cmd += func_id << 52
             #ipdb.set_trace()
     if optype in ['jump_cond', 'jump_fproc']:
-        cmd += jump_cmd_ptr << 76
+        cmd += jump_cmd_ptr << 68
     if optype in ['reg_alu', 'alu_fproc']:
         cmd += write_reg_addr << 80
     if optype == 'inc_qclk':
