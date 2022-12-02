@@ -20,7 +20,6 @@ module proc
       parameter DAC_SAMPLES_PER_CLK=4)(
       input clk,
       input reset,
-      input[FREQ_WIDTH-1:0] phase_tref,
       cmd_mem_iface cmd_iface,
       sync_iface.proc sync,
       fproc_iface.proc fproc,
@@ -117,8 +116,6 @@ module proc
     //end
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
     assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
-    //assign cstrobe_out = cstrobe;
-
 
     //instantiate modules
     //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(

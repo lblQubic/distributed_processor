@@ -134,10 +134,10 @@ def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=
         assert freq_regaddr is None and phase_regaddr is None and amp_regaddr is None
         assert env_regaddr < 16
         cmd += env_regaddr << 116
-        cmd += 0b11 << pulse_field_pos['env'] + pulse_field_widths['env'] #(37 + 5 + 18 + 9) #enable write + reg_mux
+        cmd += 0b11 << pulse_field_pos['env_word'] + pulse_field_widths['env_word'] #(37 + 5 + 18 + 9) #enable write + reg_mux
 
     if cmd_time is not None:
-        cmd += cmd_time << 16
+        cmd += cmd_time << pulse_field_pos['cmd_time']
         opcode = opcodes['pulse_write_trig']
     else:
         opcode = opcodes['pulse_write']

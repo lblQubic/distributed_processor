@@ -89,9 +89,9 @@ async def pulse_freq_trig_test(dut):
     pulse_i_opcode = 0b10010000
 
     for i in range(n_cmd):
-        freq_word = random.randint(0, 2**24)
+        freq_word = random.randint(0, 2**9)
         freq_word_list.append(freq_word)
-        cmd_list.append((pulse_i_opcode << 120) + ((freq_word + 2**25) << 48) + (pulse_time_list[i] << (16)))
+        cmd_list.append((pulse_i_opcode << 120) + ((freq_word + 2**10) << 60) + (pulse_time_list[i] << (5)))
     
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, cmd_list)
@@ -130,13 +130,15 @@ async def pulse_i_test(dut):
     pulse_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
 
     for i in range(n_cmd):
-        freq_word = random.randint(0, 2**24)
-        phase_word = random.randint(0, 2**14)
-        env_word = random.randint(0, 2**24)
+        freq_word = random.randint(0, 2**9-1)
+        phase_word = random.randint(0, 2**17-1)
+        env_word = random.randint(0, 2**24-1)
+        amp_word = random.randint(0, 2**16-1)
+        cfg_word = random.randint(0, 2**4-1)
         freq_word_list.append(freq_word)
         phase_word_list.append(phase_word)
         env_word_list.append(env_word)
-        cmd_list.append(cg.pulse_i(freq_word, phase_word, env_word, pulse_time_list[i]))
+        cmd_list.append(cg.pulse_i(freq_word, phase_word, amp_word, env_word, cfg_word, pulse_time_list[i]))
     
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, cmd_list)
@@ -162,8 +164,7 @@ async def pulse_i_test(dut):
 
     for i in range(n_cmd):
         assert freq_word_list[i] == freq_read_list[i]
-        #ipdb.set_trace()
-        assert phase_read_list[i] == (((pulse_time_list[i] + CSTROBE_DELAY)*freq_word_list[i]*4 >> 10) + phase_word_list[i]) % 2**14
+        assert phase_word_list[i] == phase_read_list[i]
         assert env_word_list[i] == env_read_list[i]
         assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
 
@@ -245,7 +246,9 @@ async def pulse_reg_test(dut):
     cmd_list = []
     freq_word_list = []
     phase_word_list = []
+    amp_word_list = []
     env_word_list = []
+    cfg_word_list = []
     pulse_time_list = [9, 15, 16]
 
     reg_word = 0x000000a3
@@ -254,21 +257,33 @@ async def pulse_reg_test(dut):
     cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_word, 'id0', 0, write_reg_addr=reg_addr))
 
     for i in range(n_cmd):
-        freq_word = random.randint(0, 2**24)
-        phase_word = random.randint(0, 2**14)
-        env_word = random.randint(0, 2**24)
+        freq_word = random.randint(0, 2**9-1)
+        phase_word = random.randint(0, 2**17-1)
+        amp_word = random.randint(0, 2**16-1)
+        cfg_word = random.randint(0,3)
+        env_word = random.randint(0, 2**24-1)
         if i==0:
             freq_word = reg_word
-            cmd_list.append(cg.pulse_cmd(freq_regaddr=reg_addr, phase_word=phase_word, env_word=env_word, cmd_time=pulse_time_list[i]))
+            cmd_list.append(cg.pulse_cmd(freq_regaddr=reg_addr, phase_word=phase_word, \
+                    amp_word=amp_word, env_word=env_word, cfg_word=cfg_word, cmd_time=pulse_time_list[i]))
         elif i==1:
             phase_word = reg_word
-            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_regaddr=reg_addr, env_word=env_word, cmd_time=pulse_time_list[i]))
+            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_regaddr=reg_addr, \
+                    amp_word=amp_word, env_word=env_word, cfg_word=cfg_word, cmd_time=pulse_time_list[i]))
         elif i==2:
             env_word = reg_word
-            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_word=phase_word, env_regaddr=reg_addr, cmd_time=pulse_time_list[i]))
+            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_word=phase_word, \
+                    amp_word=amp_word, env_regaddr=reg_addr, cfg_word=cfg_word, cmd_time=pulse_time_list[i]))
+        elif i==3:
+            amp_word = reg_word
+            cmd_list.append(cg.pulse_cmd(freq_word=freq_word, phase_word=phase_word, \
+                    amp_regaddr=reg_addr, env_word=env_word, cfg_word=cfg_word, cmd_time=pulse_time_list[i]))
+
         phase_word_list.append(phase_word)
         freq_word_list.append(freq_word)
+        amp_word_list.append(amp_word)
         env_word_list.append(env_word)
+        cfg_word_list.append(cfg_word)
     
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, cmd_list)
@@ -281,6 +296,8 @@ async def pulse_reg_test(dut):
 
     freq_read_list = []
     phase_read_list = []
+    amp_read_list = []
+    cfg_read_list = []
     env_read_list = []
     pulse_read_times = []
 
@@ -288,15 +305,20 @@ async def pulse_reg_test(dut):
         if(dut.cstrobe_out.value == 1):
             freq_read_list.append(dut.freq.value)
             phase_read_list.append(dut.phase.value)
+            amp_read_list.append(dut.amp.value)
             env_read_list.append(dut.env_word.value)
+            cfg_read_list.append(dut.cfg.value)
             pulse_read_times.append(dut.dpr.qclk_out.value)
         await RisingEdge(dut.clk)
 
     for i in range(n_cmd):
         assert freq_word_list[i] == freq_read_list[i]
-        assert phase_read_list[i] == (((pulse_time_list[i] + CSTROBE_DELAY)*freq_word_list[i]*4 >> 10) + phase_word_list[i]) % 2**14
+        assert phase_word_list[i] == phase_read_list[i]
+        assert amp_word_list[i] == amp_read_list[i]
         assert env_word_list[i] == env_read_list[i]
+        assert cfg_word_list[i] == cfg_read_list[i]
         assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
+
 @cocotb.test()
 async def jump_i_test(dut):
     cmd_list = []
@@ -376,10 +398,10 @@ async def jump_i_cond_test(dut):
 async def inc_qclk_i_test(dut):
     cmd_list = []
     cmd_wait_range = 20
-    qclk_inc_val = random.randint(-2**31, 2**31-1)
+    qclk_inc_val = random.randint(-2**31, 2**31-1-cmd_wait_range)
     qclk_wait_t = random.randint(0, cmd_wait_range-1)
 
-    cmd_list.append(cg.pulse_i(10, 0, 4, qclk_wait_t))
+    cmd_list.append(cg.pulse_i(10, 0, 4, 2, 1, qclk_wait_t))
     cmd_list.append(cg.alu_cmd('inc_qclk', 'i', qclk_inc_val))
 
     await cocotb.start(generate_clock(dut))
