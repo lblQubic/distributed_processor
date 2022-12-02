@@ -28,8 +28,24 @@ opcodes = {'pulse_write' : 0b10000,
            'inc_qclk' : 0b01101,
            'sync' : 0b01110}
 
+#pulse parameters
+pulse_field_widths = {
+        'cmd_time' : 32,
+        'cfg' : 4,
+        'amp' : 16,
+        'freq' : 9,
+        'phase' : 17,
+        'env_word' : 24}
 
-def pulse_i(freq_word, phase_word, env_word, cmd_time):
+pulse_field_pos = {'cmd_time' : 5}
+pulse_field_pos['cfg'] = pulse_field_pos['cmd_time'] + pulse_field_widths['cmd_time']
+pulse_field_pos['amp'] = pulse_field_pos['cfg'] + pulse_field_widths['cfg'] + 1
+pulse_field_pos['freq'] = pulse_field_pos['amp'] + pulse_field_widths['amp'] + 2
+pulse_field_pos['phase'] = pulse_field_pos['freq'] + pulse_field_widths['freq'] + 2
+pulse_field_pos['env_word'] = pulse_field_pos['phase'] + pulse_field_widths['phase'] + 2
+
+
+def pulse_i(freq_word, phase_word, amp_word, env_word, cfg_word, cmd_time):
     """
     Simplest type of pulse: pulse parameters and trigger time
     are all immediate values.
@@ -52,10 +68,10 @@ def pulse_i(freq_word, phase_word, env_word, cmd_time):
     #if env_length % 4 != 0:
     #    raise Exception('length of envelope must be a multiple of 4!')
     return pulse_cmd(freq_word=freq_word, phase_word=phase_word, 
-            env_word=env_word, cmd_time=cmd_time)
+            amp_word=amp_word, env_word=env_word, cfg_word=cfg_word, cmd_time=cmd_time)
 
 def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=None,
-        env_word=None, env_regaddr=None, cmd_time=None):
+        amp_word=None, amp_regaddr=None, cfg_word=None, env_word=None, env_regaddr=None, cmd_time=None):
     """
     General form for a pulse command. This instruction can execute the following actions
     (in one instruction cycle):
@@ -85,30 +101,40 @@ def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=
 
     """
     cmd = 0
+    if cfg_word is not None:
+        cmd += (cfg_word + 2**4) << pulse_field_pos['cfg']
+    if amp_word is not None:
+        assert amp_regaddr is None
+        cmd += (amp_word + 2**17) << pulse_field_pos['amp']
     if freq_word is not None:
         assert freq_regaddr is None
-        cmd += (freq_word + 2**25) << 48
+        cmd += (freq_word + 2**10) << pulse_field_pos['freq']
     if phase_word is not None:
         assert phase_regaddr is None
-        cmd += (phase_word + 2**15) << (48 + 26)
+        cmd += (phase_word + 2**18) << pulse_field_pos['phase']
     if env_word is not None:
         assert env_regaddr is None
-        cmd += (env_word + 2**25) << (48 + 26 + 16)
+        cmd += (env_word + 2**25) << pulse_field_pos['env_word']
     if freq_regaddr is not None:
-        assert phase_regaddr is None and env_regaddr is None
+        assert phase_regaddr is None and env_regaddr is None and amp_regaddr is None
         assert freq_regaddr < 16
         cmd += freq_regaddr << 116
-        cmd += 0b11 << (48 + 24) #enable write + reg_mux
+        cmd += 0b11 << pulse_field_pos['freq'] + pulse_field_widths['freq'] #(37 + 5 + 18 + 9) #enable write + reg_mux
     if phase_regaddr is not None:
-        assert freq_regaddr is None and env_regaddr is None
+        assert freq_regaddr is None and env_regaddr is None and amp_regaddr is None
         assert phase_regaddr < 16
         cmd += phase_regaddr << 116
-        cmd += 0b11 << (48 + 26 + 14)
+        cmd += 0b11 << pulse_field_pos['phase'] + pulse_field_widths['phase'] #(37 + 5 + 18 + 9) #enable write + reg_mux
+    if amp_regaddr is not None:
+        assert freq_regaddr is None and env_regaddr is None and phase_regaddr is None
+        assert amp_regaddr < 16
+        cmd += amp_regaddr << 116
+        cmd += 0b11 << pulse_field_pos['amp'] + pulse_field_widths['amp'] #(37 + 5 + 18 + 9) #enable write + reg_mux
     if env_regaddr is not None:
-        assert freq_regaddr is None and phase_regaddr is None
+        assert freq_regaddr is None and phase_regaddr is None and amp_regaddr is None
         assert env_regaddr < 16
         cmd += env_regaddr << 116
-        cmd += 0b11 << (48 + 26 + 16 + 24)
+        cmd += 0b11 << pulse_field_pos['env'] + pulse_field_widths['env'] #(37 + 5 + 18 + 9) #enable write + reg_mux
 
     if cmd_time is not None:
         cmd += cmd_time << 16
