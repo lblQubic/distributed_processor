@@ -92,6 +92,9 @@ class Compiler:
         self._isscheduled = False
         self._isresolved = False
 
+    def get_compiled_progs(self):
+        pass
+
     def schedule(self, resolved_program):
         qubit_last_t = {q: 0 for q in self.qubits}
         scheduled_program = []

@@ -37,6 +37,9 @@ module toplevel_sim#(
         fproc();
     sync_iface #(.SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH))
         sync();
+    pulse_iface #(.PHASE_WIDTH(PHASE_WIDTH), .FREQ_WIDTH(FREQ_WIDTH), 
+        .ENV_WORD_WIDTH(ENV_WIDTH), .AMP_WIDTH(AMP_WIDTH), .CFG_WIDTH(CFG_WIDTH)) pulseout();
+
 
     assign fproc.data = fproc_data;
     assign fproc.ready = fproc_ready;
@@ -50,9 +53,14 @@ module toplevel_sim#(
     proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), 
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
-        .cmd_iface(memif), .fproc(fproc), .sync(sync), .env_word_out(env_word), 
-        .freq_out(freq), .phase_out(phase), .amp_out(amp), .cfg_out(cfg), 
-        .cstrobe_out(cstrobe_out));
+        .cmd_iface(memif), .fproc(fproc), .sync(sync), .pulseout(pulseout));
+
+    assign env_word = pulseout.env_word;
+    assign amp = pulseout.amp;
+    assign phase = pulseout.phase;
+    assign freq = pulseout.freq;
+    assign cfg = pulseout.cfg;
+        assign cstrobe_out = pulseout.cstrobe;
 
     //this just breaks the input 128-bit cmd_write into 4 separate chunks and writes simultaneously
     genvar i;

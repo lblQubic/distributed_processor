@@ -14,23 +14,26 @@
 */
 
 module pulse_reg #(
-    parameter DATA_WIDTH=32,
-    parameter PHASE_WIDTH=17,
-    parameter FREQ_WIDTH=9,
-    parameter AMP_WIDTH=16,
-    parameter CFG_WIDTH=4, //mode + dest bits
-    parameter ENV_WORD_WIDTH=24)( //12 bit addr + 12 bit length
+    parameter DATA_WIDTH=32)(
     input clk,
     input[PHASE_WIDTH+FREQ_WIDTH+ENV_WORD_WIDTH+AMP_WIDTH+CFG_WIDTH+9-1:0] pulse_cmd_in, //9 b/c 4x2 control bits + 1x cfg control bit
     input[DATA_WIDTH-1:0] reg_in,
     input pulse_write_en,
     input cstrobe_in,
-    output reg [PHASE_WIDTH-1:0] phase,
-    output reg[FREQ_WIDTH-1:0] freq,
-    output reg[AMP_WIDTH-1:0] amp,
-    output reg[ENV_WORD_WIDTH-1:0] env_word,
-    output reg[CFG_WIDTH-1:0] cfg,
-    output reg cstrobe);
+    pulse_iface.proc pulseout);
+
+    localparam ENV_WORD_WIDTH = pulseout.ENV_WORD_WIDTH;
+    localparam FREQ_WIDTH = pulseout.FREQ_WIDTH;
+    localparam AMP_WIDTH = pulseout.AMP_WIDTH;
+    localparam PHASE_WIDTH = pulseout.PHASE_WIDTH;
+    localparam CFG_WIDTH = pulseout.CFG_WIDTH;
+
+    reg[PHASE_WIDTH-1:0] phase;
+    reg[FREQ_WIDTH-1:0] freq;
+    reg[AMP_WIDTH-1:0] amp;
+    reg[ENV_WORD_WIDTH-1:0] env_word;
+    reg[CFG_WIDTH-1:0] cfg;
+    reg cstrobe;
 
     localparam PULSE_CMD_WIDTH = PHASE_WIDTH+ENV_WORD_WIDTH+FREQ_WIDTH+AMP_WIDTH+CFG_WIDTH+9;
 
@@ -92,5 +95,13 @@ module pulse_reg #(
         cstrobe <= cstrobe_in;
 
     end
+
+    assign pulseout.env_word = env_word;
+    assign pulseout.phase = phase;
+    assign pulseout.freq = freq;
+    assign pulseout.amp = amp;
+    assign pulseout.cfg = cfg;
+    assign pulseout.cstrobe = cstrobe;
+
     
 endmodule
