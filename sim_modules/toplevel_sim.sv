@@ -60,7 +60,7 @@ module toplevel_sim#(
     assign phase = pulseout.phase;
     assign freq = pulseout.freq;
     assign cfg = pulseout.cfg;
-        assign cstrobe_out = pulseout.cstrobe;
+    assign cstrobe_out = pulseout.cstrobe;
 
     //this just breaks the input 128-bit cmd_write into 4 separate chunks and writes simultaneously
     genvar i;
