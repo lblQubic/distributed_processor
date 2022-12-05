@@ -20,8 +20,7 @@ module pulse_reg #(
     input[DATA_WIDTH-1:0] reg_in,
     input pulse_write_en,
     input cstrobe_in,
-    pulse_iface pulseout);
-//    pulse_iface.proc pulseout);
+    pulse_iface.proc pulseout);
 
     localparam ENV_WORD_WIDTH = pulseout.ENV_WORD_WIDTH;
     localparam FREQ_WIDTH = pulseout.FREQ_WIDTH;
