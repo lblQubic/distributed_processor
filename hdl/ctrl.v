@@ -7,7 +7,7 @@ module ctrl(
     input cstrobe_in,
     output [2:0] alu_opcode,
     output reg c_strobe_enable,
-    output reg alu_in0_sel,
+    output alu_in0_sel,
     output reg[1:0] alu_in1_sel,
     output reg reg_write_en,
     output reg instr_ptr_en,
@@ -26,6 +26,20 @@ module ctrl(
     localparam SYNC_WAIT_STATE = 4;
     localparam INC_QCLK_STATE = 5;
     localparam JUMP_COND_STATE = 6;
+    localparam PULSE_WRITE=7;
+    localparam INSTR_PTR_LOAD_EN_FALSE=8;
+	localparam REG_ALU=9;
+	localparam ALU_IN1_REG_SEL=10;
+	localparam JUMP_I=11;
+localparam INSTR_PTR_LOAD_EN_TRUE=12;
+localparam JUMP_COND=13;
+localparam INC_QCLK=15;
+localparam PULSE_WRITE_TRIG=16;
+localparam ALU_FPROC=16;
+localparam JUMP_FPROC=17;
+localparam INSTR_PTR_LOAD_EN_ALU=18;
+localparam ALU_IN1_FPROC_SEL=19;
+localparam ALU_IN1_QCLK_SEL=20;
 
     /*
     * states:
