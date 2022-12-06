@@ -12,7 +12,8 @@ module proc
       parameter CMD_ADDR_WIDTH=8,
       parameter REG_ADDR_WIDTH=4,
       parameter SYNC_BARRIER_WIDTH=8,
-      parameter DAC_SAMPLES_PER_CLK=4)(
+      parameter DAC_SAMPLES_PER_CLK=4,
+      parameter CMD_MEM_READ_LATENCY=3)(
       input clk,
       input reset,
       cmd_mem_iface cmd_iface,
@@ -125,7 +126,7 @@ module proc
               .clk(clk), .read_addr_0(reg_addr_in0), .read_addr_1(reg_addr_in1),
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
-    ctrl ctu(.clk(clk), .reset(reset), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
+    ctrl #(.MEM_READ_CYCLES(CMD_MEM_READ_LATENCY)) ctu(.clk(clk), .reset(reset), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
               .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),

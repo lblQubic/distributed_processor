@@ -123,10 +123,11 @@ module ctrl#(
 
     always @(*) begin
         if(state == MEM_WAIT_STATE) begin
-            if(mem_wait_cycles < MEM_READ_CYCLES) begin
+            if(mem_wait_cycles < MEM_READ_CYCLES - 1) begin
                 next_state = MEM_WAIT_STATE;
                 instr_ptr_en = 0;
                 instr_load_en = 0;
+                mem_wait_rst = 0;
             end
 
             else begin
@@ -197,7 +198,6 @@ module ctrl#(
                     next_state = MEM_WAIT_STATE;
                     mem_wait_rst = 1;
                     //defaults:
-                    mem_wait_rst = 0; 
                     reg_write_en = 0;
                     c_strobe_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_TRUE;
