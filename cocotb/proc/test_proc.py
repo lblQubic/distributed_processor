@@ -8,9 +8,9 @@ import distproc.command_gen as cg
 CLK_CYCLE = 5
 N_CLKS = 500
 
-MEM_READ_LATENCY = 3
+MEM_READ_LATENCY = 2
 PULSE_INSTR_TIME = max(MEM_READ_LATENCY, 1)
-ALU_INSTR_TIME = max(MEM_READ_LATENCY, 2)
+ALU_INSTR_TIME = max(MEM_READ_LATENCY, 3)
 COND_JUMP_INSTR_TIME = 3 + MEM_READ_LATENCY
 JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
 CSTROBE_DELAY = 1
@@ -74,7 +74,7 @@ async def cmd_mem_out_test(dut):
         dut._log.debug('cmd_out {}'.format(int(cmd_read_list[i])))
         dut._log.debug('qclk: {}'.format(qclk_val[i]))
         dut._log.debug ('..........................')
-        assert cmd_read_list[i] == cmd_list[i]
+        assert hex(int(cmd_read_list[i])) == hex(cmd_list[i])
 
     #dut._log.info("clk val {}".format(dut.clk))
 

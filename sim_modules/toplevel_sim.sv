@@ -9,7 +9,7 @@ module toplevel_sim#(
     parameter AMP_WIDTH = 16,
     parameter CFG_WIDTH = 4,
     parameter SYNC_BARRIER_WIDTH=8,
-    parameter MEM_READ_LATENCY=3)(
+    parameter MEM_READ_LATENCY=2)(
     input clk,
     input reset,
     input sync_enable,
@@ -51,7 +51,7 @@ module toplevel_sim#(
     assign sync.ready = sync_enable;
 
   
-    proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), 
+    proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), .CMD_MEM_READ_LATENCY(MEM_READ_LATENCY),
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
         .cmd_iface(memif), .fproc(fproc), .sync(sync), .pulseout(pulseout));
