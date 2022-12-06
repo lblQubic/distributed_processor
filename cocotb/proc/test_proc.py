@@ -8,10 +8,12 @@ import distproc.command_gen as cg
 CLK_CYCLE = 5
 N_CLKS = 500
 
-PULSE_INSTR_TIME = 1
-ALU_INSTR_TIME = 2
-COND_JUMP_INSTR_TIME = 2
-JUMP_INSTR_TIME = 1
+MEM_READ_LATENCY = 3
+PULSE_INSTR_TIME = max(MEM_READ_LATENCY, 1)
+ALU_INSTR_TIME = max(MEM_READ_LATENCY, 3)
+COND_JUMP_INSTR_TIME = ALU_INSTR_TIME + MEM_READ_LATENCY
+#JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
+JUMP_INSTR_TIME = 1 + MEM_READ_LATENCY
 CSTROBE_DELAY = 1
 
 async def generate_clock(dut):
@@ -54,8 +56,8 @@ async def cmd_mem_out_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY):
+        await RisingEdge(dut.clk)
 
     cmd_read_list = []
     qclk_val = []
@@ -73,7 +75,7 @@ async def cmd_mem_out_test(dut):
         dut._log.debug('cmd_out {}'.format(int(cmd_read_list[i])))
         dut._log.debug('qclk: {}'.format(qclk_val[i]))
         dut._log.debug ('..........................')
-        assert cmd_read_list[i] == cmd_list[i]
+        assert hex(int(cmd_read_list[i])) == hex(cmd_list[i])
 
     #dut._log.info("clk val {}".format(dut.clk))
 
@@ -82,10 +84,10 @@ async def pulse_freq_trig_test(dut):
     """
     run a series of commands to write freq val to cmd reg, then clock them out
     """
-    n_cmd = 11
     cmd_list = []
     freq_word_list = []
-    pulse_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
+    pulse_time_list = [3, 6, 11, 15, 18, 22]
+    n_cmd = len(pulse_time_list)
     pulse_i_opcode = 0b10010000
 
     for i in range(n_cmd):
@@ -99,8 +101,8 @@ async def pulse_freq_trig_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY):
+        await RisingEdge(dut.clk)
 
     freq_read_list = []
     freq_read_times = []
@@ -122,12 +124,12 @@ async def pulse_freq_trig_test(dut):
 
 @cocotb.test()
 async def pulse_i_test(dut):
-    n_cmd = 11
     cmd_list = []
     freq_word_list = []
     phase_word_list = []
     env_word_list = []
-    pulse_time_list = [2, 3, 4, 7, 8, 9, 15, 16, 18, 19, 22]
+    pulse_time_list = [3, 6, 11, 15, 18, 22]
+    n_cmd = len(pulse_time_list)
 
     for i in range(n_cmd):
         freq_word = random.randint(0, 2**9-1)
@@ -182,10 +184,8 @@ async def regwrite_i_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-    #await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY + ALU_INSTR_TIME):
+        await RisingEdge(dut.clk)
 
     reg_read = dut.dpr.regs.data[reg_addr].value
 
@@ -210,7 +210,6 @@ async def reg_i_test(dut):
         
         cmd_list.append(cg.alu_cmd('reg_alu', 'i', reg_val, 'id0', 0, reg_addr0))
         cmd_list.append(cg.alu_cmd('reg_alu', 'i', ival, op, reg_addr0, reg_addr1))
-        cg.reg_alu_i(ival, 'id0', reg_addr0, reg_addr1)
 
         dut._log.debug('cmd 0 in: {}'.format(bin(cmd_list[0])))
         dut._log.debug('cmd 1 in: {}'.format(bin(cmd_list[1])))
@@ -222,12 +221,9 @@ async def reg_i_test(dut):
         await RisingEdge(dut.clk)
         await RisingEdge(dut.clk)
         dut.reset.value = 0
-        await RisingEdge(dut.clk)
-        await RisingEdge(dut.clk)
+        for i in range(MEM_READ_LATENCY + 2*ALU_INSTR_TIME):
+            await RisingEdge(dut.clk)
 
-        await RisingEdge(dut.clk)
-        await RisingEdge(dut.clk)
-        await RisingEdge(dut.clk)
         reg_read_val = dut.dpr.regs.data[reg_addr1].value
 
         correct_val = int(evaluate_alu_exp(ival, op, reg_val))
@@ -249,7 +245,7 @@ async def pulse_reg_test(dut):
     amp_word_list = []
     env_word_list = []
     cfg_word_list = []
-    pulse_time_list = [9, 15, 16]
+    pulse_time_list = [9, 15, 18]
 
     reg_word = 0x000000a3
     reg_addr = 2
@@ -291,8 +287,8 @@ async def pulse_reg_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY):
+        await RisingEdge(dut.clk)
 
     freq_read_list = []
     phase_read_list = []
@@ -333,10 +329,8 @@ async def jump_i_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY + JUMP_INSTR_TIME):
+        await RisingEdge(dut.clk)
 
     read_command = dut.dpr.cmd_buf_out.value
 
@@ -370,14 +364,8 @@ async def jump_i_cond_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-
-    await RisingEdge(dut.clk) #first command
-    await RisingEdge(dut.clk)
-
-    await RisingEdge(dut.clk) #second command
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY + COND_JUMP_INSTR_TIME):
+        await RisingEdge(dut.clk)
 
     read_command = dut.dpr.cmd_buf_out.value
 
@@ -412,11 +400,11 @@ async def inc_qclk_i_test(dut):
     dut.reset.value = 0
     await RisingEdge(dut.clk)
 
-    for i in range(cmd_wait_range):
+    for i in range(cmd_wait_range + ALU_INSTR_TIME):
         await RisingEdge(dut.clk)
     
     qclk_read_val = dut.dpr.qclk_out.value
-    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range)
+    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME)
 
     dut._log.debug('qclk_read_val: {}'.format(qclk_read_val))
     dut._log.debug('qclk_inc_val: {}'.format(qclk_inc_val))
@@ -441,8 +429,8 @@ async def read_fproc_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY + ALU_INSTR_TIME):
+        await RisingEdge(dut.clk)
 
     for i in range(fproc_ready_t):
         await RisingEdge(dut.clk)
@@ -483,8 +471,8 @@ async def jump_fproc_i_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    for i in range(MEM_READ_LATENCY + ALU_INSTR_TIME):
+        await RisingEdge(dut.clk)
 
     for i in range(fproc_ready_t):
         await RisingEdge(dut.clk)

@@ -8,7 +8,8 @@ module toplevel_sim#(
     parameter FREQ_WIDTH = 9,
     parameter AMP_WIDTH = 16,
     parameter CFG_WIDTH = 4,
-    parameter SYNC_BARRIER_WIDTH=8)(
+    parameter SYNC_BARRIER_WIDTH=8,
+    parameter MEM_READ_LATENCY=3)(
     input clk,
     input reset,
     input sync_enable,
@@ -50,7 +51,7 @@ module toplevel_sim#(
     assign sync.ready = sync_enable;
 
   
-    proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), 
+    proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), .CMD_MEM_READ_LATENCY(MEM_READ_LATENCY),
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
         .cmd_iface(memif), .fproc(fproc), .sync(sync), .pulseout(pulseout));
@@ -65,8 +66,8 @@ module toplevel_sim#(
     //this just breaks the input 128-bit cmd_write into 4 separate chunks and writes simultaneously
     genvar i;
     generate for(i = 0; i < MEM_TO_CMD; i = i + 1) 
-        cmd_mem #(.CMD_WIDTH(MEM_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) mem(.clk(clk), 
-            .write_enable(cmd_write_enable), .cmd_in(cmd_write[MEM_WIDTH*(i+1)-1:MEM_WIDTH*i]), 
+        cmd_mem #(.CMD_WIDTH(MEM_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH), .READ_LATENCY(MEM_READ_LATENCY)) 
+            mem(.clk(clk), .write_enable(cmd_write_enable), .cmd_in(cmd_write[MEM_WIDTH*(i+1)-1:MEM_WIDTH*i]), 
             .write_address(cmd_write_addr), .read_address(memif.instr_ptr), 
             .cmd_out(memif.mem_bus[i]));
     endgenerate
