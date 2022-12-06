@@ -35,7 +35,7 @@ async def load_commands(dut, cmd_list, start_addr=0):
 
     dut.cmd_write_enable.value = 0
 
-@cocotb.test()
+#@cocotb.test()
 async def cmd_mem_out_test(dut):
     """
     write some stuff to the command memory, trigger,
@@ -79,7 +79,7 @@ async def cmd_mem_out_test(dut):
 
     #dut._log.info("clk val {}".format(dut.clk))
 
-@cocotb.test()
+#@cocotb.test()
 async def pulse_freq_trig_test(dut):
     """
     run a series of commands to write freq val to cmd reg, then clock them out
@@ -170,7 +170,7 @@ async def pulse_i_test(dut):
         assert env_word_list[i] == env_read_list[i]
         assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
 
-@cocotb.test()
+#@cocotb.test()
 async def regwrite_i_test(dut):
     reg_addr = random.randint(0,15)
     reg_val = random.randint(0, 2**32-1)
@@ -191,7 +191,7 @@ async def regwrite_i_test(dut):
 
     assert(reg_read == reg_val)
 
-@cocotb.test()
+#@cocotb.test()
 async def reg_i_test(dut):
     """
     Write a value to a random register. Then, perform an operation
@@ -236,7 +236,7 @@ async def reg_i_test(dut):
 
         assert reg_read_val.integer == correct_val 
 
-@cocotb.test()
+#@cocotb.test()
 async def pulse_reg_test(dut):
     n_cmd = 3
     cmd_list = []
@@ -315,7 +315,7 @@ async def pulse_reg_test(dut):
         assert cfg_word_list[i] == cfg_read_list[i]
         assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
 
-@cocotb.test()
+#@cocotb.test()
 async def jump_i_test(dut):
     cmd_list = []
     jump_addr = random.randint(0, 2**8-1)
@@ -340,7 +340,7 @@ async def jump_i_test(dut):
 
     assert read_command == cmd_list[jump_addr]
 
-@cocotb.test()
+#@cocotb.test()
 async def jump_i_cond_test(dut):
     cmd_list = []
     jump_addr = random.randint(0, 2**8-1)
@@ -382,7 +382,7 @@ async def jump_i_cond_test(dut):
 
     assert read_command == correct_cmd
 
-@cocotb.test()
+#@cocotb.test()
 async def inc_qclk_i_test(dut):
     cmd_list = []
     cmd_wait_range = 20
@@ -412,7 +412,7 @@ async def inc_qclk_i_test(dut):
 
     assert qclk_read_val == qclk_correct_val
 
-@cocotb.test()
+#@cocotb.test()
 async def read_fproc_test(dut):
     cmd_list = []
     fproc_max_t = 20
@@ -447,7 +447,7 @@ async def read_fproc_test(dut):
 
     assert reg_rval_read == fproc_rval
 
-@cocotb.test()
+#@cocotb.test()
 async def jump_fproc_i_test(dut):
     cmd_list = []
     fproc_max_t = 20
