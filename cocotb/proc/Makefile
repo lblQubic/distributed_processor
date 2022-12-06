@@ -7,7 +7,7 @@ VERILOG_SOURCES += $(PWD)/../../hdl/*.vh
 VERILOG_SOURCES += $(PWD)/../../sim_modules/*.sv
 EXTRA_ARGS += --trace --trace-structs
 TOPLEVEL = toplevel_sim
-#COMPILE_ARGS += -Wno
+COMPILE_ARGS += -Wno-fatal
 
 MODULE = test_proc
 

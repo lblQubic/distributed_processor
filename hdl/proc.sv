@@ -12,7 +12,8 @@ module proc
       parameter CMD_ADDR_WIDTH=8,
       parameter REG_ADDR_WIDTH=4,
       parameter SYNC_BARRIER_WIDTH=8,
-      parameter DAC_SAMPLES_PER_CLK=4)(
+      parameter DAC_SAMPLES_PER_CLK=4,
+      parameter CMD_MEM_READ_LATENCY=3)(
       input clk,
       input reset,
       cmd_mem_iface cmd_iface,
@@ -44,6 +45,7 @@ module proc
     wire freq_write_sel;
     wire env_write_sel;
     wire write_pulse_en;
+    wire instr_load_en;
 
     assign cmd_buf_out = cmd_iface.cmd_read;
     
@@ -64,6 +66,14 @@ module proc
     wire inst_ptr_load_en;
     wire inst_ptr_enable;
 
+    //local cmd buffer
+    reg[CMD_WIDTH-1:0] local_cmd;
+    always @(posedge clk) begin
+        if(instr_load_en)
+            local_cmd <= cmd_buf_out;
+    end
+
+
     //cmd buffer datapath shorthands
     wire[CMD_ADDR_WIDTH-1:0] instr_ptr_load_val;
     wire[DATA_WIDTH-1:0] alu_cmd_data_in0;
@@ -76,21 +86,21 @@ module proc
     localparam FPROC_LSB = CMD_WIDTH-ALU_INPUT_SPACE-32;
 
     localparam ALU_INPUT_SPACE = OPCODE_WIDTH + DATA_WIDTH + REG_ADDR_WIDTH; //datapath reserved for ALU inputs (both immediate and reg addressed)
-    assign instr_ptr_load_val = cmd_buf_out[INSTR_PTR_LSB + CMD_ADDR_WIDTH - 1 : INSTR_PTR_LSB];
-    assign alu_cmd_data_in0 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH]; // data_in0 and addr_in0 overlap since you always 
-    assign reg_addr_in0 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH]; //     choose between one or the other
-    assign reg_addr_in1 = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH]; 
-    assign reg_write_addr = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-2*REG_ADDR_WIDTH]; 
-    //assign cmd_out = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-PULSE_OUT_WIDTH];
+    assign instr_ptr_load_val = local_cmd[INSTR_PTR_LSB + CMD_ADDR_WIDTH - 1 : INSTR_PTR_LSB];
+    assign alu_cmd_data_in0 = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH]; // data_in0 and addr_in0 overlap since you always 
+    assign reg_addr_in0 = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH]; //     choose between one or the other
+    assign reg_addr_in1 = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH]; 
+    assign reg_write_addr = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-2*REG_ADDR_WIDTH]; 
+    //assign cmd_out = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH-DATA_WIDTH:CMD_WIDTH-OPCODE_WIDTH-DATA_WIDTH-PULSE_OUT_WIDTH];
 
     //pulse datapath
-    assign pulse_cmd_time = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH:
+    assign pulse_cmd_time = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH:
                             CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH-DATA_WIDTH];
-    assign pulse_cmd_i = cmd_buf_out[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH];
+    assign pulse_cmd_i = local_cmd[CMD_WIDTH-1-OPCODE_WIDTH-REG_ADDR_WIDTH:CMD_WIDTH-OPCODE_WIDTH-REG_ADDR_WIDTH-PULSE_CMD_I_WIDTH];
 
     //other datapath connections
     assign qclk_in = alu_out;
-    assign fproc.id = cmd_buf_out[FPROC_LSB + fproc.FPROC_ID_WIDTH - 1 : FPROC_LSB];
+    assign fproc.id = local_cmd[FPROC_LSB + fproc.FPROC_ID_WIDTH - 1 : FPROC_LSB];
 
     //conditional assignments from control bits
     assign alu_in0 = alu_in0_sel ?  reg_file_out0 : alu_cmd_data_in0;
@@ -109,17 +119,17 @@ module proc
     //instantiate modules
     //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
     //          .clk(clk), .write_enable(write_prog_enable), .read_address(cmd_buf_read_addr),
-    //          .write_address(cmd_addr), .cmd_in(cmd_data), .cmd_out(cmd_buf_out));
+    //          .write_address(cmd_addr), .cmd_in(cmd_data), .cmd_out(local_cmd));
     instr_ptr #(.WIDTH(CMD_ADDR_WIDTH)) instr(.clk(clk), .enable(inst_ptr_enable), .reset(reset),
               .load_val(instr_ptr_load_val), .load_enable(inst_ptr_load_en), .ptr_out(cmd_iface.instr_ptr));
     reg_file #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(REG_ADDR_WIDTH)) regs(
               .clk(clk), .read_addr_0(reg_addr_in0), .read_addr_1(reg_addr_in1),
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
-    ctrl ctu(.clk(clk), .reset(reset), .opcode(cmd_buf_out[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
+    ctrl #(.MEM_READ_CYCLES(CMD_MEM_READ_LATENCY)) ctu(.clk(clk), .reset(reset), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
               .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
-              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe),
+              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),
               .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable), .write_pulse_en(write_pulse_en));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
