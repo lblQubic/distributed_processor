@@ -8,11 +8,12 @@ import distproc.command_gen as cg
 CLK_CYCLE = 5
 N_CLKS = 500
 
-MEM_READ_LATENCY = 2
+MEM_READ_LATENCY = 3
 PULSE_INSTR_TIME = max(MEM_READ_LATENCY, 1)
 ALU_INSTR_TIME = max(MEM_READ_LATENCY, 3)
-COND_JUMP_INSTR_TIME = 3 + MEM_READ_LATENCY
-JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
+COND_JUMP_INSTR_TIME = ALU_INSTR_TIME + MEM_READ_LATENCY
+#JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
+JUMP_INSTR_TIME = 1 + MEM_READ_LATENCY
 CSTROBE_DELAY = 1
 
 async def generate_clock(dut):
@@ -363,7 +364,7 @@ async def jump_i_cond_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    for i in range(MEM_READ_LATENCY + ALU_INSTR_TIME + COND_JUMP_INSTR_TIME):
+    for i in range(MEM_READ_LATENCY + COND_JUMP_INSTR_TIME):
         await RisingEdge(dut.clk)
 
     read_command = dut.dpr.cmd_buf_out.value

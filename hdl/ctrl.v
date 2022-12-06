@@ -133,7 +133,7 @@ module ctrl#(
             else begin
                 instr_load_en = 1;
                 mem_wait_rst = 1;
-                instr_ptr_en = 1;
+                instr_ptr_en = ~reset;
                 next_state = DECODE_STATE;
             end
 
