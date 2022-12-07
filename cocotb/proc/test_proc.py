@@ -156,7 +156,7 @@ async def pulse_i_test(dut):
     env_read_list = []
     pulse_read_times = []
 
-    for i in range(25):
+    for i in range(30):
         if(dut.cstrobe_out.value == 1):
             freq_read_list.append(dut.freq.value)
             phase_read_list.append(dut.phase.value)
@@ -404,7 +404,7 @@ async def inc_qclk_i_test(dut):
         await RisingEdge(dut.clk)
     
     qclk_read_val = dut.dpr.qclk_out.value
-    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME)
+    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME - MEM_READ_LATENCY)
 
     dut._log.debug('qclk_read_val: {}'.format(qclk_read_val))
     dut._log.debug('qclk_inc_val: {}'.format(qclk_inc_val))
