@@ -1,3 +1,47 @@
+/**
+* Implements distributed processor FSM. 
+*
+* states:
+*   MEM_WAIT_STATE: wait for MEM_READ_CYCLES for input instruction to become valid, then
+*       assert instr_load_en to load the cmd from memory into the internal register. Transition
+*       to DECODE_STATE
+*   DECODE_STATE: new instruction clocked in; depending on opcode:
+*       pulse_write:
+*           - write pulse regs from cmd/regs, transition to MEM_WAIT_STATE
+*       pulse_write_trig:
+*           - write pulse regs from cmd/regs, wait for cstrobe, then transition to MEM_WAIT_STATE
+*       ALU type:
+*           - read regs/set up inputs to ALU, transition to next state
+*       FPROC type:
+*           - assert fproc_enable, transition to FPROC_WAIT state
+*   ALU_PROC_STATE_0
+*       - clock in ALU inputs
+*       - transition to ALU_PROC_STATE_1
+*   ALU_PROC_STATE_1
+*       - clock out ALU results, set up inputs that use this (e.g. register writes, qclk loads,
+*           instr_ptr_load_en (jumps))
+*       - transition to MEM_WAIT_STATE
+*   FPROC_WAIT_STATE
+*       - check fproc_ready; 
+*           - if 0 stay here
+*           - if 1 setup ALU inputs, transition to ALU_PROC_STATE_0
+*   DONE_STATE
+*       - assert done_stb, stay here until reset
+*   SYNC_WAIT
+*
+*   instruction paths:
+*       pulse_write: MEM_WAIT_STATE --> DECODE_STATE --> MEM_WAIT_STATE
+*       pulse_write_trig: MEM_WAIT_STATE --> DECODE_STATE --cstrobe_in--> MEM_WAIT_STATE
+*       jump_i: MEM_WAIT_STATE --> DECODE_STATE --> MEM_WAIT_STATE
+*       ALU type (reg_alu(r/i), jump_cond(r,i), inc_qclk(r,i): 
+*           MEM_WAIT_STATE --> DECODE_STATE --> ALU_PROC_STATE_0 --> ALU_PROC_STATE_1 --> MEM_WAIT_STATE
+*       FPROC type (alu_fproc, jump_fproc):
+*           MEM_WAIT_STATE --> DECODE_STATE --> FPROC_WAIT_STATE --fproc_ready--> ALU_PROC_STATE_0 
+*               --> ALU_PROC_STATE_1 --> MEM_WAIT_STATE
+*       done: MEM_WAIT_STATE --> DECODE_STATE --> DONE_STATE --reset--> MEM_WAIT_STATE
+*
+*
+*/
 module ctrl#(
     parameter MEM_READ_CYCLES=3)(
     input clk,
@@ -8,6 +52,7 @@ module ctrl#(
     input cstrobe_in,
     output [2:0] alu_opcode,
     output reg c_strobe_enable,
+    output reg done_stb,
     output alu_in0_sel,
     output reg[1:0] alu_in1_sel,
     output reg reg_write_en,
@@ -16,21 +61,20 @@ module ctrl#(
     output reg instr_load_en,
     output reg qclk_load_en,
     output reg sync_out_ready,
-    output reg fproc_out_ready,
+    output reg fproc_enable,
     output reg write_pulse_en);
 
-    reg[3:0] state, next_state;
+    reg[4:0] state, next_state;
     reg[3:0] mem_wait_cycles;
     reg mem_wait_rst;
 
     localparam MEM_WAIT_STATE = 0;
-    localparam ALU_PROC_STATE = 1;
-    localparam ALU_FPROC_WAIT_STATE = 2;
-    localparam JUMP_FPROC_WAIT_STATE = 3;
-    localparam SYNC_WAIT_STATE = 4;
-    localparam INC_QCLK_STATE = 5;
-    localparam JUMP_COND_STATE = 6;
-    localparam DECODE_STATE = 7;
+    localparam DECODE_STATE = 1;
+    localparam ALU_PROC_STATE_0 = 2;
+    localparam ALU_PROC_STATE_1 = 3;
+    localparam FPROC_WAIT_STATE = 4;
+    localparam SYNC_WAIT_STATE = 6;
+    localparam DONE_STATE = 9;
 
 
     parameter INST_PTR_DEFAULT_EN = 2'b00;
@@ -71,32 +115,11 @@ module ctrl#(
     parameter JUMP_FPROC = 4'b0101;
     parameter INC_QCLK = 4'b0110;
     parameter SYNC = 4'b0111;
+    parameter DONE = 4'b1010;
 
 
 
 
-    /*
-    * states:
-    *   MEM_WAIT_STATE: wait for MEM_READ_CYCLES for input instruction to become valid, then
-    *       assert instr_load_en to load the cmd from memory into the internal register. Transition
-    *       to DECODE_STATE
-    *   DECODE_STATE: new instruction clocked in; depending on opcode:
-    *       pulse_write:
-    *           - write pulse regs from cmd/regs, transition to MEM_WAIT_STATE
-    *       pulse_write_trig:
-    *           - write pulse regs from cmd/regs, wait for cstrobe, then transition to MEM_WAIT_STATE
-    *       alu_proc or jump_cond:
-    *           - read regs/set up inputs to ALU, transition to ALU_PROC_STATE or JUMP_COND state
-    *       - pulse_write: enable pulse_write regs, enable PC, transition to itself
-    *       - fproc or sync; transition to fproc/sync wait states respectively
-    *   ALU_PROC_STATE
-    *       - clock in register writes and increment instr_ptr
-    *   FPROC_WAIT_STATE
-    *       - check ready; if 0 stay here, if 1 regwrite or jump according to opcode
-    *   SYNC_WAIT
-    *   PULSE_WAIT
-    *
-    */
 
     //`include "../hdl/ctrl_params.vh"
     //`include "../hdl/instr_params.vh"
@@ -138,17 +161,19 @@ module ctrl#(
             end
 
             sync_out_ready = 0;
-            fproc_out_ready = 0;
+            fproc_enable = 0;
             reg_write_en = 0;
             qclk_load_en = 0;
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             c_strobe_enable = 0;
             write_pulse_en = 0;
+            done_stb = 0;
         
         end
 
         else if(state == DECODE_STATE) begin
             instr_load_en = 0;
+            done_stb = 0;
             case(opcode[7:4])
                 PULSE_WRITE : begin
                     next_state = MEM_WAIT_STATE;
@@ -157,7 +182,7 @@ module ctrl#(
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     sync_out_ready = 0;
-                    fproc_out_ready = 0;
+                    fproc_enable = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     write_pulse_en = 1;
@@ -173,14 +198,15 @@ module ctrl#(
                     instr_ptr_en = 0;
                     mem_wait_rst = 0; 
                     sync_out_ready = 0;
-                    fproc_out_ready = 0;
+                    fproc_enable = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     write_pulse_en = 1;
                 end
 
-                REG_ALU : begin
-                    next_state = ALU_PROC_STATE;
+                REG_ALU, JUMP_COND : begin
+                    //prepare ALU inputs, go to wait state
+                    next_state = ALU_PROC_STATE_0;
                     alu_in1_sel = ALU_IN1_REG_SEL;
                     //defaults:
                     mem_wait_rst = 0; 
@@ -190,7 +216,23 @@ module ctrl#(
                     instr_ptr_en = 0;
                     qclk_load_en = 0;
                     sync_out_ready = 0;
-                    fproc_out_ready = 0;
+                    fproc_enable = 0;
+                    write_pulse_en = 0;
+                end
+
+                INC_QCLK : begin
+                    //prepare ALU inputs, go to wait state
+                    next_state = ALU_PROC_STATE_0;
+                    alu_in1_sel = ALU_IN1_QCLK_SEL;
+                    //defaults:
+                    mem_wait_rst = 0; 
+                    reg_write_en = 0;
+                    c_strobe_enable = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    instr_ptr_en = 0;
+                    qclk_load_en = 0;
+                    sync_out_ready = 0;
+                    fproc_enable = 0;
                     write_pulse_en = 0;
                 end
 
@@ -204,57 +246,14 @@ module ctrl#(
                     instr_ptr_en = 0;
                     qclk_load_en = 0;
                     sync_out_ready = 0;
-                    fproc_out_ready = 0;
+                    fproc_enable = 0;
                     write_pulse_en = 0;
                 end
 
-                JUMP_COND : begin //this must use a cmp opcode or bad things will happen!
-                    next_state = JUMP_COND_STATE;
-                    alu_in1_sel = ALU_IN1_REG_SEL;
-                    //defaults:
-                    mem_wait_rst = 0; 
-                    reg_write_en = 0;
-                    c_strobe_enable = 0;
-                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
-                    instr_ptr_en = 0;
-                    qclk_load_en = 0;
-                    sync_out_ready = 0;
-                    fproc_out_ready = 0;
-                    write_pulse_en = 0;
-                end
 
-                INC_QCLK : begin //this can use an ADD, SUB, or ID opcode
-                    next_state = INC_QCLK_STATE;
-                    alu_in1_sel = ALU_IN1_QCLK_SEL;
-                    //defaults:
-                    mem_wait_rst = 0; 
-                    c_strobe_enable = 0;
-                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
-                    instr_ptr_en = 0;
-                    sync_out_ready = 0;
-                    fproc_out_ready = 0;
-                    reg_write_en = 0;
-                    qclk_load_en = 0;
-                    write_pulse_en = 0;
-                end
-
-                ALU_FPROC : begin
-                    next_state = ALU_FPROC_WAIT_STATE;
-                    fproc_out_ready = 1;
-                    //defaults:
-                    mem_wait_rst = 0; 
-                    c_strobe_enable = 0;
-                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
-                    instr_ptr_en = 0;
-                    sync_out_ready = 0;
-                    reg_write_en = 0;
-                    qclk_load_en = 0;
-                    write_pulse_en = 0;
-                end
-
-                JUMP_FPROC : begin
-                    next_state = JUMP_FPROC_WAIT_STATE;
-                    fproc_out_ready = 1;
+                ALU_FPROC, JUMP_FPROC : begin
+                    next_state = FPROC_WAIT_STATE;
+                    fproc_enable = 1;
                     //defaults:
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
@@ -276,16 +275,17 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     c_strobe_enable = 0;
-                    fproc_out_ready = 0;
+                    fproc_enable = 0;
                 end
 
             endcase
 
         end
 
-        else if(state == ALU_PROC_STATE) begin
-            next_state = MEM_WAIT_STATE;
-            reg_write_en = 1;
+        else if(state == ALU_PROC_STATE_0) begin
+            alu_in1_sel = ALU_IN1_REG_SEL;
+            next_state = ALU_PROC_STATE_1;
+            reg_write_en = 0;
             mem_wait_rst = 0; 
             c_strobe_enable = 0;
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
@@ -293,43 +293,52 @@ module ctrl#(
             instr_load_en = 0;
             qclk_load_en = 0;
             sync_out_ready = 0;
-            fproc_out_ready = 0;
+            fproc_enable = 0;
             write_pulse_en = 0;
+            done_stb = 0;
         end
 
-        else if(state == INC_QCLK_STATE) begin
+        else if(state == ALU_PROC_STATE_1) begin
+            alu_in1_sel = ALU_IN1_REG_SEL;
             next_state = MEM_WAIT_STATE;
-            mem_wait_rst = 0; 
-            reg_write_en = 0;
             c_strobe_enable = 0;
-            instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             instr_ptr_en = 0;
             instr_load_en = 0;
-            qclk_load_en = 1;
             sync_out_ready = 0;
-            fproc_out_ready = 0;
+            fproc_enable = 0;
             write_pulse_en = 0;
+            done_stb = 0;
+            case(opcode[7:4]) 
+                REG_ALU, ALU_FPROC : begin
+                    reg_write_en = 1;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    qclk_load_en = 0;
+                    mem_wait_rst = 0; 
+                end
+
+                JUMP_COND, JUMP_FPROC : begin
+                    mem_wait_rst = 1; 
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_ALU;
+                    qclk_load_en = 0;
+                    reg_write_en = 0;
+                end
+
+                INC_QCLK : begin 
+                    reg_write_en = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    qclk_load_en = 1;
+                    mem_wait_rst = 0; 
+                end
+
+            endcase
+
         end
 
-        else if(state == JUMP_COND_STATE) begin
-            mem_wait_rst = 1; 
-            next_state = MEM_WAIT_STATE;
-            reg_write_en = 0;
-            c_strobe_enable = 0;
-            instr_ptr_load_en = INSTR_PTR_LOAD_EN_ALU;
-            instr_ptr_en = 0;
-            instr_load_en = 0;
-            qclk_load_en = 0;
-            sync_out_ready = 0;
-            fproc_out_ready = 0;
-            write_pulse_en = 0;
-        end
-
-        else if(state == ALU_FPROC_WAIT_STATE) begin
+        else if(state == FPROC_WAIT_STATE) begin
             if(fproc_ready)
-                next_state = ALU_PROC_STATE;
+                next_state = ALU_PROC_STATE_0;
             else
-                next_state = ALU_FPROC_WAIT_STATE;
+                next_state = FPROC_WAIT_STATE;
             
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             mem_wait_rst = 0; 
@@ -341,28 +350,25 @@ module ctrl#(
             c_strobe_enable = 0;
             qclk_load_en = 0;
             sync_out_ready = 0;
-            fproc_out_ready = 0;
+            fproc_enable = 0;
             write_pulse_en = 0;
+            done_stb = 0;
         end
 
-        else if(state == JUMP_FPROC_WAIT_STATE) begin
-            if(fproc_ready)
-                next_state = JUMP_COND_STATE;
-            else
-                next_state = JUMP_FPROC_WAIT_STATE;
-            
-            instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
-            alu_in1_sel = ALU_IN1_FPROC_SEL;
+        else if(state == DONE_STATE) begin
+            next_state = DONE_STATE;
             mem_wait_rst = 0; 
-
+            instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             reg_write_en = 0;
             instr_ptr_en = 0;
             instr_load_en = 0;
             c_strobe_enable = 0;
             qclk_load_en = 0;
             sync_out_ready = 0;
-            fproc_out_ready = 0;
+            fproc_enable = 0;
             write_pulse_en = 0;
+            done_stb = 1;
+            mem_wait_rst = 0; 
         end
         
     end
