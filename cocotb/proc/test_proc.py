@@ -79,7 +79,6 @@ async def cmd_mem_out_test(dut):
         assert hex(int(cmd_read_list[i])) == hex(cmd_list[i])
 
     #dut._log.info("clk val {}".format(dut.clk))
-    assert 1==0
 
 @cocotb.test()
 async def pulse_freq_trig_test(dut):
@@ -417,13 +416,14 @@ async def inc_qclk_i_test(dut):
 @cocotb.test()
 async def read_fproc_test(dut):
     cmd_list = []
-    fproc_max_t = 20
+    fproc_min_t = 1
+    fproc_max_t = 10
 
     read_reg_addr = random.randint(0, 15)
     fproc_rval = random.randint(0, 2**32-1)
     cmd_list.append(cg.read_fproc(0, read_reg_addr))
 
-    fproc_ready_t = random.randint(0, fproc_max_t)
+    fproc_ready_t = random.randint(fproc_min_t, fproc_max_t)
 
     await cocotb.start(generate_clock(dut))
     await load_commands(dut, cmd_list)
