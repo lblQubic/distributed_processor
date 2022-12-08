@@ -26,7 +26,7 @@
 *           - if 0 stay here
 *           - if 1 setup ALU inputs, transition to ALU_PROC_STATE_0
 *   DONE_STATE
-*       - assert done_stb, stay here until reset
+*       - assert done_gate, stay here until reset
 *   SYNC_WAIT
 *
 *   instruction paths:
@@ -52,7 +52,7 @@ module ctrl#(
     input cstrobe_in,
     output [2:0] alu_opcode,
     output reg c_strobe_enable,
-    output reg done_stb,
+    output reg done_gate,
     output alu_in0_sel,
     output reg[1:0] alu_in1_sel,
     output reg reg_write_en,
@@ -167,13 +167,13 @@ module ctrl#(
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             c_strobe_enable = 0;
             write_pulse_en = 0;
-            done_stb = 0;
+            done_gate = 0;
         
         end
 
         else if(state == DECODE_STATE) begin
             instr_load_en = 0;
-            done_stb = 0;
+            done_gate = 0;
             case(opcode[7:4])
                 PULSE_WRITE : begin
                     next_state = MEM_WAIT_STATE;
@@ -265,6 +265,19 @@ module ctrl#(
                     write_pulse_en = 0;
                 end
 
+                DONE : begin
+                    next_state = DONE_STATE;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    mem_wait_rst = 1; 
+                    write_pulse_en = 0;
+                    instr_ptr_en = 0;
+                    sync_out_ready = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                    c_strobe_enable = 0;
+                    fproc_enable = 0;
+                end
+
                 default : begin
                     next_state = DECODE_STATE;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
@@ -295,7 +308,7 @@ module ctrl#(
             sync_out_ready = 0;
             fproc_enable = 0;
             write_pulse_en = 0;
-            done_stb = 0;
+            done_gate = 0;
         end
 
         else if(state == ALU_PROC_STATE_1) begin
@@ -307,7 +320,7 @@ module ctrl#(
             sync_out_ready = 0;
             fproc_enable = 0;
             write_pulse_en = 0;
-            done_stb = 0;
+            done_gate = 0;
             case(opcode[7:4]) 
                 REG_ALU, ALU_FPROC : begin
                     reg_write_en = 1;
@@ -352,7 +365,7 @@ module ctrl#(
             sync_out_ready = 0;
             fproc_enable = 0;
             write_pulse_en = 0;
-            done_stb = 0;
+            done_gate = 0;
         end
 
         else if(state == DONE_STATE) begin
@@ -367,7 +380,7 @@ module ctrl#(
             sync_out_ready = 0;
             fproc_enable = 0;
             write_pulse_en = 0;
-            done_stb = 1;
+            done_gate = 1;
             mem_wait_rst = 0; 
         end
         

@@ -26,7 +26,8 @@ opcodes = {'pulse_write' : 0b10000,
            'jump_fproc' : 0b01011,
            'inc_qclk_i' : 0b01100,
            'inc_qclk' : 0b01101,
-           'sync' : 0b01110}
+           'sync' : 0b01110,
+           'done' : 0b10100}
 
 #pulse parameters
 pulse_field_widths = {
@@ -267,7 +268,7 @@ def jump_fproc_i(func_id, value, alu_op, instr_ptr_addr):
     opcode = (opcodes['jump_fproc_i'] << 3) + alu_opcodes[alu_op]
     return (opcode << 120) + (value << 88) + (instr_ptr_addr << 76) + (func_id << 52)
 
-def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=None, write_reg_addr=None, jump_cmd_ptr=None, func_id=None):
+def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=0, write_reg_addr=None, jump_cmd_ptr=None, func_id=None):
     """
     This is a general function for generating the following types of instructions:
         reg_(i)alu, jump_cond(i), alu_fproc(i), jump_fproc(i), inc_qclk(i)
@@ -315,6 +316,9 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=None, write_reg_add
     cmd += opcode << 120
 
     return cmd
+
+def done_cmd():
+    return opcodes['done'] << 123
 
 
 def twos_complement(value, nbits=32):

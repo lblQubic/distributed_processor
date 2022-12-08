@@ -500,6 +500,29 @@ async def jump_fproc_i_test(dut):
     dut._log.debug('cmd_read: {}'.format(read_command.integer))
     dut._log.debug('jump condition: {}'.format(evaluate_alu_exp(cmp_ival, op, fproc_rval)))
 
+@cocotb.test()
+async def done_gate_test(dut):
+    cmd_list = []
+    cmd_list.append(cg.alu_cmd('reg_alu', 'i', 1, 'id0', write_reg_addr=0))
+    cmd_list.append(cg.alu_cmd('reg_alu', 'i', 1, 'id0', write_reg_addr=0))
+    cmd_list.append(cg.alu_cmd('reg_alu', 'i', 1, 'id0', write_reg_addr=0))
+    cmd_list.append(cg.done_cmd())
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    for i in range(MEM_READ_LATENCY + 3*ALU_INSTR_TIME + 2):
+        await(RisingEdge(dut.clk))
+
+    donegate = dut.done_gate.value
+    assert donegate == 1
+    await(RisingEdge(dut.clk))
+    donegate = dut.done_gate.value
+    assert donegate == 1
+
 
 
 def evaluate_alu_exp(in0, op, in1):

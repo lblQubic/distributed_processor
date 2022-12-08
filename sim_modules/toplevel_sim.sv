@@ -27,7 +27,8 @@ module toplevel_sim#(
     output[SYNC_BARRIER_WIDTH-1:0] sync_barrier,
     output sync_barrier_en_out,
     output[SYNC_BARRIER_WIDTH-1:0] fproc_id,
-    output fproc_en_out);
+    output fproc_en_out,
+    output done_gate);
 
     localparam MEM_TO_CMD=4;
     localparam MEM_WIDTH=32;
@@ -54,7 +55,7 @@ module toplevel_sim#(
     proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), .CMD_MEM_READ_LATENCY(MEM_READ_LATENCY),
         .CMD_ADDR_WIDTH(CMD_ADDR_WIDTH), .REG_ADDR_WIDTH(REG_ADDR_WIDTH),
         .SYNC_BARRIER_WIDTH(SYNC_BARRIER_WIDTH)) dpr(.clk(clk), .reset(reset),
-        .cmd_iface(memif), .fproc(fproc), .sync(sync), .pulseout(pulseout));
+        .cmd_iface(memif), .fproc(fproc), .sync(sync), .pulseout(pulseout), .done_gate(done_gate));
 
     assign env_word = pulseout.env_word;
     assign amp = pulseout.amp;
