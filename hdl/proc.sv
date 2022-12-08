@@ -19,7 +19,8 @@ module proc
       cmd_mem_iface cmd_iface,
       sync_iface.proc sync,
       fproc_iface.proc fproc,
-      pulse_iface.proc pulseout);
+      pulse_iface.proc pulseout,
+      output done_stb);
 
     //`include "../hdl/instr_params.vh" //todo: debug includes
     //`include "../hdl/ctrl_params.vh"
@@ -135,7 +136,7 @@ module proc
               .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),
-              .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable), .write_pulse_en(write_pulse_en));
+              .sync_out_ready(sync.enable), .fproc_out_ready(fproc.enable), .write_pulse_en(write_pulse_en), .done_stb(done_stb));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(|reset_sr[2:0]), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
     pulse_reg #(.DATA_WIDTH(DATA_WIDTH)) pulsereg(.clk(clk), .pulse_cmd_in(pulse_cmd_i), .reg_in(reg_file_out0), 
