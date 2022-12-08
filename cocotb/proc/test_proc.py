@@ -10,10 +10,10 @@ N_CLKS = 500
 
 MEM_READ_LATENCY = 3
 PULSE_INSTR_TIME = max(MEM_READ_LATENCY, 1)
-ALU_INSTR_TIME = max(MEM_READ_LATENCY, 3)
+ALU_INSTR_TIME = max(MEM_READ_LATENCY, 4)
 COND_JUMP_INSTR_TIME = ALU_INSTR_TIME + MEM_READ_LATENCY
 #JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
-JUMP_INSTR_TIME = 1 + MEM_READ_LATENCY
+JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
 CSTROBE_DELAY = 1
 
 async def generate_clock(dut):
@@ -364,7 +364,7 @@ async def jump_i_cond_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    for i in range(MEM_READ_LATENCY + COND_JUMP_INSTR_TIME):
+    for i in range(MEM_READ_LATENCY + COND_JUMP_INSTR_TIME + ALU_INSTR_TIME):
         await RisingEdge(dut.clk)
 
     read_command = dut.dpr.cmd_buf_out.value
@@ -400,17 +400,17 @@ async def inc_qclk_i_test(dut):
     dut.reset.value = 0
     await RisingEdge(dut.clk)
 
-    for i in range(cmd_wait_range + ALU_INSTR_TIME):
+    for i in range(cmd_wait_range + ALU_INSTR_TIME + 1):
         await RisingEdge(dut.clk)
     
     qclk_read_val = dut.dpr.qclk_out.value
-    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME - MEM_READ_LATENCY)
+    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME - MEM_READ_LATENCY + 1)
 
     dut._log.debug('qclk_read_val: {}'.format(qclk_read_val))
     dut._log.debug('qclk_inc_val: {}'.format(qclk_inc_val))
     dut._log.debug('qclk_correct_val: {}'.format(qclk_correct_val))
 
-    assert qclk_read_val == qclk_correct_val
+    assert int(qclk_read_val) == qclk_correct_val
 
 @cocotb.test()
 async def read_fproc_test(dut):
@@ -429,7 +429,7 @@ async def read_fproc_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    for i in range(MEM_READ_LATENCY + ALU_INSTR_TIME):
+    for i in range(MEM_READ_LATENCY):
         await RisingEdge(dut.clk)
 
     for i in range(fproc_ready_t):
@@ -441,8 +441,8 @@ async def read_fproc_test(dut):
     await RisingEdge(dut.clk)
     dut.fproc_ready.value = 0
     dut.fproc_data.value = 0
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
+    for i in range(COND_JUMP_INSTR_TIME):
+        await RisingEdge(dut.clk)
     reg_rval_read = dut.dpr.regs.data[read_reg_addr].value
 
     assert reg_rval_read == fproc_rval
