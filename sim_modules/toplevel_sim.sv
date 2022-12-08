@@ -9,7 +9,7 @@ module toplevel_sim#(
     parameter AMP_WIDTH = 16,
     parameter CFG_WIDTH = 4,
     parameter SYNC_BARRIER_WIDTH=8,
-    parameter MEM_READ_LATENCY=3)(
+    parameter MEM_READ_LATENCY=2)(
     input clk,
     input reset,
     input sync_enable,
