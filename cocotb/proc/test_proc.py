@@ -79,6 +79,7 @@ async def cmd_mem_out_test(dut):
         assert hex(int(cmd_read_list[i])) == hex(cmd_list[i])
 
     #dut._log.info("clk val {}".format(dut.clk))
+    assert 1==0
 
 @cocotb.test()
 async def pulse_freq_trig_test(dut):
