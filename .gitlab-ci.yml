@@ -40,19 +40,19 @@ test-proc:   # This job runs in the test stage.
   script:
     - cd $PROC_TEST_PATH
     - make
-    - /usr/bin/python3 ../.check_xml results.xml
+    - /usr/bin/python3 ../.check_xml.py results.xml
 
 test-fproc-lut:
   stage: test
   script:
     - cd $FPROC_LUT_TEST_PATH
     - make
-    - /usr/bin/python3 ../.check_xml results.xml
+    - /usr/bin/python3 ../.check_xml.py results.xml
 
 test-pulse-reg:
   stage: test
   script:
     - cd $PULSE_REG_TEST_PATH
     - make
-    - /usr/bin/python3 ../.check_xml results.xml
+    - /usr/bin/python3 ../.check_xml.py results.xml
 
