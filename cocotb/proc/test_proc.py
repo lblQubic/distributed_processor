@@ -14,7 +14,7 @@ ALU_INSTR_TIME = max(MEM_READ_LATENCY, 4)
 COND_JUMP_INSTR_TIME = ALU_INSTR_TIME + MEM_READ_LATENCY
 #JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
 JUMP_INSTR_TIME = 2 + MEM_READ_LATENCY
-CSTROBE_DELAY = 1
+CSTROBE_DELAY = 2
 
 async def generate_clock(dut):
     for i in range(N_CLKS):
@@ -106,7 +106,7 @@ async def pulse_freq_trig_test(dut):
 
     freq_read_list = []
     freq_read_times = []
-    for i in range(25):
+    for i in range(26):
         if(dut.cstrobe_out.value == 1):
             freq_read_list.append(dut.freq.value)
             freq_read_times.append(dut.dpr.qclk_out.value)

@@ -60,7 +60,7 @@ module proc
     wire[1:0] inst_ptr_en_sel;
     wire[1:0] inst_ptr_load_en_sel;
     wire qclk_load_en;
-    wire cstrobe;
+    reg cstrobe;
 
     wire qclk_resetin;
     wire inst_ptr_resetin;
@@ -115,11 +115,11 @@ module proc
     //        alu_in1 = fproc_data;
     //end
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
-    assign cstrobe = (qclk_out == pulse_cmd_time) & c_strobe_enable;
 	reg [4:0] reset_sr=0;
 	reg dummy_resetsr=0;
 	always @(posedge clk) begin
 		{dummy_resetsr,reset_sr}<={reset_sr,reset};
+        cstrobe <= (qclk_out == pulse_cmd_time) & c_strobe_enable;
 	end
 
     //instantiate modules
