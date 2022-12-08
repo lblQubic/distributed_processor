@@ -8,7 +8,8 @@ import distproc.command_gen as cg
 CLK_CYCLE = 5
 N_CLKS = 500
 
-MEM_READ_LATENCY = 3
+MEM_READ_LATENCY = 2
+QCLK_RST_DELAY = 3
 PULSE_INSTR_TIME = max(MEM_READ_LATENCY, 1)
 ALU_INSTR_TIME = max(MEM_READ_LATENCY, 4)
 COND_JUMP_INSTR_TIME = ALU_INSTR_TIME + MEM_READ_LATENCY
@@ -101,7 +102,7 @@ async def pulse_freq_trig_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    for i in range(MEM_READ_LATENCY):
+    for i in range(QCLK_RST_DELAY):
         await RisingEdge(dut.clk)
 
     freq_read_list = []
@@ -404,7 +405,7 @@ async def inc_qclk_i_test(dut):
         await RisingEdge(dut.clk)
     
     qclk_read_val = dut.dpr.qclk_out.value
-    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME - MEM_READ_LATENCY + 1)
+    qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + ALU_INSTR_TIME - QCLK_RST_DELAY + 1)
 
     dut._log.debug('qclk_read_val: {}'.format(qclk_read_val))
     dut._log.debug('qclk_inc_val: {}'.format(qclk_inc_val))
