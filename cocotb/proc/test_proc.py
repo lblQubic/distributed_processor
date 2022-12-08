@@ -400,12 +400,12 @@ async def inc_qclk_i_test(dut):
     await RisingEdge(dut.clk)
     dut.reset.value = 0
 
-    for i in range(cmd_wait_range + PULSE_INSTR_TIME + ALU_INSTR_TIME + 1):
+    for i in range(cmd_wait_range + PULSE_INSTR_TIME + ALU_INSTR_TIME + MEM_READ_LATENCY + 1):
         await RisingEdge(dut.clk)
     
     qclk_read_val = dut.dpr.qclk_out.value
     qclk_correct_val = evaluate_alu_exp(qclk_inc_val, 'add', cmd_wait_range + PULSE_INSTR_TIME \
-            + ALU_INSTR_TIME - QCLK_RST_DELAY)
+            + ALU_INSTR_TIME + MEM_READ_LATENCY - QCLK_RST_DELAY)
 
     dut._log.debug('qclk_read_val: {}'.format(qclk_read_val))
     dut._log.debug('qclk_inc_val: {}'.format(qclk_inc_val))
