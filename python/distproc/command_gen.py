@@ -144,6 +144,7 @@ def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=
         opcode = opcodes['pulse_write']
 
     cmd += (opcode << 123)
+    print('cmd',hex(cmd))
     return cmd
 
 
