@@ -34,26 +34,25 @@ test-compiler:
     - cd $DRIVER_TEST_PATH 
     - pip install pytest
     - pytest
-  artifacts:
-    when: always
-    reports:
-      junit: results.xml
 
 test-proc:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   script:
     - cd $PROC_TEST_PATH
     - make
+    - python ../.check_xml results.xml
 
 test-fproc-lut:
   stage: test
   script:
     - cd $FPROC_LUT_TEST_PATH
     - make
+    - python ../.check_xml results.xml
 
 test-pulse-reg:
   stage: test
   script:
     - cd $PULSE_REG_TEST_PATH
     - make
+    - python ../.check_xml results.xml
 
