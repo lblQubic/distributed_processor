@@ -523,6 +523,27 @@ async def done_gate_test(dut):
     donegate = dut.done_gate.value
     assert donegate == 1
 
+@cocotb.test()
+async def pulse_reset_test(dut):
+    cmd_list = []
+    cmd_list.append(cg.pulse_reset())
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    for i in range(MEM_READ_LATENCY + 1):
+        await(RisingEdge(dut.clk))
+
+    rst = dut.pulse_reset.value
+    assert rst == 1
+    await(RisingEdge(dut.clk))
+    rst = dut.pulse_reset.value
+    assert rst == 0 
+
+
 
 
 def evaluate_alu_exp(in0, op, in1):

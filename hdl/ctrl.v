@@ -62,7 +62,8 @@ module ctrl#(
     output reg qclk_load_en,
     output reg sync_out_ready,
     output reg fproc_enable,
-    output reg write_pulse_en);
+    output reg write_pulse_en,
+    output reg pulse_reset);
 
     reg[4:0] state, next_state;
     reg[3:0] mem_wait_cycles;
@@ -116,6 +117,7 @@ module ctrl#(
     parameter INC_QCLK = 4'b0110;
     parameter SYNC = 4'b0111;
     parameter DONE = 4'b1010;
+    parameter PULSE_RESET = 4'b1011;
 
 
 
@@ -168,6 +170,7 @@ module ctrl#(
             c_strobe_enable = 0;
             write_pulse_en = 0;
             done_gate = 0;
+            pulse_reset = 0;
         
         end
 
@@ -186,6 +189,7 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     write_pulse_en = 1;
+                    pulse_reset = 0;
                 end
 
                 PULSE_WRITE_TRIG : begin
@@ -202,6 +206,21 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     write_pulse_en = 1;
+                    pulse_reset = 0;
+                end
+
+                PULSE_RESET : begin
+                    next_state = MEM_WAIT_STATE;
+                    mem_wait_rst = 0; 
+                    c_strobe_enable = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    instr_ptr_en = 0;
+                    sync_out_ready = 0;
+                    fproc_enable = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                    write_pulse_en = 0;
+                    pulse_reset = 1;
                 end
 
                 REG_ALU, JUMP_COND : begin
@@ -218,6 +237,7 @@ module ctrl#(
                     sync_out_ready = 0;
                     fproc_enable = 0;
                     write_pulse_en = 0;
+                    pulse_reset = 0;
                 end
 
                 INC_QCLK : begin
@@ -234,6 +254,7 @@ module ctrl#(
                     sync_out_ready = 0;
                     fproc_enable = 0;
                     write_pulse_en = 0;
+                    pulse_reset = 0;
                 end
 
                 JUMP_I : begin
@@ -248,6 +269,7 @@ module ctrl#(
                     sync_out_ready = 0;
                     fproc_enable = 0;
                     write_pulse_en = 0;
+                    pulse_reset = 0;
                 end
 
 
@@ -263,6 +285,7 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     write_pulse_en = 0;
+                    pulse_reset = 0;
                 end
 
                 DONE : begin
@@ -276,6 +299,7 @@ module ctrl#(
                     qclk_load_en = 0;
                     c_strobe_enable = 0;
                     fproc_enable = 0;
+                    pulse_reset = 0;
                 end
 
                 default : begin
@@ -289,6 +313,7 @@ module ctrl#(
                     qclk_load_en = 0;
                     c_strobe_enable = 0;
                     fproc_enable = 0;
+                    pulse_reset = 0;
                 end
 
             endcase
@@ -309,6 +334,7 @@ module ctrl#(
             fproc_enable = 0;
             write_pulse_en = 0;
             done_gate = 0;
+            pulse_reset = 0;
         end
 
         else if(state == ALU_PROC_STATE_1) begin
@@ -321,6 +347,7 @@ module ctrl#(
             fproc_enable = 0;
             write_pulse_en = 0;
             done_gate = 0;
+            pulse_reset = 0;
             case(opcode[7:4]) 
                 REG_ALU, ALU_FPROC : begin
                     reg_write_en = 1;
@@ -366,6 +393,7 @@ module ctrl#(
             fproc_enable = 0;
             write_pulse_en = 0;
             done_gate = 0;
+            pulse_reset = 0;
         end
 
         else if(state == DONE_STATE) begin
@@ -382,6 +410,7 @@ module ctrl#(
             write_pulse_en = 0;
             done_gate = 1;
             mem_wait_rst = 0; 
+            pulse_reset = 0;
         end
         
     end
