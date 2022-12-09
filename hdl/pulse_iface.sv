@@ -12,9 +12,10 @@ interface pulse_iface#(
     wire[ENV_WORD_WIDTH-1:0] env_word;
     wire[CFG_WIDTH-1:0] cfg;
     wire cstrobe;
+    wire reset;
 
     modport proc(output phase, output freq, output amp, 
-        output env_word, output cfg, output cstrobe);
+        output env_word, output cfg, output cstrobe, output reset);
 
 endinterface
 

@@ -27,7 +27,8 @@ opcodes = {'pulse_write' : 0b10000,
            'inc_qclk_i' : 0b01100,
            'inc_qclk' : 0b01101,
            'sync' : 0b01110,
-           'done' : 0b10100}
+           'done' : 0b10100,
+           'pulse_reset' : 0b10110}
 
 #pulse parameters
 pulse_field_widths = {
@@ -320,6 +321,9 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=0, write_reg_addr=N
 
 def done_cmd():
     return opcodes['done'] << 123
+
+def pulse_reset():
+    return opcodes['pulse_reset'] << 123
 
 
 def twos_complement(value, nbits=32):

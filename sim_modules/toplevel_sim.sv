@@ -28,6 +28,7 @@ module toplevel_sim#(
     output sync_barrier_en_out,
     output[SYNC_BARRIER_WIDTH-1:0] fproc_id,
     output fproc_en_out,
+    output pulse_reset,
     output done_gate);
 
     localparam MEM_TO_CMD=4;
@@ -63,6 +64,7 @@ module toplevel_sim#(
     assign freq = pulseout.freq;
     assign cfg = pulseout.cfg;
     assign cstrobe_out = pulseout.cstrobe;
+    assign pulse_reset = pulseout.reset;
 
     //this just breaks the input 128-bit cmd_write into 4 separate chunks and writes simultaneously
     genvar i;
