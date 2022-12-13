@@ -3,42 +3,12 @@ import copy
 import numpy as np
 import ipdb
 import distproc.hwconfig as hw
+from collections import OrderedDict
 
 ENV_BITS = 16
 N_MAX_REGS = 16
 
-class MultiUnitAssembler:
-
-    def __init__(self, n_units, hwconfig):
-        self.n_units = n_units
-        self.assemblers = []
-        for i in range(self.n_units):
-            self.assemblers.append(SingleUnitAssembler(hwconfig))
-
-    def add_env(self, unitind, name, env):
-        self.assemblers[unitind].add_env(name, env)
-
-    def add_pulse(self, unitind, freq, phase, start_time, env, length=None, label=None):
-        self.assemblers[unitind].add_pulse(freq, phase, start_time, env, length, label)
-
-    def get_compiled_program(self):
-        cmd_lists = []
-        env_buffers = []
-        for assembler in self.assemblers:
-            cmd_list, env_raw = assembler.get_compiled_program()
-            cmd_lists.append(cmd_list)
-            env_buffers.append(env_raw)
-
-        return cmd_lists, env_buffers
-
-    def get_sim_program(self):
-        prog = []
-        for assembler in self.assemblers:
-            prog.append(assembler.get_sim_program())
-
-        return prog
-
-class SingleUnitAssembler:
+class SingleProcAssembler:
     """
     Class for constructing an assembly-language level program and 
     converting to machine code + env buffers
@@ -52,16 +22,30 @@ class SingleUnitAssembler:
             key: user-declared register name
             value: register address in proc core
     """
-    def __init__(self, hwconfig):
-        self._env_dict = {}
+    def __init__(self, hwconfig, n_element):
+        self.n_element = n_element
+        self._env_dicts = [OrderedDict() for i in range n_element] #map names to envelope
+        self._freq_lists = [[] for i in range n_element] #map inds to freq
         self._program = []
         self._regs = {}
         self._hwconfig = hwconfig
 
-    def add_env(self, name, env):
+    def add_env(self, name, env, elem_ind):
         if np.any(np.abs(env) > 1):
             raise Exception('env mag must be < 1')
-        self._env_dict[name] = env
+        self._env_dicts[elem_ind][name] = env
+
+    def add_freq(self, freq, elem_ind, freq_ind=None):
+        if freq_ind is None:
+            self._freq_lists[elem_ind].append(freq)
+        else if freq_ind >= len(self._freq_lists[elem_ind]):
+            for i in range(len(self._freq_lists[elem_ind]) - freq_ind):
+                self._freq_lists[elem_ind].append(None)
+            self._freq_lists[elem_ind].append(freq)
+        else:
+            if self._freq_lists[elem_ind][freq_ind] is None:
+                raise ValueError('ind {} is already occupied!'.format(freq_ind))
+            self._freq_lists[elem_ind][freq_ind] = freq
 
     def declare_reg(self, name):
         """
@@ -141,7 +125,7 @@ class SingleUnitAssembler:
             cmd['label'] = label
         self._program.append(cmd)
 
-    def add_pulse(self, freq, phase, start_time, env, length=None, label=None):
+    def add_pulse(self, freq, phase, start_time, env, elem_ind, length=None, label=None):
         """
         Add a pulse command to the program. 'freq' and 'phase' can be specified by 
         named registers or immediate values.
@@ -167,7 +151,7 @@ class SingleUnitAssembler:
             if np.any((np.abs(np.real(env)) > 1) | (np.abs(np.imag(env)) > 1)):
                 raise Exception('env must be < 1')
             envkey = self._hash_env(env)
-            if envkey not in self._env_dict:
+            if envkey not in self._env_dicts[elem_ind]:
                 self._env_dict[envkey] = env
         elif isinstance(env, str):
             envkey = env
@@ -184,25 +168,30 @@ class SingleUnitAssembler:
 
         if isinstance(freq, str):
             assert freq in self._regs.keys()
+        else:
+            if freq not in self._freq_lists[elem_ind]: #if freq is numerical, add to list of freqs
+                self.add_freq(freq, elem_ind)
+
         if isinstance(phase, str):
             assert phase in self._regs.keys()
 
         if isinstance(freq, str) and isisnstance(phase, str):
             #can only do one pulse_reg write at a time so use two instructions
             self._program.append({'cmdtype': 'pulse', 'freq': freq})
-            cmd = {'cmdtype': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey}
+            cmd = {'cmdtype': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
         else:
-            cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey}
+            cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
 
         if label is not None:
             cmd['label'] = label
         self._program.append(cmd)
 
     def get_compiled_program(self):
-        #TODO: consider copying cmd and modifying to avoid all of these else statements
         cmd_list = []
-        env_raw, env_ind_map = self._get_env_buffer()
+        freq_list = []
+        env_raw, env_ind_map = self._get_env_buffers()
         cmd_label_addrmap = self._get_cmd_labelmap()
+        freq_raw, freq_ind_map = self._get_freq_buffers()
         for cmd in self._program:
             cmd = copy.deepcopy(cmd) #we are modifying cmd so don't overwrite anything in self._program
 
@@ -213,7 +202,7 @@ class SingleUnitAssembler:
                     if isinstance(cmd['freq'], str):
                         pulseargs['freq_regaddr'] = self._regs[cmd['freq']]
                     else:
-                        pulseargs['freq_word'] = self._hwconfig.get_freq_word(cmd['freq'])
+                        pulseargs['freq_word'] = self._hwconfig.get_freq_addr(freq_ind_map[cmd['env']][cmd['freq']])
 
                 if 'phase' in cmd.keys():
                     if isinstance(cmd['phase'], str):
@@ -222,10 +211,13 @@ class SingleUnitAssembler:
                         pulseargs['phase_word'] = self._hwconfig.get_phase_word(cmd['phase'])
 
                 if 'env' in cmd.keys():
-                    pulseargs['env_word'] = self._hwconfig.get_env_word(env_ind_map[cmd['env']], cmd['length'])
+                    pulseargs['env_word'] = self._hwconfig.get_env_word(env_ind_map[cmd['elem']][cmd['env']], cmd['length'])
 
                 if 'start_time' in cmd.keys():
                     pulseargs['cmd_time'] = cmd['start_time']
+
+                if 'elem' in cmd.keys()
+                    pulseargs['cfg_word'] = self._hwconfig.get_cfg_word(cmd['elem'], None)
                     
                 cmd_list.append(cg.pulse_cmd(**pulseargs))
 
@@ -269,15 +261,20 @@ class SingleUnitAssembler:
         return cmd_list
 
     def _get_cmd_labelmap(self):
+        """
+        Get command locations (addresses) for labeled commands. 
+        Used for jump instructions
+        """
         labelmap = {}
         for i, cmd in enumerate(self._program):
             if 'label' in cmd.keys():
                 labelmap[cmd['label']] = i
         return labelmap
 
-    def _get_env_buffer(self):
+    def _get_env_buffer(self, elem_ind):
         """
-        Computes the raw envelope buffer along with a dictionary of addresses
+        Computes the raw envelope buffer along with a dictionary of indices. Address
+        is computed later by hwconfig
 
         Returns
         -------
@@ -299,14 +296,43 @@ class SingleUnitAssembler:
 
         env_raw = np.empty(0).astype(int)
 
-        for envkey, env in self._env_dict.items():
+        for envkey, env in self._env_dicts[elem_ind].items():
             env_ind_map[envkey] = cur_env_ind
             env = self._hwconfig.get_env_buffer(env)
             cur_env_ind += len(env)
             env_raw = np.append(env_raw, env)
 
         return env_raw, env_ind_map
-            
+    
+    def _get_env_buffers(self):
+        env_data = []
+        env_ind_maps = []
+        for i in range(self.n_element):
+            d, m = self._get_env_buffer(self, i)
+            env_data.append(d)
+            env_ind_maps.append(m)
+
+        return env_data, env_ind_maps
+
+    def _get_freq_buffer(self, elem_ind):
+        """
+        Return the full raw freq buffer + index map
+        """
+        freq_buffer = self._hwconfig.get_freq_buffer(self._freq_lists[elem_ind])
+        freq_ind_map = {f: self._freq_lists[elem_ind].index(f) for f in self._freq_lists[elem_ind]}
+        return freq_buffer, freq_ind_map
+
+    def _get_freq_buffers(self):
+        freq_data = []
+        freq_ind_maps = []
+        for i in range(self.n_element):
+            d, m = self._get_freq_buffer(self, i)
+            freq_data.append(d)
+            freq_ind_maps.append(m)
+
+        return freq_data, freq_ind_maps
+
+
     def _hash_env(self, env):
         return str(hash(env.data.tobytes()))
 

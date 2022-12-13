@@ -35,7 +35,7 @@ class HardwareConfig(ABC):
         return 1/self.fpga_clk_period
 
     @abstractmethod
-    def get_freq_word(self, freq):
+    def get_freq_addr(self, freq):
         pass
 
     @abstractmethod
@@ -52,4 +52,16 @@ class HardwareConfig(ABC):
 
     @abstractmethod
     def get_env_buffer(self, env_samples):
+        pass
+
+    @abstractmethod
+    def get_freq_buffer(self, freqs):
+        pass
+
+    @abstractmethod
+    def get_freq_addr(self, freq_ind):
+        pass
+
+    @abstractmethod
+    def get_cfg_word(self, elem_ind, mode_bits):
         pass
