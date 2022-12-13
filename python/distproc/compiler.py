@@ -73,6 +73,7 @@ class Compiler:
         self._isscheduled = False
         self._isresolved = False
         self.coredict = {}
+        self.elemdict = {}
 
         self.assemblers = {}
         self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
@@ -81,8 +82,9 @@ class Compiler:
                 self.zphase[qubit + '.' + freqname] = 0
             for chan, ind in wiremap.coredict.items():
                 if qubit in chan:
-                    self.assemblers[ind] = asm.SingleUnitAssembler(hwconfig)
+                    self.assemblers[ind] = asm.SingleCoreAssembler(hwconfig, hwconfig.elems_per_core)
                     self.coredict[chan] = ind
+                    self.elemdict[chan] = wiremap.elemdict[chan]
 
     def add_statement(self, statement_dict, index=-1):
         if index==-1:
@@ -183,9 +185,10 @@ class Compiler:
             if 'gate' in instr.keys():
                 for pulse in instr['gate'].get_pulses():
                     coreind = self.wiremap.coredict[pulse.dest]
+                    elemind = self.wiremap.elemdict[pulse.dest]
                     lofreq = self.wiremap.lofreq[pulse.dest]
                     self.assemblers[coreind].add_pulse(pulse.fcarrier - lofreq, pulse.pcarrier, instr['t'], \
-                            pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1])
+                            pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1], elemind)
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
 

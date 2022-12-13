@@ -8,7 +8,7 @@ from collections import OrderedDict
 ENV_BITS = 16
 N_MAX_REGS = 16
 
-class SingleProcAssembler:
+class SingleCoreAssembler:
     """
     Class for constructing an assembly-language level program and 
     converting to machine code + env buffers
@@ -24,8 +24,8 @@ class SingleProcAssembler:
     """
     def __init__(self, hwconfig, n_element):
         self.n_element = n_element
-        self._env_dicts = [OrderedDict() for i in range n_element] #map names to envelope
-        self._freq_lists = [[] for i in range n_element] #map inds to freq
+        self._env_dicts = [OrderedDict() for i in range(n_element)] #map names to envelope
+        self._freq_lists = [[] for i in range(n_element)] #map inds to freq
         self._program = []
         self._regs = {}
         self._hwconfig = hwconfig
@@ -38,7 +38,7 @@ class SingleProcAssembler:
     def add_freq(self, freq, elem_ind, freq_ind=None):
         if freq_ind is None:
             self._freq_lists[elem_ind].append(freq)
-        else if freq_ind >= len(self._freq_lists[elem_ind]):
+        elif freq_ind >= len(self._freq_lists[elem_ind]):
             for i in range(len(self._freq_lists[elem_ind]) - freq_ind):
                 self._freq_lists[elem_ind].append(None)
             self._freq_lists[elem_ind].append(freq)
@@ -152,19 +152,19 @@ class SingleProcAssembler:
                 raise Exception('env must be < 1')
             envkey = self._hash_env(env)
             if envkey not in self._env_dicts[elem_ind]:
-                self._env_dict[envkey] = env
+                self._env_dicts[elem_ind][envkey] = env
         elif isinstance(env, str):
             envkey = env
         else:
             raise Exception('env must be string or np array')
         
         if length is not None:
-            if length > len(self._env_dict[envkey]):
+            if length > len(self._env_dicts[elem_ind][envkey]):
                 raise Exception('provided pulse length exceeds length of envelope')
-            elif length < len(self._env_dict[envkey]) and length % self._hwconfig.dac_samples_per_clk != 0:
+            elif length < len(self._env_dicts[elem_ind][envkey]) and length % self._hwconfig.dac_samples_per_clk != 0:
                 raise Exception('env length must match pulse length if end of pulse is not aligned with clock boundary') 
         else:
-            length = len(self._env_dict[envkey])
+            length = len(self._env_dicts[elem_ind][envkey])
 
         if isinstance(freq, str):
             assert freq in self._regs.keys()
@@ -216,7 +216,7 @@ class SingleProcAssembler:
                 if 'start_time' in cmd.keys():
                     pulseargs['cmd_time'] = cmd['start_time']
 
-                if 'elem' in cmd.keys()
+                if 'elem' in cmd.keys():
                     pulseargs['cfg_word'] = self._hwconfig.get_cfg_word(cmd['elem'], None)
                     
                 cmd_list.append(cg.pulse_cmd(**pulseargs))

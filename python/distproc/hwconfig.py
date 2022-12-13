@@ -13,6 +13,7 @@ class HardwareConfig(ABC):
         self.nclks_alu = 2
         self.nclks_br_fproc = 2
         self.nclks_read_fproc = 2
+        self.elems_per_core = 3
 
     @property
     def dac_sample_period(self):
