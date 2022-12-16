@@ -98,6 +98,18 @@ class SingleCoreAssembler:
             cmd['label'] = label
         self._program.append(cmd)
 
+    def add_phase_reset(self, label=None):
+        cmd = {'cmdtype': 'pulse_reset'}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
+    def add_done_stb(self, label=None):
+        cmd = {'cmdtype': 'done_stb'}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
     def add_jump_cond(self, in0, alu_op, in1_reg, jump_label, label=None):
         assert in1_reg in self._regs.keys()
         if isinstance(in0, str):
@@ -250,6 +262,12 @@ class SingleCoreAssembler:
                 cmd_list.append(cg.alu_cmd(cmd['cmdtype'], im_or_reg, in0, cmd.get('alu_op'), \
                         cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id')))
 
+            elif cmd['cmdtype'] == 'pulse_reset':
+                cmd_list.append(cg.pulse_reset())
+
+            elif cmd['cmdtype'] == 'done_stb':
+                cmd_list.append(cg.done_cmd())
+
             else:
                 raise Exception('{} not supported'.format['cmdtype'])
 
@@ -264,7 +282,7 @@ class SingleCoreAssembler:
         for cmd in self._program:
             cmd = copy.deepcopy(cmd)
             if cmd['cmdtype'] == 'pulse':
-                cmd.update({'env':self._env_dict[cmd['env']]})
+                cmd.update({'env':self._env_dicts[cmd['elem']][cmd['env']]})
             cmd_list.append(cmd)
 
         return cmd_list
