@@ -66,3 +66,7 @@ class HardwareConfig(ABC):
     @abstractmethod
     def get_cfg_word(self, elem_ind, mode_bits):
         pass
+
+    @abstractmethod
+    def get_amp_word(self, amplitude):
+        pass

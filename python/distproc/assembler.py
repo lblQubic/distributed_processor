@@ -125,7 +125,7 @@ class SingleCoreAssembler:
             cmd['label'] = label
         self._program.append(cmd)
 
-    def add_pulse(self, freq, phase, start_time, env, elem_ind, length=None, label=None):
+    def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, length=None, label=None):
         """
         Add a pulse command to the program. 'freq' and 'phase' can be specified by 
         named registers or immediate values.
@@ -172,15 +172,18 @@ class SingleCoreAssembler:
             if freq not in self._freq_lists[elem_ind]: #if freq is numerical, add to list of freqs
                 self.add_freq(freq, elem_ind)
 
+        if isinstance(amp, str):
+            assert amp in self._regs.keys()
+
         if isinstance(phase, str):
             assert phase in self._regs.keys()
 
         if isinstance(freq, str) and isisnstance(phase, str):
             #can only do one pulse_reg write at a time so use two instructions
             self._program.append({'cmdtype': 'pulse', 'freq': freq})
-            cmd = {'cmdtype': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+            cmd = {'cmdtype': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
         else:
-            cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+            cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
 
         if label is not None:
             cmd['label'] = label
@@ -202,13 +205,19 @@ class SingleCoreAssembler:
                     if isinstance(cmd['freq'], str):
                         pulseargs['freq_regaddr'] = self._regs[cmd['freq']]
                     else:
-                        pulseargs['freq_word'] = self._hwconfig.get_freq_addr(freq_ind_map[cmd['env']][cmd['freq']])
+                        pulseargs['freq_word'] = self._hwconfig.get_freq_addr(freq_ind_map[cmd['elem']][cmd['freq']])
 
                 if 'phase' in cmd.keys():
                     if isinstance(cmd['phase'], str):
                         pulseargs['phase_regaddr'] = self._regs[cmd['phase']]
                     else:
                         pulseargs['phase_word'] = self._hwconfig.get_phase_word(cmd['phase'])
+
+                if 'amp' in cmd.keys():
+                    if isinstance(cmd['amp'], str):
+                        pulseargs['amp_regaddr'] = self._regs[cmd['amp']]
+                    else:
+                        pulseargs['amp_word'] = self._hwconfig.get_amp_word(cmd['amp'])
 
                 if 'env' in cmd.keys():
                     pulseargs['env_word'] = self._hwconfig.get_env_word(env_ind_map[cmd['elem']][cmd['env']], cmd['length'])
@@ -244,7 +253,7 @@ class SingleCoreAssembler:
             else:
                 raise Exception('{} not supported'.format['cmdtype'])
 
-        return cmd_list, env_raw
+        return cmd_list, env_raw, freq_raw
     
     def get_sim_program(self):
         """
@@ -308,7 +317,7 @@ class SingleCoreAssembler:
         env_data = []
         env_ind_maps = []
         for i in range(self.n_element):
-            d, m = self._get_env_buffer(self, i)
+            d, m = self._get_env_buffer(i)
             env_data.append(d)
             env_ind_maps.append(m)
 
@@ -326,7 +335,7 @@ class SingleCoreAssembler:
         freq_data = []
         freq_ind_maps = []
         for i in range(self.n_element):
-            d, m = self._get_freq_buffer(self, i)
+            d, m = self._get_freq_buffer(i)
             freq_data.append(d)
             freq_ind_maps.append(m)
 
