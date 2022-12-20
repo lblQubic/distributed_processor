@@ -339,10 +339,10 @@ def twos_complement(value, nbits=32):
     -------
         int or list of ints
     """
-    if isinstance(value, int):
-        value_array = np.array([value])
-    else:
+    if isinstance(value, list) or isinstance(value, np.ndarray):
         value_array = np.array(value)
+    else:
+        value_array = np.array([value])
 
     if np.any((value_array > (2**(nbits-1) - 1)) | (value_array < (-2**(nbits-1)))):
         raise Exception('{} out of range'.format(value))
@@ -351,6 +351,9 @@ def twos_complement(value, nbits=32):
     negmask = value_array < 0
 
     value_array[negmask] = 2**nbits + value_array[negmask]
+
+    if np.any(value_array) < 0:
+        raise Exception('Overflow, probably related to input dtype')
 
     if isinstance(value, int):
         return int(value_array[0])
