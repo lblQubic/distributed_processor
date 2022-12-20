@@ -190,10 +190,17 @@ class SingleCoreAssembler:
         if isinstance(phase, str):
             assert phase in self._regs.keys()
 
-        if isinstance(freq, str) and isisnstance(phase, str):
+        if isinstance(freq, str) and isisnstance(phase, str) and isinstance(amp, str):
             #can only do one pulse_reg write at a time so use two instructions
             self._program.append({'cmdtype': 'pulse', 'freq': freq})
+            self._program.append({'cmdtype': 'pulse', 'amp': amp})
+            cmd = {'cmdtype': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+        elif isinstance(freq, str) and (isinstance(phase, str) or isinstance(amp, str)):
+            self._program.append({'cmdtype': 'pulse', 'freq': freq})
             cmd = {'cmdtype': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+        elif isinstance(phase, str) and isinstance(amp, str):
+            self._program.append({'cmdtype': 'pulse', 'freq': phase})
+            cmd = {'cmdtype': 'pulse', 'freq': freq, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
         else:
             cmd = {'cmdtype': 'pulse', 'freq': freq, 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
 
