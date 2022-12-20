@@ -22,13 +22,13 @@ class SingleCoreAssembler:
             key: user-declared register name
             value: register address in proc core
     """
-    def __init__(self, hwconfig, n_element):
-        self.n_element = n_element
-        self._env_dicts = [OrderedDict() for i in range(n_element)] #map names to envelope
-        self._freq_lists = [[] for i in range(n_element)] #map inds to freq
+    def __init__(self, elem_cfgs):
+        self.n_element = len(elem_cfgs)
+        self._env_dicts = [OrderedDict() for i in range(self.n_element)] #map names to envelope
+        self._freq_lists = [[] for i in range(self.n_element)] #map inds to freq
         self._program = []
         self._regs = {}
-        self._hwconfig = hwconfig
+        self._elem_cfgs = elem_cfgs
 
     def add_env(self, name, env, elem_ind):
         if np.any(np.abs(env) > 1):
@@ -173,7 +173,7 @@ class SingleCoreAssembler:
         if length is not None:
             if length > len(self._env_dicts[elem_ind][envkey]):
                 raise Exception('provided pulse length exceeds length of envelope')
-            elif length < len(self._env_dicts[elem_ind][envkey]) and length % self._hwconfig.dac_samples_per_clk != 0:
+            elif length < len(self._env_dicts[elem_ind][envkey]) and length % self._elem_cfgs[elem_ind].samples_per_clk != 0:
                 raise Exception('env length must match pulse length if end of pulse is not aligned with clock boundary') 
         else:
             length = len(self._env_dicts[elem_ind][envkey])
@@ -217,28 +217,28 @@ class SingleCoreAssembler:
                     if isinstance(cmd['freq'], str):
                         pulseargs['freq_regaddr'] = self._regs[cmd['freq']]
                     else:
-                        pulseargs['freq_word'] = self._hwconfig.get_freq_addr(freq_ind_map[cmd['elem']][cmd['freq']])
+                        pulseargs['freq_word'] = self._elem_cfgs[cmd['elem']].get_freq_addr(freq_ind_map[cmd['elem']][cmd['freq']])
 
                 if 'phase' in cmd.keys():
                     if isinstance(cmd['phase'], str):
                         pulseargs['phase_regaddr'] = self._regs[cmd['phase']]
                     else:
-                        pulseargs['phase_word'] = self._hwconfig.get_phase_word(cmd['phase'])
+                        pulseargs['phase_word'] = self._elem_cfgs[cmd['elem']].get_phase_word(cmd['phase'])
 
                 if 'amp' in cmd.keys():
                     if isinstance(cmd['amp'], str):
                         pulseargs['amp_regaddr'] = self._regs[cmd['amp']]
                     else:
-                        pulseargs['amp_word'] = self._hwconfig.get_amp_word(cmd['amp'])
+                        pulseargs['amp_word'] = self._elem_cfgs[cmd['elem']].get_amp_word(cmd['amp'])
 
                 if 'env' in cmd.keys():
-                    pulseargs['env_word'] = self._hwconfig.get_env_word(env_ind_map[cmd['elem']][cmd['env']], cmd['length'])
+                    pulseargs['env_word'] = self._elem_cfgs[cmd['elem']].get_env_word(env_ind_map[cmd['elem']][cmd['env']], cmd['length'])
 
                 if 'start_time' in cmd.keys():
                     pulseargs['cmd_time'] = cmd['start_time']
 
                 if 'elem' in cmd.keys():
-                    pulseargs['cfg_word'] = self._hwconfig.get_cfg_word(cmd['elem'], None)
+                    pulseargs['cfg_word'] = self._elem_cfgs[cmd['elem']].get_cfg_word(cmd['elem'], None)
                     
                 cmd_list.append(cg.pulse_cmd(**pulseargs))
 
@@ -325,7 +325,7 @@ class SingleCoreAssembler:
 
         for envkey, env in self._env_dicts[elem_ind].items():
             env_ind_map[envkey] = cur_env_ind
-            env = self._hwconfig.get_env_buffer(env)
+            env = self._elem_cfgs[elem_ind].get_env_buffer(env)
             cur_env_ind += len(env)
             env_raw = np.append(env_raw, env)
 
@@ -345,7 +345,7 @@ class SingleCoreAssembler:
         """
         Return the full raw freq buffer + index map
         """
-        freq_buffer = self._hwconfig.get_freq_buffer(self._freq_lists[elem_ind])
+        freq_buffer = self._elem_cfgs[elem_ind].get_freq_buffer(self._freq_lists[elem_ind])
         freq_ind_map = {f: self._freq_lists[elem_ind].index(f) for f in self._freq_lists[elem_ind]}
         return freq_buffer, freq_ind_map
 
