@@ -158,7 +158,7 @@ module ctrl#(
             else begin
                 instr_load_en = 1;
                 mem_wait_rst = 1;
-                instr_ptr_en = ~reset;
+                instr_ptr_en = 1;
                 next_state = DECODE_STATE;
             end
 
@@ -197,7 +197,7 @@ module ctrl#(
                         next_state = MEM_WAIT_STATE;
                     else
                         next_state = DECODE_STATE;
-                    c_strobe_enable = ~reset;
+                    c_strobe_enable = 1;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     mem_wait_rst = 0; 
