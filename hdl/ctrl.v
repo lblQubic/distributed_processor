@@ -302,6 +302,20 @@ module ctrl#(
                     pulse_reset = 0;
                 end
 
+                4'b0000 : begin //all zero opcode
+                    next_state = DONE_STATE;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    mem_wait_rst = 1; 
+                    write_pulse_en = 0;
+                    instr_ptr_en = 0;
+                    sync_out_ready = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                    c_strobe_enable = 0;
+                    fproc_enable = 0;
+                    pulse_reset = 0;
+                end
+
                 default : begin
                     next_state = DECODE_STATE;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
