@@ -179,17 +179,18 @@ class SingleCoreAssembler:
             out_reg : str
                 Reg that gets written w/ ALU output. CAN be declared implicitly.
         """
-        assert in1_reg in self._regs.keys()
-        if isinstance(in0, str):
-            assert in0 in self._regs.keys()
+        #assert in1_reg in self._regs.keys()
+        #if isinstance(in0, str):
+        #    assert in0 in self._regs.keys()
 
-        if out_reg not in self._regs.keys():
-            self.declare_reg(out_reg)
+        #if out_reg not in self._regs.keys():
+        #    self.declare_reg(out_reg)
 
-        cmd = {'op': 'reg_alu', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'out_reg': out_reg}
-        if label is not None:
-            cmd['label'] = label
-        self._program.append(cmd)
+        #cmd = {'op': 'reg_alu', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'out_reg': out_reg}
+        #if label is not None:
+        #    cmd['label'] = label
+        #self._program.append(cmd)
+        self.add_alu_cmd('reg_alu', in0, alu_op, in1_reg, out_reg, label=label)
 
     def add_phase_reset(self, label=None):
         cmd = {'op': 'pulse_reset'}
@@ -204,31 +205,33 @@ class SingleCoreAssembler:
         self._program.append(cmd)
 
     def add_jump_cond(self, in0, alu_op, in1_reg, jump_label, label=None):
-        assert in1_reg in self._regs.keys()
-        if isinstance(in0, str):
-            assert in0 in self._regs.keys()
+        #assert in1_reg in self._regs.keys()
+        #if isinstance(in0, str):
+        #    assert in0 in self._regs.keys()
 
-        cmd = {'op': 'jump_cond', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'jump_label': jump_label}
-        if label is not None:
-            cmd['label'] = label
-        self._program.append(cmd)
+        #cmd = {'op': 'jump_cond', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'jump_label': jump_label}
+        #if label is not None:
+        #    cmd['label'] = label
+        #self._program.append(cmd)
+        self.add_alu_cmd('jump_cond', in0, alu_op, in1_reg, jump_label=jump_label, label=label)
 
     def add_inc_qclk(self, increment, label=None):
-        if isinstance(increment, str):
-            assert increment in self._regs.keys()
+        #if isinstance(increment, str):
+        #    assert increment in self._regs.keys()
 
-        cmd = {'op': 'inc_qclk', 'in0': increment}
-        if label is not None:
-            cmd['label'] = label
-        self._program.append(cmd)
+        #cmd = {'op': 'inc_qclk', 'in0': increment}
+        #if label is not None:
+        #    cmd['label'] = label
+        #self._program.append(cmd)
+        self.add_alu_cmd('inc_qclk', increment, 'add', label=label)
 
     def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
-        if isinstance(in0, str):
-            assert in0 in self._regs.keys()
-        cmd = {'op': 'jump_fproc', 'in0': in0, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
-        if label is not None:
-            cmd['label'] = label
-        self._program.append(cmd)
+        #if isinstance(in0, str):
+        #    assert in0 in self._regs.keys()
+        #cmd = {'op': 'jump_fproc', 'in0': in0, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
+        #if label is not None:
+        #    cmd['label'] = label
+        self.add_alu_cmd('jump_fproc', in0, alu_op, jump_label=jump_label, func_id=func_id, label=label)
 
     def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, length=None, label=None):
         """
