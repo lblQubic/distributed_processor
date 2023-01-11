@@ -5,30 +5,41 @@ import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
 import qubitconfig.wiremap as wm
 
-class HWConfigTest(hw.HardwareConfig):
+class ElementConfigTest(hw.ElementConfig):
     def __init__(self):
-        super().__init__(4.e-9, 4, 4)
-    def get_freq_addr(self):
+        super().__init__(2.e-9, 16)
+
+    def get_freq_addr(self, freq):
         return 0
-    def get_freq_buffer(self):
+
+    def get_phase_word(self, phase):
         return 0
-    def get_phase_word(self):
+
+    def get_env_word(self, env_start_ind, env_length):
         return 0
-    def get_env_addr(self):
+
+    def get_env_buffer(self, env_samples):
         return 0
-    def get_env_buffer(self, env):
+
+    def get_freq_buffer(self, freqs):
         return 0
-    def get_env_word(self, env_ind, env_length):
+
+    def get_freq_addr(self, freq_ind):
         return 0
+
+    def get_amp_word(self, amplitude):
+        return 0
+
     def length_nclks(self, tlength):
         return int(np.ceil(tlength/self.fpga_clk_period))
+
     def get_cfg_word(self, elem_ind, mode_bits):
         return elem_ind
 
 def test_phase_resolve():
     wiremap = wm.Wiremap('wiremap_test0.json')
     qchip = qc.QChip('qubitcfg.json')
-    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, HWConfigTest())
+    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, ElementConfigTest())
     compiler.add_statement({'name':'X90', 'qubit':'Q0'})
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
@@ -44,7 +55,7 @@ def test_phase_resolve():
 def test_basic_schedule():
     wiremap = wm.Wiremap('wiremap_test0.json')
     qchip = qc.QChip('qubitcfg.json')
-    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, HWConfigTest())
+    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, ElementConfigTest())
     compiler.add_statement({'name':'X90', 'qubit':'Q0'})
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
@@ -67,7 +78,7 @@ def test_basic_compile():
     #can we compile without errors
     wiremap = wm.Wiremap('wiremap_test0.json')
     qchip = qc.QChip('qubitcfg.json')
-    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, HWConfigTest())
+    compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, ElementConfigTest())
     compiler.add_statement({'name':'X90', 'qubit':'Q0'})
     compiler.add_statement({'name':'X90', 'qubit':'Q1'})
     compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})

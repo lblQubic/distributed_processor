@@ -61,13 +61,13 @@ class SingleCoreAssembler:
             del cmdargs['op']
             if cmd['op'] == 'pulse':
                 nreg_params = np.sum([isinstance(cmd[key], str) for key in ['freq', 'amp', 'phase']])
-                if nreg_params >= 1:
+                if nreg_params > 1:
                     warnings.warn('{} will be split into multiple instructions, which may cause timing problems'.format(cmd))
                 self.add_pulse(**cmdargs)
             elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 #todo: maybe move this to a separate function? add_alu_cmd
                 self.add_alu_cmd(**cmd)
-            elif cmd['op'] == 'add_reg_write':
+            elif cmd['op'] == 'reg_write':
                 self.add_reg_write(**cmdargs)
             elif cmd['op'] == 'phase_reset':
                 self.add_phase_reset(**cmdargs)
@@ -112,14 +112,6 @@ class SingleCoreAssembler:
             cmd['label'] = label
 
         self._program.append(cmd)
-
-    def _cmd_hasargs(self, cmd, keys):
-        return np.all([key in cmd.keys() for key in keys])
-
-    def _cmd_arg_subset(self, cmd, keys):
-        cmdargs = cmd.copy()
-        del cmdargs['op']
-        return np.all([key in keys for key in cmdargs.keys()])
 
     def add_env(self, name, env, elem_ind):
         if np.any(np.abs(env) > 1):
