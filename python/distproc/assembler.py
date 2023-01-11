@@ -14,6 +14,9 @@ Distributed processor assembly language definition:
         {'op': 'jump_cond', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'jump_label': <string>, 'label':<string>}
     jump_fproc:
         {'op': 'jump_fproc', 'in0': <int, regname>, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
+    reg_write:
+        {'op': 'reg_write', 'value': <int>, 'reg_name': out_regname, 'label':<string>} 
+        note: this is just a helper/wrapper for a reg_alu instruction
 
 """
 
@@ -54,29 +57,24 @@ class SingleCoreAssembler:
 
     def from_list(self, cmd_list):
         for cmd in cmd_list:
+            cmdargs = cmd.copy()
+            del cmdargs['op']
             if cmd['op'] == 'pulse':
                 nreg_params = np.sum([isinstance(cmd[key], str) for key in ['freq', 'amp', 'phase']])
                 if nreg_params >= 1:
                     warnings.warn('{} will be split into multiple instructions, which may cause timing problems'.format(cmd))
-                self.add_pulse(**(del cmd.copy()['op']))
+                self.add_pulse(**cmdargs)
             elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 #todo: maybe move this to a separate function? add_alu_cmd
-                if isinstance(cmd['in0'], str) and cmd['in0'] not in self._regs:
-                    raise Exception('Must declare reg {}'.format(cmd['in0']))
-                if 'in1_reg' in cmd.keys() and cmd['in1_reg'] not in self._regs:
-                    raise Exception('Must declare reg {}'.format(cmd['in0']))
-                if 'out_reg' in cmd.keys() and cmd['in1_reg'] not in self._regs:
-                    self.declare_reg('out_reg')
-
-                #check for extraneous keys
-                assert self._cmd_arg_subset(cmd, ['in0', 'in1_reg', 'out_reg', \
-                        'alu_op', 'jump_label', 'label', 'fproc_id'])
-                if cmd['op'] in ['jump_fproc', 'jump_cond']:
-                    assert self._cmd_hasargs('jump_label')
-                elif cmd['op'] in 'reg_alu':
-                    assert self._cmd_hasargs(cmd, ['out_reg', 'in1_reg'])
-                elif cmd['op'] in 'inc_qclk':
-                    assert self._cmd_arg_subset(cmd, ['in0', 'label'])
+                self.add_alu_cmd(**cmd)
+            elif cmd['op'] == 'add_reg_write':
+                self.add_reg_write(**cmdargs)
+            elif cmd['op'] == 'phase_reset':
+                self.add_phase_reset(**cmdargs)
+            elif cmd['op'] == 'done_stb':
+                self.add_done_stb(**cmdargs)
+            else:
+                raise Exception('{} not supported!'.format(cmd))
 
     def add_alu_cmd(self, op, in0, alu_op, in1_reg=None, out_reg=None, jump_label=None, fproc_id=None, label=None):
         assert op in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']
@@ -179,17 +177,6 @@ class SingleCoreAssembler:
             out_reg : str
                 Reg that gets written w/ ALU output. CAN be declared implicitly.
         """
-        #assert in1_reg in self._regs.keys()
-        #if isinstance(in0, str):
-        #    assert in0 in self._regs.keys()
-
-        #if out_reg not in self._regs.keys():
-        #    self.declare_reg(out_reg)
-
-        #cmd = {'op': 'reg_alu', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'out_reg': out_reg}
-        #if label is not None:
-        #    cmd['label'] = label
-        #self._program.append(cmd)
         self.add_alu_cmd('reg_alu', in0, alu_op, in1_reg, out_reg, label=label)
 
     def add_phase_reset(self, label=None):
@@ -205,32 +192,12 @@ class SingleCoreAssembler:
         self._program.append(cmd)
 
     def add_jump_cond(self, in0, alu_op, in1_reg, jump_label, label=None):
-        #assert in1_reg in self._regs.keys()
-        #if isinstance(in0, str):
-        #    assert in0 in self._regs.keys()
-
-        #cmd = {'op': 'jump_cond', 'in0': in0, 'alu_op': alu_op, 'in1_reg': in1_reg, 'jump_label': jump_label}
-        #if label is not None:
-        #    cmd['label'] = label
-        #self._program.append(cmd)
         self.add_alu_cmd('jump_cond', in0, alu_op, in1_reg, jump_label=jump_label, label=label)
 
     def add_inc_qclk(self, increment, label=None):
-        #if isinstance(increment, str):
-        #    assert increment in self._regs.keys()
-
-        #cmd = {'op': 'inc_qclk', 'in0': increment}
-        #if label is not None:
-        #    cmd['label'] = label
-        #self._program.append(cmd)
         self.add_alu_cmd('inc_qclk', increment, 'add', label=label)
 
     def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
-        #if isinstance(in0, str):
-        #    assert in0 in self._regs.keys()
-        #cmd = {'op': 'jump_fproc', 'in0': in0, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
-        #if label is not None:
-        #    cmd['label'] = label
         self.add_alu_cmd('jump_fproc', in0, alu_op, jump_label=jump_label, func_id=func_id, label=label)
 
     def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, length=None, label=None):
@@ -372,7 +339,7 @@ class SingleCoreAssembler:
                 cmd_list.append(cg.done_cmd())
 
             else:
-                raise Exception('{} not supported'.format['op'])
+                raise Exception('{} not supported'.format(cmd['op']))
 
         return cmd_list, env_raw, freq_raw
     
