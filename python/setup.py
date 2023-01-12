@@ -1,9 +1,11 @@
+"""
+Note: for offline install with pip use --no-build-isolation option
+"""
+
 import setuptools
 from setuptools.command.build_py import build_py
 import sys
 import subprocess
-
-
 
 #with open("README.md", "r", encoding="utf-8") as fh:
 #    long_description = fh.read()
