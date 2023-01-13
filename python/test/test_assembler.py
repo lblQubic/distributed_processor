@@ -56,8 +56,6 @@ def test_prog_fromlist():
     asmprog.add_done_stb()
     cmdpr, envpr, freqpr = asmprog.get_compiled_program()
 
-    #ipdb.set_trace()
-
     assert np.all(np.asarray(cmdpr) == np.asarray(cmdfl))
     assert np.all(np.asarray(envpr[0]) == np.asarray(envfl[0]))
     assert np.all(np.asarray(freqpr) == np.asarray(freqfl))

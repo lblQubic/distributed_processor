@@ -17,6 +17,9 @@ Distributed processor assembly language definition:
     reg_write:
         {'op': 'reg_write', 'value': <int>, 'reg_name': out_regname, 'label':<string>} 
         note: this is just a helper/wrapper for a reg_alu instruction
+    other:
+        {'op': 'phase_reset'}
+        {'op': 'done_stb'}
 
 """
 
@@ -65,7 +68,6 @@ class SingleCoreAssembler:
                     warnings.warn('{} will be split into multiple instructions, which may cause timing problems'.format(cmd))
                 self.add_pulse(**cmdargs)
             elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
-                #todo: maybe move this to a separate function? add_alu_cmd
                 self.add_alu_cmd(**cmd)
             elif cmd['op'] == 'reg_write':
                 self.add_reg_write(**cmdargs)
