@@ -138,7 +138,7 @@ module proc
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),
               .sync_out_ready(sync.enable), .fproc_enable(fproc.enable), .write_pulse_en(write_pulse_en), .done_gate(done_gate), .pulse_reset(pulseout.reset));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
-    qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(|reset_sr[1:0]), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
+    qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(|reset_sr[3:0]), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
     pulse_reg #(.DATA_WIDTH(DATA_WIDTH)) pulsereg(.clk(clk), .pulse_cmd_in(pulse_cmd_i), .reg_in(reg_file_out0), 
         .pulse_write_en(write_pulse_en), .cstrobe_in(cstrobe), .pulseout(pulseout));
 
