@@ -297,7 +297,6 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=0, write_reg_addr=N
     if optype in ['alu_fproc', 'jump_fproc']:
         if func_id is not None:
             cmd += func_id << 52
-            #ipdb.set_trace()
     if optype in ['jump_cond', 'jump_fproc']:
         cmd += jump_cmd_ptr << 68
     if optype in ['reg_alu', 'alu_fproc']:

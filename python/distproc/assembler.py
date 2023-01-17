@@ -2,21 +2,36 @@
 Distributed processor assembly language definition:
     list of dicts; should map 1-to-1 to assembled commands that run on proc
 
+    declaring registers:
+        {'op': 'declare_reg', 'name': <str>, 'dtype': <('int',), ('phase', elemind), ('amp', elemind)>} 
+
+        All registers are typed (to allow for straightforward parameterization of phase/amplitude). If a type is 
+        not specified when declaring the register the default type is ('int',). 
+
     pulse cmd:
         {'op': 'pulse', 'freq': <freq_in_Hz, regname>, 'env': <np_array, dict, regname>, 'phase': <phaserad, regname>,
             'amp': <float (normalized to 1), regname>, 'start_time': <starttime_in_clks>, 'elem_ind': <int>, 'label':<string>} 
             #todo: should elem_ind be replaced by chan name/string?
-    reg_alu instructions:
-        {'op': 'reg_alu', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'out_reg': out_regname, 'label':<string>}
-    inc_qclk:
-        {'op': 'inc_qclk', 'in0': <int, regname>}
-    jump_cond:
-        {'op': 'jump_cond', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'jump_label': <string>, 'label':<string>}
-    jump_fproc:
-        {'op': 'jump_fproc', 'in0': <int, regname>, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
-    reg_write:
-        {'op': 'reg_write', 'value': <int>, 'reg_name': out_regname, 'label':<string>} 
-        note: this is just a helper/wrapper for a reg_alu instruction
+
+        ways to specify the envelope:
+            1. numpy array of samples, normalized to 1
+            2. dictionary specifying envelope function + parameters; the format of this dictionary should be specified in 
+               ElementConfig.get_env_buffer
+            3. register name (parameterizes the env_word field of the pulse command, no real higher level support here)
+
+    register-based instructions:
+        reg_alu:
+            {'op': 'reg_alu', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'out_reg': out_regname, 'label':<string>}
+        inc_qclk:
+            {'op': 'inc_qclk', 'in0': <int, regname>}
+        jump_cond:
+            {'op': 'jump_cond', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'jump_label': <string>, 'label':<string>}
+        jump_fproc:
+            {'op': 'jump_fproc', 'in0': <int, regname>, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
+        reg_write:
+            {'op': 'reg_write', 'value': <int>, 'name': out_regname, 'dtype': <('int',), ('phase', elemind), ('amp', elemind)>, 'label':<string>} 
+            note: this is just a helper/wrapper for a reg_alu instruction
+
     other:
         {'op': 'phase_reset'}
         {'op': 'done_stb'}
@@ -48,7 +63,12 @@ class SingleCoreAssembler:
     ----------
         _regs : dict
             key: user-declared register name
-            value: register address in proc core
+            value: dictionary containing:
+                'index' : physical register address
+                'dtype' : register datatype. Allowed types are:
+                    ('int',)
+                    ('phase', elemind)
+                    ('amp', elemind)
     """
     def __init__(self, elem_cfgs):
         self.n_element = len(elem_cfgs)
@@ -89,14 +109,18 @@ class SingleCoreAssembler:
         if op in ['reg_alu', 'jump_cond']:
             assert in1_reg is not None
             assert fproc_id is None
+            if isinstance(in0, str):
+                assert self._regs[in0]['dtype'] == self._regs[in1_reg]['dtype']
             cmd['in1_reg'] = in1_reg
         else:
             assert in1_reg is None
 
         if op in ['reg_alu', 'alu_fproc']:
             assert out_reg is not None
-            if out_reg not in self._regs.keys():
-                self.declare_reg(out_reg)
+            if isinstance(in0, str):
+                assert self._regs[in0]['dtype'] == self._regs[out_reg]['dtype']
+            if in1_reg is not None:
+                assert self._regs[in1_reg]['dtype'] == self._regs[out_reg]['dtype']
             cmd['out_reg'] = out_reg
         else:
             assert out_reg is None
@@ -132,28 +156,32 @@ class SingleCoreAssembler:
                 raise ValueError('ind {} is already occupied!'.format(freq_ind))
             self._freq_lists[elem_ind][freq_ind] = freq
 
-    def declare_reg(self, name):
+    def declare_reg(self, name, dtype=('int',)):
         """
         Declare a named register that can be referenced 
         by subsequent commands
         """
         if not self._regs:
-            self._regs[name] = 0
+            self._regs[name] = {'index': 0, 'dtype': dtype}
         elif 'name' in self._regs.keys():
             raise Exception('Register already declared!') #maybe make this a warning?
         else:
             max_regind = max(self._regs.values())
             if max_regind >= N_MAX_REGS - 1:
                 raise Exception('cannot add any more regs, limit of {} reached'.format(N_MAX_REGS))
-            self._regs[name] = max_regind + 1
+            self._regs[name] = {'index': max_regind + 1, 'dtype': dtype}
 
-    def add_reg_write(self, reg_name, value, label=None):
+    def add_reg_write(self, name, value, dtype=None, label=None):
         """
-        Write 'value' to a named register reg_name. CAN be declared implicitly.
+        Write 'value' to a named register name. CAN be declared implicitly.
         """
-        if reg_name not in self._regs.keys():
-            self.declare_reg(reg_name)
-        self.add_reg_alu(value, 'id0', reg_name, reg_name, label)
+        if name not in self._regs.keys():
+            if dtype is None:
+                dtype = ('int',)
+            self.declare_reg(name, dtype)
+        elif dtype is not None:
+            assert dtype == self._regs[name]['dtype']
+        self.add_reg_alu(value, 'id0', name, name, label)
 
     def add_reg_alu(self, in0, alu_op, in1_reg, out_reg, label=None):
         """
@@ -225,7 +253,7 @@ class SingleCoreAssembler:
         elif isinstance(env, str):
             envkey = env
         else:
-            raise Exception('env must be string or np array')
+            raise Exception('env must be string, dict, or np array')
         
         if length is not None:
             if length > len(self._env_dicts[elem_ind][envkey]):
@@ -237,22 +265,25 @@ class SingleCoreAssembler:
 
         if isinstance(freq, str):
             assert freq in self._regs.keys()
+            assert self._regs[freq]['dtype'] == ('int',)
         else:
             if freq not in self._freq_lists[elem_ind]: #if freq is numerical, add to list of freqs
                 self.add_freq(freq, elem_ind)
 
         if isinstance(amp, str):
             assert amp in self._regs.keys()
+            assert self._regs[amp]['dtype'] == ('amp', elem_ind)
 
         if isinstance(phase, str):
             assert phase in self._regs.keys()
+            assert self._regs[phase]['dtype'] == ('phase', elem_ind)
 
         if isinstance(freq, str) and isisnstance(phase, str) and isinstance(amp, str):
             #can only do one pulse_reg write at a time so use two instructions
             self._program.append({'op': 'pulse', 'freq': freq})
             self._program.append({'op': 'pulse', 'amp': amp})
             cmd = {'op': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
-        elif isinstance(freq, str) and (isinstance(phase, str) or isinstance(amp, str)):
+        elif (isinstance(freq, str) and (isinstance(phase, str)) or isinstance(amp, str)):
             self._program.append({'op': 'pulse', 'freq': freq})
             cmd = {'op': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
         elif isinstance(phase, str) and isinstance(amp, str):
@@ -279,19 +310,19 @@ class SingleCoreAssembler:
 
                 if 'freq' in cmd.keys():
                     if isinstance(cmd['freq'], str):
-                        pulseargs['freq_regaddr'] = self._regs[cmd['freq']]
+                        pulseargs['freq_regaddr'] = self._regs[cmd['freq']]['index']
                     else:
                         pulseargs['freq_word'] = self._elem_cfgs[cmd['elem']].get_freq_addr(freq_ind_map[cmd['elem']][cmd['freq']])
 
                 if 'phase' in cmd.keys():
                     if isinstance(cmd['phase'], str):
-                        pulseargs['phase_regaddr'] = self._regs[cmd['phase']]
+                        pulseargs['phase_regaddr'] = self._regs[cmd['phase']]['index']
                     else:
                         pulseargs['phase_word'] = self._elem_cfgs[cmd['elem']].get_phase_word(cmd['phase'])
 
                 if 'amp' in cmd.keys():
                     if isinstance(cmd['amp'], str):
-                        pulseargs['amp_regaddr'] = self._regs[cmd['amp']]
+                        pulseargs['amp_regaddr'] = self._regs[cmd['amp']]['index']
                     else:
                         pulseargs['amp_word'] = self._elem_cfgs[cmd['elem']].get_amp_word(cmd['amp'])
 
@@ -308,20 +339,28 @@ class SingleCoreAssembler:
 
             elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
-                    in0 = self._regs[cmd['in0']]
+                    in0 = self._regs[cmd['in0']['index']]
                     im_or_reg = 'r'
                 else:
                     in0 = cmd['in0']
                     im_or_reg = 'i'
 
+                    # if we're writing to/interacting with typed register, typecast intermediate value accordingly
+                    if 'out_reg' in cmd.keys() or 'in1_reg' in cmd.keys():
+                        dtype = self._regs[cmd['out_reg']]['dtype'] if 'out_reg' in cmd.keys() else self._regs[cmd['in1_reg']]['dtype']
+                        if dtype[0] == 'phase':
+                            in0 = self._elem_cfgs[dtype[1]].get_phase_word(cmd['in0'])
+                        elif dtype[0] == 'amp':
+                            in0 = self._elem_cfgs[dtype[1]].get_amp_word(cmd['in0'])
+
                 if 'out_reg' in cmd.keys():
-                    cmd['out_reg'] = self._regs[cmd['out_reg']]
+                    cmd['out_reg'] = self._regs[cmd['out_reg']]['index']
 
                 if 'jump_label' in cmd.keys():
                     cmd['jump_addr'] = cmd_label_addrmap[cmd['jump_label']]
 
                 if 'in1_reg' in cmd.keys():
-                    cmd['in1_reg'] = self._regs[cmd['in1_reg']]
+                    cmd['in1_reg'] = self._regs[cmd['in1_reg']]['index']
 
                 cmd_list.append(cg.alu_cmd(cmd['op'], im_or_reg, in0, cmd.get('alu_op'), \
                         cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id')))
