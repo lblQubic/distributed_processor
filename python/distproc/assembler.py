@@ -45,6 +45,7 @@ import ipdb
 import distproc.hwconfig as hw
 from collections import OrderedDict
 import warnings
+import json
 
 ENV_BITS = 16
 N_MAX_REGS = 16
@@ -100,7 +101,8 @@ class SingleCoreAssembler:
 
     def add_alu_cmd(self, op, in0, alu_op, in1_reg=None, out_reg=None, jump_label=None, fproc_id=None, label=None):
         assert op in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']
-        assert in1_reg in self._regs.keys()
+        if in1_reg is not None:
+            assert in1_reg in self._regs.keys()
         if isinstance(in0, str):
             assert in0 in self._regs.keys()
 
@@ -166,7 +168,7 @@ class SingleCoreAssembler:
         elif 'name' in self._regs.keys():
             raise Exception('Register already declared!') #maybe make this a warning?
         else:
-            max_regind = max(self._regs.values())
+            max_regind = max([reg['index'] for reg in self._regs.values()])
             if max_regind >= N_MAX_REGS - 1:
                 raise Exception('cannot add any more regs, limit of {} reached'.format(N_MAX_REGS))
             self._regs[name] = {'index': max_regind + 1, 'dtype': dtype}
@@ -339,7 +341,7 @@ class SingleCoreAssembler:
 
             elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
-                    in0 = self._regs[cmd['in0']['index']]
+                    in0 = self._regs[cmd['in0']]['index']
                     im_or_reg = 'r'
                 else:
                     in0 = cmd['in0']
@@ -464,5 +466,10 @@ class SingleCoreAssembler:
 
 
     def _hash_env(self, env):
-        return str(hash(env.data.tobytes()))
+        if isinstance(env, np.ndarray):
+            return str(hash(env.data.tobytes()))
+        elif isinstance(env, dict):
+            return json.dumps(env, sort_keys=True)
+        else:
+            raise Exception('{} not supported!'.format(type(env)))
 
