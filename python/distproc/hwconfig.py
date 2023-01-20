@@ -45,7 +45,7 @@ class ElementConfig(ABC):
         pass
 
     @abstractmethod
-    def get_env_buffer(self, env_samples):
+    def get_env_buffer(self, env):
         pass
 
     @abstractmethod
