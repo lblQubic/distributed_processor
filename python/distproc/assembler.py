@@ -224,7 +224,7 @@ class SingleCoreAssembler:
     def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
         self.add_alu_cmd('jump_fproc', in0, alu_op, jump_label=jump_label, func_id=func_id, label=label)
 
-    def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, length=None, label=None):
+    def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, label=None):
         """
         Add a pulse command to the program. 'freq' and 'phase' can be specified by 
         named registers or immediate values.
@@ -256,14 +256,8 @@ class SingleCoreAssembler:
             envkey = env
         else:
             raise Exception('env must be string, dict, or np array')
-        
-        if length is not None:
-            if length > len(self._env_dicts[elem_ind][envkey]):
-                raise Exception('provided pulse length exceeds length of envelope')
-            elif length < len(self._env_dicts[elem_ind][envkey]) and length % self._elem_cfgs[elem_ind].samples_per_clk != 0:
-                raise Exception('env length must match pulse length if end of pulse is not aligned with clock boundary') 
-        else:
-            length = len(self._env_dicts[elem_ind][envkey])
+
+        length = len(self._env_dicts[elem_ind][envkey])
 
         if isinstance(freq, str):
             assert freq in self._regs.keys()
