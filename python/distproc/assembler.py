@@ -8,6 +8,10 @@ Distributed processor assembly language definition:
         All registers are typed (to allow for straightforward parameterization of phase/amplitude). If a type is 
         not specified when declaring the register the default type is ('int',). 
 
+    declaring frequencies:
+        {'op': 'declare_freq', 'freq': <freq_in_Hz>, 'elem_ind': <element_index>, 'freq_ind': <optional_ind_in_buffer>}
+        TODO: consider vectorizing this
+
     pulse cmd:
         {'op': 'pulse', 'freq': <freq_in_Hz, regname>, 'env': <np_array, dict, regname>, 'phase': <phaserad, regname>,
             'amp': <float (normalized to 1), regname>, 'start_time': <starttime_in_clks>, 'elem_ind': <int>, 'label':<string>} 
@@ -23,7 +27,7 @@ Distributed processor assembly language definition:
         reg_alu:
             {'op': 'reg_alu', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'out_reg': out_regname, 'label':<string>}
         inc_qclk:
-            {'op': 'inc_qclk', 'in0': <int, regname>}
+            {'op': 'inc_qclk', 'in0': <int, regname>, 'label': <string>}
         jump_cond:
             {'op': 'jump_cond', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'jump_label': <string>, 'label':<string>}
         jump_fproc:
@@ -49,6 +53,7 @@ import json
 
 ENV_BITS = 16
 N_MAX_REGS = 16
+
 
 class SingleCoreAssembler:
     """
@@ -96,6 +101,8 @@ class SingleCoreAssembler:
                 self.add_phase_reset(**cmdargs)
             elif cmd['op'] == 'done_stb':
                 self.add_done_stb(**cmdargs)
+            elif cmd['op'] == 'declare_freq':
+                self.add_freq(**cmdargs)
             else:
                 raise Exception('{} not supported!'.format(cmd))
 
@@ -131,7 +138,7 @@ class SingleCoreAssembler:
             assert jump_label is not None
             cmd['jump_label'] = jump_label
 
-        if op in ['alu_fproc', 'jump_fproc']: #None defaults to 0, implies fproc_id not used
+        if op in ['alu_fproc', 'jump_fproc']:  # None defaults to 0, implies fproc_id not used
             cmd['fproc_id'] = fproc_id
         else:
             assert fproc_id is None
@@ -160,7 +167,7 @@ class SingleCoreAssembler:
 
     def declare_reg(self, name, dtype=('int',)):
         """
-        Declare a named register that can be referenced 
+        Declare a named register that can be referenced
         by subsequent commands
         """
         if not self._regs:
@@ -192,8 +199,8 @@ class SingleCoreAssembler:
         Parameters
         ----------
             in0 : int or str
-                First input to ALU. If int, assumed to be intermediate value. If string,
-                assumed to be named register
+                First input to ALU. If int, assumed to be intermediate value.
+                If string, assumed to be named register
             alu_op : str
                 'add', 'sub', 'id0', 'id1', 'eq', 'le', 'ge', 'zero'
             in1_reg : str
@@ -216,7 +223,8 @@ class SingleCoreAssembler:
         self._program.append(cmd)
 
     def add_jump_cond(self, in0, alu_op, in1_reg, jump_label, label=None):
-        self.add_alu_cmd('jump_cond', in0, alu_op, in1_reg, jump_label=jump_label, label=label)
+        self.add_alu_cmd('jump_cond', in0, alu_op, in1_reg,
+                         jump_label=jump_label, label=label)
 
     def add_inc_qclk(self, increment, label=None):
         self.add_alu_cmd('inc_qclk', increment, 'add', label=label)
@@ -278,28 +286,34 @@ class SingleCoreAssembler:
             #can only do one pulse_reg write at a time so use two instructions
             self._program.append({'op': 'pulse', 'freq': freq})
             self._program.append({'op': 'pulse', 'amp': amp})
-            cmd = {'op': 'pulse', 'phase': phase, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+            cmd = {'op': 'pulse', 'phase': phase, 'start_time': start_time,
+                   'length': length, 'env': envkey, 'elem': elem_ind}
         elif (isinstance(freq, str) and (isinstance(phase, str)) or isinstance(amp, str)):
             self._program.append({'op': 'pulse', 'freq': freq})
-            cmd = {'op': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+            cmd = {'op': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time,
+                   'length': length, 'env': envkey, 'elem': elem_ind}
         elif isinstance(phase, str) and isinstance(amp, str):
             self._program.append({'op': 'pulse', 'freq': phase})
-            cmd = {'op': 'pulse', 'freq': freq, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+            cmd = {'op': 'pulse', 'freq': freq, 'amp': amp, 'start_time': start_time,
+                   'length': length, 'env': envkey, 'elem': elem_ind}
         else:
-            cmd = {'op': 'pulse', 'freq': freq, 'phase': phase, 'amp': amp, 'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+            cmd = {'op': 'pulse', 'freq': freq, 'phase': phase, 'amp': amp, 
+                   'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
 
         if label is not None:
             cmd['label'] = label
         self._program.append(cmd)
 
     def get_compiled_program(self):
+        # consider splitting this into a few different functions
+        # at top case level
         cmd_list = []
         freq_list = []
         env_raw, env_ind_map = self._get_env_buffers()
         cmd_label_addrmap = self._get_cmd_labelmap()
         freq_raw, freq_ind_map = self._get_freq_buffers()
         for cmd in self._program:
-            cmd = copy.deepcopy(cmd) #we are modifying cmd so don't overwrite anything in self._program
+            cmd = copy.deepcopy(cmd)  # we are modifying cmd so don't overwrite anything in self._program
 
             if cmd['op'] == 'pulse':
                 pulseargs = {}
@@ -388,12 +402,14 @@ class SingleCoreAssembler:
 
     def _get_cmd_labelmap(self):
         """
-        Get command locations (addresses) for labeled commands. 
+        Get command locations (addresses) for labeled commands.
         Used for jump instructions
         """
         labelmap = {}
         for i, cmd in enumerate(self._program):
             if 'label' in cmd.keys():
+                if cmd['label'] in labelmap.keys():
+                    raise Exception('label already in use!')
                 labelmap[cmd['label']] = i
         return labelmap
 
