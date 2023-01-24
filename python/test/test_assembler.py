@@ -41,7 +41,7 @@ def test_prog_fromlist():
     asmlist = asm.SingleCoreAssembler([ElementConfig(), ElementConfig(), ElementConfig()])
     prog = []
     prog.append({'op':'phase_reset'})
-    prog.append({'op':'reg_write', 'value':10, 'name':'phase', 'dtype': ('phase', 0)})
+    prog.append({'op':'reg_write', 'value':np.pi, 'name':'phase', 'dtype': ('phase', 0)})
     prog.append({'op': 'pulse', 'freq': 100e6, 'env': np.arange(10)/11., 'phase': 'phase', \
             'amp': 0.9, 'start_time': 15, 'elem_ind': 0, 'label': 'pulse0'})
     prog.append({'op':'done_stb'})
@@ -51,7 +51,7 @@ def test_prog_fromlist():
 
     asmprog = asm.SingleCoreAssembler([ElementConfig(), ElementConfig(), ElementConfig()])
     asmprog.add_phase_reset()
-    asmprog.add_reg_write('phase', 10, ('phase', 0))
+    asmprog.add_reg_write('phase', np.pi, ('phase', 0))
     asmprog.add_pulse(100e6, 'phase', 0.9, 15, np.arange(10)/11., 0, label='pulse0')
     asmprog.add_done_stb()
     cmdpr, envpr, freqpr = asmprog.get_compiled_program()
