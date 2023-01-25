@@ -45,7 +45,7 @@ Distributed processor assembly language definition:
 import distproc.command_gen as cg
 import copy
 import numpy as np
-import ipdb
+#import ipdb
 import distproc.hwconfig as hw
 from collections import OrderedDict
 import warnings
@@ -93,7 +93,7 @@ class SingleCoreAssembler:
                 if nreg_params > 1:
                     warnings.warn('{} will be split into multiple instructions, which may cause timing problems'.format(cmd))
                 self.add_pulse(**cmdargs)
-            elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
+            elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc']:
                 self.add_alu_cmd(**cmd)
             elif cmd['op'] == 'reg_write':
                 self.add_reg_write(**cmdargs)
@@ -103,6 +103,8 @@ class SingleCoreAssembler:
                 self.add_done_stb(**cmdargs)
             elif cmd['op'] == 'declare_freq':
                 self.add_freq(**cmdargs)
+            elif cmd['op'] == 'inc_qclk':
+                self.add_inc_qclk(**cmdargs)
             else:
                 raise Exception('{} not supported!'.format(cmd))
 
@@ -226,8 +228,8 @@ class SingleCoreAssembler:
         self.add_alu_cmd('jump_cond', in0, alu_op, in1_reg,
                          jump_label=jump_label, label=label)
 
-    def add_inc_qclk(self, increment, label=None):
-        self.add_alu_cmd('inc_qclk', increment, 'add', label=label)
+    def add_inc_qclk(self, in0, label=None):
+        self.add_alu_cmd('inc_qclk', in0, 'add', label=label)
 
     def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
         self.add_alu_cmd('jump_fproc', in0, alu_op, jump_label=jump_label, func_id=func_id, label=label)
@@ -282,7 +284,7 @@ class SingleCoreAssembler:
             assert phase in self._regs.keys()
             assert self._regs[phase]['dtype'] == ('phase', elem_ind)
 
-        if isinstance(freq, str) and isisnstance(phase, str) and isinstance(amp, str):
+        if isinstance(freq, str) and isinstance(phase, str) and isinstance(amp, str):
             #can only do one pulse_reg write at a time so use two instructions
             self._program.append({'op': 'pulse', 'freq': freq})
             self._program.append({'op': 'pulse', 'amp': amp})
@@ -385,10 +387,10 @@ class SingleCoreAssembler:
                 raise Exception('{} not supported'.format(cmd['op']))
 
         return cmd_list, env_raw, freq_raw
-    
+
     def get_sim_program(self):
         """
-        Get a pulse/command list usable by simulation tools. Currently, this is the same as 
+        Get a pulse/command list usable by simulation tools. Currently, this is the same as
         self._program, but with env names replaced by data
         """
         cmd_list = []
