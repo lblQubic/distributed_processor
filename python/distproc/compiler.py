@@ -61,30 +61,39 @@ import distproc.assembler as asm
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync']
 
-class Compiler:
-    def __init__(self, qubits, wiremap, qchip, hwconfig):
-        self.qubits = qubits
-        self.wiremap = wiremap
-        self.qchip = qchip
-        self.hwconfig = hwconfig
-        self._program = []
-        self._resolved_program = []
-        self._scheduled_program = []
-        self._isscheduled = False
-        self._isresolved = False
-        self.coredict = {}
-        self.elemdict = {}
 
-        self.assemblers = {}
+class Compiler:
+    def __init__(self, proc_groups, fpga_config_dict, qchip, qubits=None):
+
+        self.qchip = qchip
+        if qubits is None:
+            self.qubits = qchip.qubits.keys()
+        else:
+            self.qubits = qubits
+
+        if isinstance(proc_groups, list):
+            self.asm_progs = {grp : [] for grp in proc_groups}
+        elif proc_groups == 'by_qubit':
+            self.asm_progs = {['{}.qdrv'.format(q), '{}.rdrv'.format(q), '{}.rdlo'.format(q)] : [] for q in self.qubits}
+        elif proc_groups == 'by_channel':
+            self.asm_progs = {['{}.qdrv'.format(q)]: [] for q in self.qubits} 
+            self.asm_progs.update({['{}.rdrv'.format(q)]: [] for q in self.qubits})
+            self.asm_progs.update({['{}.rdlo'.format(q)]: [] for q in self.qubits})
+        else:
+            raise ValueError('{} group not supported'.format(proc_groups))
+
         self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
-        for qubit in qubits:
+        self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
+        for qubit in self.qubits:
+            for chantype in ['qdrv', 'rdrv', 'rdlo']:
+                chan = '{}.{}'.format(qubit, chantype)
+                for grp in self.asm_progs.keys():
+                    if chan in grp:
+                        self.chan_to_core[chan] = grp
+                        break
+
             for freqname in qchip.qubit_dict[qubit].keys():
                 self.zphase[qubit + '.' + freqname] = 0
-            for chan, ind in wiremap.coredict.items():
-                if qubit in chan:
-                    self.assemblers[ind] = asm.SingleCoreAssembler(hwconfig, hwconfig.elems_per_core)
-                    self.coredict[chan] = ind
-                    self.elemdict[chan] = wiremap.elemdict[chan]
 
     def add_statement(self, statement_dict, index=-1):
         if index==-1:
