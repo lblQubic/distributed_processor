@@ -29,10 +29,6 @@ class ElementConfig(ABC):
         return 1/self.fpga_clk_period
 
     @abstractmethod
-    def get_freq_addr(self, freq):
-        pass
-
-    @abstractmethod
     def get_phase_word(self, phase):
         pass
 
@@ -63,3 +59,17 @@ class ElementConfig(ABC):
     @abstractmethod
     def get_amp_word(self, amplitude):
         pass
+
+
+class FPGAConfig:
+
+    def __init__(self, **kwargs):
+        self.fpga_clk_period = kwargs.pop('fpga_clk_period')
+        self.alu_instr_clks = kwargs.pop('alu_instr_clks')
+        self.jump_cond_clks = kwargs.pop('jump_cond_clks')
+        self.jump_fproc_clks = kwargs.pop('jump_fproc_clks')
+        self.pulse_regwrite_clks = kwargs.pop('pulse_regwrite_clks')
+
+    @property
+    def fpga_clk_freq(self):
+        return 1/self.fpga_clk_period
