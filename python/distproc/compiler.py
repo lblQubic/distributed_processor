@@ -128,10 +128,12 @@ class Compiler:
                                              'scope': statement['scope']})
                 flattened_program.extend(flattened_falseblock)
 
-                flattened_trueblock, branchind = self._flatten_control_flow(trueblock, label_prefix='true_'+label_prefix)
+                flattened_trueblock = self._flatten_control_flow(trueblock, label_prefix='true_'+label_prefix)
                 flattened_trueblock.insert(0, {'name': 'jump_label', 'label': jump_label_true, 'scope': statement['scope']})
                 flattened_program.extend(flattened_trueblock)
                 flattened_program.append({'name': 'jump_label', 'label': jump_label_end, 'scope': statement['scope']})
+            else:
+                flattened_program.append(statement)
 
         return flattened_program
 
@@ -145,22 +147,24 @@ class Compiler:
         # self._control_flow_graph[cur_blockname] = {}
         cur_block = []
         for i, statement in enumerate(self._flat_program):
+            ipdb.set_trace()
             if statement['name'] in ['branch_fproc', 'branch_var', 'jump_i']:
                 self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
                 ctrl_blockname = '{}_ctrl'.format(cur_blockname)
-                self._basic_blocks[ctrl_blockname] = BasicBlock([statement])
+                self._basic_blocks[ctrl_blockname] = BasicBlock([statement], self._fpga_config, self.qchip)
                 for q in statement['scope']:
                     self._control_flow_graph[q][qubit_lastblock[q]] = ctrl_blockname
                     if statement['name'] in ['branch_fproc', 'branch_var']:
                         cur_blockname = statement['jump_label'].replace('true', 'false')
-                        self._control_flow_graph[q][ctrl_blockname] = [statement['true'], statement['false']]
+                        # cur_blockname are the statements that come immediately after the jump
+                        self._control_flow_graph[q][ctrl_blockname] = [statement['jump_label'], cur_blockname]
                     else:
                         assert statement['name'] == 'jump_i'
                         self._control_flow_graph[q][ctrl_blockname] = statement['jump_label']
                         cur_blockname = 'block_{}'.format(i)
                 cur_block = []
             elif statement['name'] == 'jump_label':
-                self._basic_blocks[cur_blockname] = BasicBlock(cur_block)
+                self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
                 cur_blockname = statement['label']
                 cur_block.append(statement)
 
@@ -227,6 +231,7 @@ class BasicBlock:
         self._program = program
         self._fpga_config = fpga_config
         self._scope()
+        self.zphase = {}
         for qubit in self.qubit_scope:
             for freqname in qchip.qubit_dict[qubit].keys():
                 self.zphase[qubit + '.' + freqname] = 0
@@ -337,3 +342,6 @@ class BasicBlock:
                             pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1], elemind)
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
+
+    def __repr__(self):
+        return str(self._program)
