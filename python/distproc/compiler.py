@@ -36,7 +36,9 @@ Instruction dict format:
         branch_var: {'name': 'branch_var', 'var': var_name, ...}
         branch on previously stored variable
     ALU instructions:
-        {'name': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'in0': var_name, 'in1': var_name or value}
+        {'name': 'alu', 'add' or 'sub' or 'le' or 'ge' or 'eq', 'in0': var_name, 'in1': var_name or value, 'out': output reg}
+    variable declaration:
+        {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}
 
 
     Note about instructions using function processor (FPROC): these instructions are scheduled
@@ -66,15 +68,19 @@ RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtua
 
 
 class Compiler:
-    def __init__(self, proc_groups, fpga_config, qchip, qubits=None):
-
+    def __init__(self, program, proc_groups, fpga_config, qchip):
         self._fpga_config = fpga_config
 
         self.qchip = qchip
-        if qubits is None:
-            self.qubits = qchip.qubits.keys()
+
+        if isinstance(program, list):
+            self._from_list(program)
+
         else:
-            self.qubits = qubits
+            raise TypeError('program must be of type list')
+
+        self._scope_program()
+
 
         if isinstance(proc_groups, list):
             self.asm_progs = {grp : [] for grp in proc_groups}
@@ -138,6 +144,8 @@ class Compiler:
                 flattened_program.append({'name': 'jump_label', 'label': jump_label_end, 'scope': statement['scope']})
 
                 branchind += 1
+            elif statement['name'] == 'alu_op':
+                statement = statement.copy()
             else:
                 flattened_program.append(statement)
 
@@ -185,69 +193,24 @@ class Compiler:
                     else:
                         qubit_lastblock[qubit] = blockname
 
-
-
-    # def _generate_cfg(self):
-    #     cur_blockname = 'start'
-    #     # self._control_flow_graph[cur_blockname] = {}
-    #     cur_block = []
-    #     for i, statement in enumerate(self._flat_program):
-    #         if statement['name'] in ['branch_fproc', 'branch_var', 'jump_i']:
-    #             self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
-    #             ctrl_blockname = '{}_ctrl'.format(cur_blockname)
-    #             self._basic_blocks[ctrl_blockname] = BasicBlock([statement], self._fpga_config, self.qchip)
-    #             for q in statement['scope']:
-    #                 self._control_flow_graph[q][qubit_lastblock[q]] = ctrl_blockname
-    #                 if statement['name'] in ['branch_fproc', 'branch_var']:
-    #                     cur_blockname = statement['jump_label'].replace('true', 'false')
-    #                     # cur_blockname are the statements that come immediately after the jump
-    #                     self._control_flow_graph[q][ctrl_blockname] = [statement['jump_label'], cur_blockname]
-    #                 else:
-    #                     assert statement['name'] == 'jump_i'
-    #                     self._control_flow_graph[q][ctrl_blockname] = statement['jump_label']
-    #                     cur_blockname = 'block_{}'.format(i)
-    #             cur_block = []
-    #         elif statement['name'] == 'jump_label':
-    #             self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
-    #             cur_blockname = statement['label']
-    #             cur_block.append(statement)
-
-    #         elif statement['name'] == 'for_loop':
-    #             raise NotImplementedError
-    #         else:
-    #             cur_block.append(statement)
-
-    #     self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
-
     def get_compiled_program(self):
         pass
 
-    def from_list(self, prog_list):
+    def _from_list(self, prog_list):
         self._program = prog_list
+
+    def _scope_program(self):
+        self.qubits = []
+        for statement in self._program:
+            if 'qubit' in statement.keys():
+                self.qubits.extend(statement['qubit'])
+            if 'scope' in statement.keys():
+                self.qubits.extend(statement['scope'])
+        self.qubits = list(np.unique(np.asarray(self.qubits)))
+
 
     def compile(self):
         pass
-
-    def generate_sim_output(self, n_samples=5000):
-        destdict = {}
-        for chan, ind in self.coredict.items():
-            destdict[ind] = np.zeros((2, n_samples))
-        for instr in self._scheduled_program:
-            if 'gate' in instr.keys():
-                for pulse in instr['gate'].get_pulses():
-                    pulse_env = pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1]
-                    sample_inds = np.arange(0, len(pulse_env))
-                    lofreq = self.wiremap.lofreq[pulse.dest]
-                    phases = pulse.pcarrier + 2*np.pi*(pulse.fcarrier-lofreq)*self.hwconfig.dac_sample_period*(sample_inds + 4*(instr['t']+1))
-                    scale_factor = 2**15 #TODO: fix hardcoding
-                    pulse_i = scale_factor*(np.real(pulse_env)*np.cos(phases) - np.imag(pulse_env)*np.sin(phases))
-                    pulse_q = scale_factor*(np.imag(pulse_env)*np.cos(phases) + np.real(pulse_env)*np.sin(phases))
-                    start_time = instr['t']*self.hwconfig.dac_samples_per_clk
-                    destdict[self.wiremap.coredict[pulse.dest]][0, start_time:start_time+len(pulse_env)] = pulse_i
-                    destdict[self.wiremap.coredict[pulse.dest]][1, start_time:start_time+len(pulse_env)] = pulse_q
-            else:
-                raise Exception('{} not yet implemented'.format(instr['name']))
-        return destdict
 
 
 class BasicBlock:
@@ -324,6 +287,7 @@ class BasicBlock:
                         gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] += gate['t']
+                #elif gate['name'] == '
                 else:
                     raise Exception('{} not yet implemented'.format(gate['name']))
                 continue
