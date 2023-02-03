@@ -101,6 +101,7 @@ def test_linear_cfg():
     program = [{'name': 'X90', 'qubit': 'Q0'},
                {'name': 'X90', 'qubit': 'Q1'}]
     compiler.from_list(program)
+    compiler.make_basic_blocks()
     compiler.generate_cfg()
     print('basic_blocks{}'.format(compiler._basic_blocks))
     print('cfg {}'.format(compiler._control_flow_graph))
@@ -120,6 +121,7 @@ def test_onebranch_cfg():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q0', 'Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler.from_list(program)
+    compiler.make_basic_blocks()
     compiler.generate_cfg()
     ipdb.set_trace()
     print('basic_blocks{}'.format(compiler._basic_blocks))

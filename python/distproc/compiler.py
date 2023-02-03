@@ -57,6 +57,7 @@ import os
 import sys
 import copy
 import ipdb
+from collections import OrderedDict
 
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
@@ -115,15 +116,18 @@ class Compiler:
             if statement['name'] in ['branch_fproc', 'branch_var']:
                 falseblock = statement['false']
                 trueblock = statement['true']
-                del statement['true']
-                del statement['false']
 
                 jump_label_true = '{}true_{}'.format(label_prefix, branchind)
+                jump_label_false = '{}false_{}'.format(label_prefix, branchind)
                 jump_label_end = '{}end_{}'.format(label_prefix, branchind)
 
-                statement['jump_label'] = jump_label_true
+                statement['true'] = jump_label_true
+                statement['false'] = jump_label_false
+
+                # statement['jump_label'] = jump_label_true
                 flattened_program.append(statement)
                 flattened_falseblock = self._flatten_control_flow(falseblock, label_prefix='false_'+label_prefix)
+                flattened_falseblock.insert(0, {'name': 'jump_label', 'label': jump_label_false, 'scope': statement['scope']})
                 flattened_falseblock.append({'name': 'jump_i', 'jump_label': jump_label_end,
                                              'scope': statement['scope']})
                 flattened_program.extend(flattened_falseblock)
@@ -137,36 +141,25 @@ class Compiler:
 
         return flattened_program
 
-    def generate_cfg(self):
-        self._basic_blocks = {}
+    def make_basic_blocks(self):
+        self._basic_blocks = OrderedDict()
         self._flat_program = self._flatten_control_flow(self._program)
 
-        cur_blockname = 'start'
-        self._control_flow_graph = {q: {} for q in self.qubits}
-        qubit_lastblock = {q: cur_blockname for q in self.qubits}
-        # self._control_flow_graph[cur_blockname] = {}
+        cur_blockname = 'block_0'
+        blockind = 1
         cur_block = []
-        for i, statement in enumerate(self._flat_program):
-            ipdb.set_trace()
+        for statement in self._flat_program:
             if statement['name'] in ['branch_fproc', 'branch_var', 'jump_i']:
                 self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
                 ctrl_blockname = '{}_ctrl'.format(cur_blockname)
                 self._basic_blocks[ctrl_blockname] = BasicBlock([statement], self._fpga_config, self.qchip)
-                for q in statement['scope']:
-                    self._control_flow_graph[q][qubit_lastblock[q]] = ctrl_blockname
-                    if statement['name'] in ['branch_fproc', 'branch_var']:
-                        cur_blockname = statement['jump_label'].replace('true', 'false')
-                        # cur_blockname are the statements that come immediately after the jump
-                        self._control_flow_graph[q][ctrl_blockname] = [statement['jump_label'], cur_blockname]
-                    else:
-                        assert statement['name'] == 'jump_i'
-                        self._control_flow_graph[q][ctrl_blockname] = statement['jump_label']
-                        cur_blockname = 'block_{}'.format(i)
+                cur_blockname = 'block_{}'.format(blockind)
+                blockind += 1
                 cur_block = []
             elif statement['name'] == 'jump_label':
                 self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
+                cur_block = [statement]
                 cur_blockname = statement['label']
-                cur_block.append(statement)
 
             elif statement['name'] == 'for_loop':
                 raise NotImplementedError
@@ -174,6 +167,56 @@ class Compiler:
                 cur_block.append(statement)
 
         self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
+
+    def generate_cfg(self):
+        self._control_flow_graph = {q: {'start': None} for q in self.qubits}
+        qubit_lastblock = {q: 'start' for q in self.qubits}
+        for blockname, block in self._basic_blocks.items():
+            ipdb.set_trace()
+            for qubit in self.qubits:
+                if qubit in block.scope:
+                    if qubit_lastblock[qubit] is not None:
+                        self._control_flow_graph[qubit][qubit_lastblock[qubit]] = blockname
+
+                    if block.dest_nodes is not None:
+                        self._control_flow_graph[qubit][blockname] = block.dest_nodes
+                        qubit_lastblock[qubit] = None
+                    else:
+                        qubit_lastblock[qubit] = blockname
+
+
+
+    # def _generate_cfg(self):
+    #     cur_blockname = 'start'
+    #     # self._control_flow_graph[cur_blockname] = {}
+    #     cur_block = []
+    #     for i, statement in enumerate(self._flat_program):
+    #         if statement['name'] in ['branch_fproc', 'branch_var', 'jump_i']:
+    #             self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
+    #             ctrl_blockname = '{}_ctrl'.format(cur_blockname)
+    #             self._basic_blocks[ctrl_blockname] = BasicBlock([statement], self._fpga_config, self.qchip)
+    #             for q in statement['scope']:
+    #                 self._control_flow_graph[q][qubit_lastblock[q]] = ctrl_blockname
+    #                 if statement['name'] in ['branch_fproc', 'branch_var']:
+    #                     cur_blockname = statement['jump_label'].replace('true', 'false')
+    #                     # cur_blockname are the statements that come immediately after the jump
+    #                     self._control_flow_graph[q][ctrl_blockname] = [statement['jump_label'], cur_blockname]
+    #                 else:
+    #                     assert statement['name'] == 'jump_i'
+    #                     self._control_flow_graph[q][ctrl_blockname] = statement['jump_label']
+    #                     cur_blockname = 'block_{}'.format(i)
+    #             cur_block = []
+    #         elif statement['name'] == 'jump_label':
+    #             self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
+    #             cur_blockname = statement['label']
+    #             cur_block.append(statement)
+
+    #         elif statement['name'] == 'for_loop':
+    #             raise NotImplementedError
+    #         else:
+    #             cur_block.append(statement)
+
+    #     self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
 
     def get_compiled_program(self):
         pass
@@ -232,7 +275,7 @@ class BasicBlock:
         self._fpga_config = fpga_config
         self._scope()
         self.zphase = {}
-        for qubit in self.qubit_scope:
+        for qubit in self.scope:
             for freqname in qchip.qubit_dict[qubit].keys():
                 self.zphase[qubit + '.' + freqname] = 0
         self.is_resolved = False
@@ -242,21 +285,30 @@ class BasicBlock:
         if not swphase:
             raise Exception('HW phases not yet implemented!')
 
+    @property
+    def dest_nodes(self):
+        if self._program[-1]['name'] in ['branch_fproc', 'branch_var']:
+            return [self._program[-1]['true'], self._program[-1]['false']]
+        elif self._program[-1]['name'] in ['jump_i']:
+            return [self._program[-1]['jump_label']]
+        else:
+            return None
+
     def _scope(self):
-        self.qubit_scope = []
+        self.scope = []
         for statement in self._program:
             if 'qubit' in statement.keys():
-                self.qubit_scope.extend(statement['qubit'])
+                self.scope.extend(statement['qubit'])
             elif 'scope' in statement.keys():
-                self.qubit_scope.extend(statement['scope'])
-        self.qubit_scope = list(np.unique(np.asarray(self.qubit_scope)))
+                self.scope.extend(statement['scope'])
+        self.scope = list(np.unique(np.asarray(self.scope)))
 
     def schedule(self):
         if not self.is_resolved:
             self._resolve_gates()
         if not self.is_zresolved:
             self._resolve_virtualz_pulses()
-        qubit_last_t = {q: 0 for q in self.qubit_scope}
+        qubit_last_t = {q: 0 for q in self.scope}
         self.scheduled_program = []
         for gate in self.resolved_program:
             if isinstance(gate, dict):
@@ -266,7 +318,7 @@ class BasicBlock:
                         qubit_last_t[qubit] = qubit_max_t
                 elif gate['name'] == 'delay':
                     if 'qubit' not in gate:
-                        gate['qubit'] = self.qubit_scope
+                        gate['qubit'] = self.scope
                     elif isinstance(gate['qubit'], str):
                         gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
@@ -278,7 +330,7 @@ class BasicBlock:
             min_pulse_t = []
             for pulse in pulses:
                 qubit = pulse.dest[:2]
-                assert qubit in self.qubit_scope
+                assert qubit in self.scope
                 qubit_t = qubit_last_t[qubit]
                 min_pulse_t.append(qubit_t - self._get_pulse_nclks(pulse.t0))
             gate_t = max(min_pulse_t)
