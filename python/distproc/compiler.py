@@ -136,6 +136,8 @@ class Compiler:
                 flattened_trueblock.insert(0, {'name': 'jump_label', 'label': jump_label_true, 'scope': statement['scope']})
                 flattened_program.extend(flattened_trueblock)
                 flattened_program.append({'name': 'jump_label', 'label': jump_label_end, 'scope': statement['scope']})
+
+                branchind += 1
             else:
                 flattened_program.append(statement)
 
@@ -172,7 +174,6 @@ class Compiler:
         self._control_flow_graph = {q: {'start': None} for q in self.qubits}
         qubit_lastblock = {q: 'start' for q in self.qubits}
         for blockname, block in self._basic_blocks.items():
-            ipdb.set_trace()
             for qubit in self.qubits:
                 if qubit in block.scope:
                     if qubit_lastblock[qubit] is not None:
