@@ -36,7 +36,7 @@ Instruction dict format:
         branch_var: {'name': 'branch_var', 'var': var_name, ...}
         branch on previously stored variable
     ALU instructions:
-        {'name': 'alu', 'add' or 'sub' or 'le' or 'ge' or 'eq', 'in0': var_name, 'in1': var_name or value, 'out': output reg}
+        {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'in0': var_name, 'in1': var_name or value, 'out': output reg}
     variable declaration:
         {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}
 
@@ -59,13 +59,13 @@ import os
 import sys
 import copy
 import ipdb
+import json
 from collections import OrderedDict
 
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
 
-RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtualz']
-
+RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtualz', 'jump_i', 'alu', 'declare']
 
 class Compiler:
     def __init__(self, program, proc_groups, fpga_config, qchip):
@@ -80,7 +80,7 @@ class Compiler:
             raise TypeError('program must be of type list')
 
         self._scope_program()
-
+        self._lint_and_scopevars()
 
         if isinstance(proc_groups, list):
             self.asm_progs = {grp : [] for grp in proc_groups}
@@ -193,6 +193,15 @@ class Compiler:
                     else:
                         qubit_lastblock[qubit] = blockname
 
+    def schedule(self):
+        block_min_t = {blockname: 0 for blockname in self._basic_blocks.keys()}
+        for _, block in self._basic_blocks.items():
+            block.schedule()
+        #for qubit in self.qubits:
+        #    curnode = 'start'
+        #    for node, dest in self._control_flow_graph[qubit].items():
+        #        self._control_flow_graph[qubit]
+
     def get_compiled_program(self):
         pass
 
@@ -208,9 +217,32 @@ class Compiler:
                 self.qubits.extend(statement['scope'])
         self.qubits = list(np.unique(np.asarray(self.qubits)))
 
+    def _lint_and_scopevars(self):
+        vars = {}
+        for statement in self._program:
+            if 'qubit' in statement.keys():
+                assert isinstance(statement['qubit'], list)
+            else: # this is not a gate
+                assert statement['name'] in RESRV_NAMES
+
+            if statement['name'] == 'declare':
+                assert statement['var'] not in vars.keys()
+                vars[statement['var']] = {'dtype': statement['dtype'], 'scope': statement['scope']}
+            elif statement['name'] == 'alu':
+                assert vars[statement['in1']]['dtype'] == vars[statement['out']]['dtype']
+                assert set(vars[statement['out']]['scope']).issubset(vars[statement['in1']]['scope'])
+                if isinstance(statement['in0'], str):
+                    assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
+                    assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
+                statement['scope'] = vars[statement['out']]['scope']
 
     def compile(self):
-        pass
+        for blockname, block in self._basic_blocks.items():
+            compiled_block = block.compile()
+            for proc_group, prog in self.asm_progs.items():
+                qubit = proc_group[0].split('.')[0]
+                if qubit in compiled_block.keys():
+                    self.asm_progs[proc_group].extend(compiled_block[qubit])
 
 
 class BasicBlock:
@@ -246,6 +278,7 @@ class BasicBlock:
         self.is_scheduled = False
         self.is_zresolved = not swphase
         self._swphase = swphase
+        self.qchip = qchip
         if not swphase:
             raise Exception('HW phases not yet implemented!')
 
@@ -287,7 +320,15 @@ class BasicBlock:
                         gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] += gate['t']
-                #elif gate['name'] == '
+                elif gate['name'] == 'alu':
+                    for qubit in self.scope:
+                        qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
+                elif gate['name'] == 'branch_fproc':
+                    for qubit in self.scope:
+                        qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks
+                elif gate['name'] == 'branch_var':
+                    for qubit in self.scope:
+                        qubit_last_t[qubit] += self._fpga_config.jump_cond_clks
                 else:
                     raise Exception('{} not yet implemented'.format(gate['name']))
                 continue
@@ -303,6 +344,7 @@ class BasicBlock:
                 qubit_last_t[pulse.dest[:2]] = gate_t + self._get_pulse_nclks(pulse.t0) + self._get_pulse_nclks(pulse.twidth)
             self.scheduled_program.append({'gate': gate, 't': gate_t})
         self.delta_t = max(qubit_last_t.values())
+        self.is_scheduled = True
 
     def _resolve_gates(self):
         """
@@ -310,7 +352,7 @@ class BasicBlock:
         all gate.contents elements are GatePulse objects)
         """
         self.resolved_program = []
-        for gatedict in self.resolved_program:
+        for gatedict in self._program:
             if gatedict['name'] in RESRV_NAMES:
                 self.resolved_program.append(gatedict)
                 continue
@@ -325,11 +367,11 @@ class BasicBlock:
         self.is_resolved = True
 
     def _get_pulse_nclks(self, length_secs):
-        return int(np.ceil(length_secs/self._fpga_config['clk_period']))
+        return int(np.ceil(length_secs/self._fpga_config.fpga_clk_period))
 
-    def _resolve_virtualz_pulses(self, resolved_program):
+    def _resolve_virtualz_pulses(self):
         zresolved_program = []
-        for gate in resolved_program:
+        for gate in self.resolved_program:
             if isinstance(gate, qc.Gate):
                 gate = gate.copy()
                 for pulse in gate.contents:
@@ -344,21 +386,53 @@ class BasicBlock:
             else:
                 zresolved_program.append(gate)
 
-        return zresolved_program
+        self.resolved_program = zresolved_program
 
     def compile(self, tstart=0):
-        if not self._isresolved and self.is_scheduled:
+        # TODO: add twidth attribute to env, not pulse
+        compiled_program = {qubit: [] for qubit in self.scope}
+        if not (self.is_resolved and self.is_scheduled):
             raise Exception('schedule and resolve gates first!')
         for instr in self.scheduled_program:
             if 'gate' in instr.keys():
                 for pulse in instr['gate'].get_pulses():
-                    coreind = self.wiremap.coredict[pulse.dest]
-                    elemind = self.wiremap.elemdict[pulse.dest]
+                    qubit_scope = pulse.dest.split('.')[0]
+                    envdict = pulse.env.env_desc[0]
+                    if 'twidth' not in envdict['paradict'].keys():
+                        envdict['paradict']['twidth'] = pulse.twidth
+                    compiled_program[qubit_scope].append(
+                            {'op': 'pulse', 'freq': pulse.fcarrier, 'phase': pulse.pcarrier, 'amp': pulse.amp,
+                             'env': pulse.env.env_desc[0], 'start_time': instr['t'] + tstart, 'dest': pulse.dest})
                     # lofreq = self.wiremap.lofreq[pulse.dest]
-                    self.assemblers[coreind].add_pulse(pulse.fcarrier, pulse.pcarrier, instr['t'],
-                            pulse.env.get_samples(dt=self.hwconfig.dac_sample_period, twidth=pulse.twidth, amp=pulse.amp)[1], elemind)
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
+        return compiled_program
 
     def __repr__(self):
-        return str(self._program)
+        return 'BasicBlock(' + str(self._program) + ')'
+
+
+class CompiledProgram:
+    """
+    Simple class for reading/writing compiler output.
+
+    TODO: metadata to consider adding:
+        qchip version?
+        git revision?
+    """
+
+    def __init__(self, program, fpga_config):
+        self.fpga_config = fpga_config
+        self.program = program
+
+    @property
+    def proc_groups(self):
+        return self.program.keys()
+
+    def save(self, filename):
+        progdict = {'fpga_config': self.fpga_config.__dict__, **self.program}
+        with open(filename) as f:
+            json.dumps(progdict, f, indent=4)
+
+    def load(self, filename):
+        pass

@@ -2,13 +2,14 @@ import pytest
 import numpy as np
 import ipdb
 import distproc.compiler as cm
+import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
 import qubitconfig.wiremap as wm
 
 class ElementConfigTest(hw.ElementConfig):
-    def __init__(self):
-        super().__init__(2.e-9, 16)
+    def __init__(self, samples_per_clk, interp_ratio):
+        super().__init__(2.e-9, samples_per_clk)
 
     def get_phase_word(self, phase):
         return 0
@@ -90,6 +91,7 @@ def test_basic_compile():
     # compiler.generate_sim_output()
     # assert True
 
+
 def test_linear_cfg():
     qchip = qc.QChip('qubitcfg.json')
     fpga_config = {'alu_instr_clks': 2,
@@ -106,6 +108,7 @@ def test_linear_cfg():
     print('cfg {}'.format(compiler._control_flow_graph))
     assert True
 
+
 def test_onebranch_cfg():
     qchip = qc.QChip('qubitcfg.json')
     fpga_config = {'alu_instr_clks': 2,
@@ -121,10 +124,13 @@ def test_onebranch_cfg():
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     compiler.make_basic_blocks()
     compiler.generate_cfg()
-    ipdb.set_trace()
-    print('basic_blocks{}'.format(compiler._basic_blocks))
-    print('cfg {}'.format(compiler._control_flow_graph))
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
     assert True
+
 
 def test_multrst_cfg():
     qchip = qc.QChip('qubitcfg.json')
@@ -144,7 +150,62 @@ def test_multrst_cfg():
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     compiler.make_basic_blocks()
     compiler.generate_cfg()
-    ipdb.set_trace()
-    print('basic_blocks{}'.format(compiler._basic_blocks))
-    print('cfg {}'.format(compiler._control_flow_graph))
+    print('basic_blocks:')
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
+
+    assert True
+
+def test_linear_compile():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'read', 'qubit': ['Q0']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler.make_basic_blocks()
+    compiler.generate_cfg()
+    compiler.schedule()
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
+    compiler.compile()
+    print(compiler.asm_progs)
+    assert True
+
+def test_linear_compile_globalasm():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'read', 'qubit': ['Q0']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler.make_basic_blocks()
+    compiler.generate_cfg()
+    compiler.schedule()
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
+    compiler.compile()
+    compiled_prog = cm.CompiledProgram(compiler.asm_progs, fpga_config)
+
+    globalasm = am.GlobalAssembler(compiled_prog, channel_configs, ElementConfigTest)
     assert True

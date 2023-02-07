@@ -282,7 +282,7 @@
                 "twidth": 2e-06
             },
             {
-                "dest": "Q0.read",
+                "dest": "Q0.rdlo",
                 "pcarrier": 4.538344910403168,
                 "t0": 6e-07,
                 "fcarrier": "Q0.readfreq",
@@ -397,7 +397,7 @@
                 "twidth": 2e-06
             },
             {
-                "dest": "Q1.read",
+                "dest": "Q1.rdlo",
                 "pcarrier": 0.3379672162204977,
                 "t0": 6e-07,
                 "fcarrier": "Q1.readfreq",
@@ -512,7 +512,7 @@
                 "twidth": 2e-06
             },
             {
-                "dest": "Q2.read",
+                "dest": "Q2.rdlo",
                 "pcarrier": 5.276753690493398,
                 "t0": 6e-07,
                 "fcarrier": "Q2.readfreq",

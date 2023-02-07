@@ -3,8 +3,12 @@
 from abc import ABC, abstractmethod
 import distproc.command_gen as cg
 import numpy as np
+import json
 
 class ElementConfig(ABC):
+    """
+    TODO: standardize constructor args for GlobalAssembler usage
+    """
 
     def __init__(self, fpga_clk_period, samples_per_clk):
         self.fpga_clk_period = fpga_clk_period
@@ -73,3 +77,34 @@ class FPGAConfig:
     @property
     def fpga_clk_freq(self):
         return 1/self.fpga_clk_period
+
+
+class ChannelConfig:
+    
+    def __init__(self, core_ind, elem_ind, elem_params, env_mem_name, freq_mem_name, acc_mem_name):
+        self.core_ind = core_ind
+        self.elem_ind = elem_ind
+        self.elem_params = elem_params
+        self.env_mem_name = env_mem_name.format(core_ind=self.core_ind)
+        self.freq_mem_name = freq_mem_name.format(core_ind=self.core_ind)
+        self.acc_mem_name = acc_mem_name.format(core_ind=self.core_ind)
+
+
+def load_channel_configs(config_dict):
+
+    if isinstance(config_dict, str):
+        with open(config_dict) as f:
+            config_dict = json.load(f)
+
+    assert 'fpga_clk_freq' in config_dict.keys()
+
+    channel_configs = {}
+
+    for key, value in config_dict.items():
+        if isinstance(value, dict):
+            channel_configs[key] = ChannelConfig(**value)
+
+        else:
+            channel_configs[key] = value 
+
+    return channel_configs

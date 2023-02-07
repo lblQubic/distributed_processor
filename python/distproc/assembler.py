@@ -1,5 +1,4 @@
-"""
-Distributed processor assembly language definition:
+"""Distributed processor assembly language definition:
     list of dicts; should map 1-to-1 to assembled commands that run on proc
 
     declaring registers:
@@ -262,6 +261,10 @@ class SingleCoreAssembler:
             envkey = self._hash_env(env)
             if envkey not in self._env_dicts[elem_ind]:
                 self._env_dicts[elem_ind][envkey] = env
+        elif isinstance(env, dict):
+            envkey = self._hash_env(env)
+            if envkey not in self._env_dicts[elem_ind]:
+                self._env_dicts[elem_ind][envkey] = env
         elif isinstance(env, str):
             envkey = env
         else:
@@ -476,7 +479,6 @@ class SingleCoreAssembler:
 
         return freq_data, freq_ind_maps
 
-
     def _hash_env(self, env):
         if isinstance(env, np.ndarray):
             return str(hash(env.data.tobytes()))
@@ -485,3 +487,43 @@ class SingleCoreAssembler:
         else:
             raise Exception('{} not supported!'.format(type(env)))
 
+
+class GlobalAssembler:
+
+    def __init__(self, compiled_program, channel_configs, elementconfig_class):
+        """
+        channel configs is loaded from json file, using hwconfig.load_channel_configs
+        """
+        self.assemblers = {}
+        self.channel_configs = channel_configs
+
+        if int(np.round(channel_configs['fpga_clk_freq'])) != int(np.round(compiled_program.fpga_config.fpga_clk_freq)):
+            raise Exception('Program target clock {} Hz does not match HW clock \
+                    {}'.format(compiled_program.fpga_config.fpga_clk_freq, channel_configs['fpga_clk_freq']))
+
+        for proc_group in compiled_program.proc_groups:
+            elem_cfgs = {}
+            core_ind = channel_configs[proc_group[0]].core_ind
+            for chan in proc_group:
+                chan_cfg = channel_configs[chan]
+                assert chan_cfg.core_ind == core_ind
+                elem_cfgs[chan_cfg.elem_ind] = elementconfig_class(**chan_cfg.elem_params)
+            elem_cfgs = [elem_cfgs[elem_ind] for elem_ind in sorted(elem_cfgs.keys())]
+
+            self.assemblers[core_ind] = SingleCoreAssembler(elem_cfgs)
+            self._resolve_element_inds(compiled_program.program[proc_group])
+            self.assemblers[core_ind].from_list(compiled_program.program[proc_group])
+
+    def _resolve_element_inds(self, single_core_program):
+        for statement in single_core_program:
+            if statement['op'] == 'pulse':
+                statement['elem_ind'] = self.channel_configs[statement['dest']].elem_ind
+                del statement['dest']
+
+    def get_assembled_program(self):
+        assembled_prog = {}
+        for core_ind, asm in self.assemblers.items():
+            cmd_list, env_raw, freq_raw = asm.get_compiled_program()
+            assembled_prog[core_ind] = {'cmd_list': cmd_list, 'env_buffer': env_raw, 'freq_buffer': freq_raw}
+
+        return assembled_prog
