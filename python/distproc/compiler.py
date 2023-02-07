@@ -17,7 +17,7 @@ Instruction dict format:
         later on. Optional 'scope' key to specify qubits using the variable. Otherwise, scope
         is determined automatically by compiler.
     store fproc instruction:
-        {'name': 'store_fproc', 'fproc_id': function_id, 'dest': var_name}
+        {'name': 'store_fproc', 'fproc_id': function_id, 'dest': var_name, 'scope': qubits}
         stores fproc result (next available from fproc_id) in variable var_name for use 
         later in the program.
     barrier: {'name': 'barrier', 'qubits': qubitid_list}
@@ -83,13 +83,13 @@ class Compiler:
         self._lint_and_scopevars()
 
         if isinstance(proc_groups, list):
-            self.asm_progs = {grp : [] for grp in proc_groups}
+            self.proc_groups = proc_groups
         elif proc_groups == 'by_qubit':
-            self.asm_progs = {('{}.qdrv'.format(q), '{}.rdrv'.format(q), '{}.rdlo'.format(q)) : [] for q in self.qubits}
+            self.proc_groups = [('{}.qdrv'.format(q), '{}.rdrv'.format(q), '{}.rdlo'.format(q)) for q in self.qubits]
         elif proc_groups == 'by_channel':
-            self.asm_progs = {('{}.qdrv'.format(q)): [] for q in self.qubits} 
-            self.asm_progs.update({('{}.rdrv'.format(q)): [] for q in self.qubits})
-            self.asm_progs.update({('{}.rdlo'.format(q)): [] for q in self.qubits})
+            self.proc_groups = [('{}.qdrv'.format(q)) for q in self.qubits] 
+            self.proc_groups.extend([('{}.rdrv'.format(q)) for q in self.qubits])
+            self.proc_groups.extend([('{}.rdlo'.format(q)) for q in self.qubits])
         else:
             raise ValueError('{} group not supported'.format(proc_groups))
 
@@ -98,7 +98,7 @@ class Compiler:
         for qubit in self.qubits:
             for chantype in ['qdrv', 'rdrv', 'rdlo']:
                 chan = '{}.{}'.format(qubit, chantype)
-                for grp in self.asm_progs.keys():
+                for grp in self.proc_groups:
                     if chan in grp:
                         self.chan_to_core[chan] = grp
                         break
@@ -106,13 +106,11 @@ class Compiler:
             for freqname in qchip.qubit_dict[qubit].keys():
                 self.zphase[qubit + '.' + freqname] = 0
 
-    def add_statement(self, statement_dict, index=-1):
-        if index == -1:
-            self._program.append(statement_dict)
-        else:
-            self._program.insert(index, statement_dict)
-        self._isscheduled = False
-        self._isresolved = False
+        self._flat_program = self._flatten_control_flow(self._program)
+        self._make_basic_blocks()
+        self._generate_cfg()
+
+        self.is_scheduled = False
 
     def _flatten_control_flow(self, program, label_prefix=''):
         flattened_program = []
@@ -151,10 +149,8 @@ class Compiler:
 
         return flattened_program
 
-    def make_basic_blocks(self):
+    def _make_basic_blocks(self):
         self._basic_blocks = OrderedDict()
-        self._flat_program = self._flatten_control_flow(self._program)
-
         cur_blockname = 'block_0'
         blockind = 1
         cur_block = []
@@ -178,7 +174,7 @@ class Compiler:
 
         self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
 
-    def generate_cfg(self):
+    def _generate_cfg(self):
         self._control_flow_graph = {q: {'start': None} for q in self.qubits}
         qubit_lastblock = {q: 'start' for q in self.qubits}
         for blockname, block in self._basic_blocks.items():
@@ -201,9 +197,7 @@ class Compiler:
         #    curnode = 'start'
         #    for node, dest in self._control_flow_graph[qubit].items():
         #        self._control_flow_graph[qubit]
-
-    def get_compiled_program(self):
-        pass
+        self.is_scheduled = True
 
     def _from_list(self, prog_list):
         self._program = prog_list
@@ -237,12 +231,17 @@ class Compiler:
                 statement['scope'] = vars[statement['out']]['scope']
 
     def compile(self):
+        if not self.is_scheduled:
+            self.schedule()
+        asm_progs = {grp: [] for grp in self.proc_groups}
         for blockname, block in self._basic_blocks.items():
             compiled_block = block.compile()
-            for proc_group, prog in self.asm_progs.items():
+            for proc_group in self.proc_groups:
                 qubit = proc_group[0].split('.')[0]
                 if qubit in compiled_block.keys():
-                    self.asm_progs[proc_group].extend(compiled_block[qubit])
+                    asm_progs[proc_group].extend(compiled_block[qubit])
+
+        return CompiledProgram(asm_progs, self._fpga_config)
 
 
 class BasicBlock:

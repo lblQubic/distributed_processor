@@ -102,8 +102,8 @@ def test_linear_cfg():
     program = [{'name': 'X90', 'qubit': ['Q0']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.make_basic_blocks()
-    compiler.generate_cfg()
+    compiler._make_basic_blocks()
+    compiler._generate_cfg()
     print('basic_blocks{}'.format(compiler._basic_blocks))
     print('cfg {}'.format(compiler._control_flow_graph))
     assert True
@@ -122,8 +122,8 @@ def test_onebranch_cfg():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q0', 'Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.make_basic_blocks()
-    compiler.generate_cfg()
+    compiler._make_basic_blocks()
+    compiler._generate_cfg()
     for blockname, block in compiler._basic_blocks.items():
         print('{}: {}'.format(blockname, block))
 
@@ -148,8 +148,8 @@ def test_multrst_cfg():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.make_basic_blocks()
-    compiler.generate_cfg()
+    compiler._make_basic_blocks()
+    compiler._generate_cfg()
     print('basic_blocks:')
     for blockname, block in compiler._basic_blocks.items():
         print('{}: {}'.format(blockname, block))
@@ -171,16 +171,14 @@ def test_linear_compile():
                {'name': 'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.make_basic_blocks()
-    compiler.generate_cfg()
     compiler.schedule()
     for blockname, block in compiler._basic_blocks.items():
         print('{}: {}'.format(blockname, block))
 
     for source, dest in compiler._control_flow_graph.items():
         print('{}: {}'.format(source, dest))
-    compiler.compile()
-    print(compiler.asm_progs)
+    compiledprog = compiler.compile()
+    print(compiledprog)
     assert True
 
 def test_linear_compile_globalasm():
@@ -196,16 +194,8 @@ def test_linear_compile_globalasm():
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.make_basic_blocks()
-    compiler.generate_cfg()
-    compiler.schedule()
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    compiler.compile()
-    compiled_prog = cm.CompiledProgram(compiler.asm_progs, fpga_config)
+    compiled_prog = compiler.compile()
+    #compiled_prog = cm.CompiledProgram(compiler.asm_progs, fpga_config)
 
     globalasm = am.GlobalAssembler(compiled_prog, channel_configs, ElementConfigTest)
     assert True
