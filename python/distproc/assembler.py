@@ -314,7 +314,7 @@ class SingleCoreAssembler:
         # at top case level
         cmd_list = []
         freq_list = []
-        env_raw, env_ind_map = self._get_env_buffers()
+        env_raw, env_word_map = self._get_env_buffers()
         cmd_label_addrmap = self._get_cmd_labelmap()
         freq_raw, freq_ind_map = self._get_freq_buffers()
         for cmd in self._program:
@@ -342,7 +342,7 @@ class SingleCoreAssembler:
                         pulseargs['amp_word'] = self._elem_cfgs[cmd['elem']].get_amp_word(cmd['amp'])
 
                 if 'env' in cmd.keys():
-                    pulseargs['env_word'] = self._elem_cfgs[cmd['elem']].get_env_word(env_ind_map[cmd['elem']][cmd['env']], cmd['length'])
+                    pulseargs['env_word'] = env_word_map[cmd['elem']][cmd['env']] 
 
                 if 'start_time' in cmd.keys():
                     pulseargs['cmd_time'] = cmd['start_time']
@@ -439,27 +439,27 @@ class SingleCoreAssembler:
                 by four.
         """
         cur_env_ind = 0
-        env_ind_map = {}
+        env_word_map = {}
 
         env_raw = np.empty(0).astype(int)
 
         for envkey, env in self._env_dicts[elem_ind].items():
-            env_ind_map[envkey] = cur_env_ind
             env = self._elem_cfgs[elem_ind].get_env_buffer(env)
+            env_word_map[envkey] = self._elem_cfgs[elem_ind].get_env_word(cur_env_ind, len(env))
             cur_env_ind += len(env)
             env_raw = np.append(env_raw, env)
 
-        return env_raw, env_ind_map
+        return env_raw, env_word_map
     
     def _get_env_buffers(self):
         env_data = []
-        env_ind_maps = []
+        env_word_maps = []
         for i in range(self.n_element):
             d, m = self._get_env_buffer(i)
             env_data.append(d)
-            env_ind_maps.append(m)
+            env_word_maps.append(m)
 
-        return env_data, env_ind_maps
+        return env_data, env_word_maps
 
     def _get_freq_buffer(self, elem_ind):
         """
@@ -483,7 +483,7 @@ class SingleCoreAssembler:
         if isinstance(env, np.ndarray):
             return str(hash(env.data.tobytes()))
         elif isinstance(env, dict):
-            return json.dumps(env, sort_keys=True)
+            return str(hash(json.dumps(env, sort_keys=True)))
         else:
             raise Exception('{} not supported!'.format(type(env)))
 
@@ -524,6 +524,6 @@ class GlobalAssembler:
         assembled_prog = {}
         for core_ind, asm in self.assemblers.items():
             cmd_list, env_raw, freq_raw = asm.get_compiled_program()
-            assembled_prog[core_ind] = {'cmd_list': cmd_list, 'env_buffer': env_raw, 'freq_buffer': freq_raw}
+            assembled_prog[core_ind] = {'cmd_list': cmd_list, 'env_buffers': env_raw, 'freq_buffers': freq_raw}
 
         return assembled_prog

@@ -66,6 +66,7 @@ import qubitconfig.qchip as qc
 import distproc.assembler as asm
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtualz', 'jump_i', 'alu', 'declare']
+INITIAL_TSTART = 5
 
 class Compiler:
     def __init__(self, program, proc_groups, fpga_config, qchip):
@@ -233,13 +234,16 @@ class Compiler:
     def compile(self):
         if not self.is_scheduled:
             self.schedule()
-        asm_progs = {grp: [] for grp in self.proc_groups}
+        asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self.proc_groups}
         for blockname, block in self._basic_blocks.items():
-            compiled_block = block.compile()
+            compiled_block = block.compile(tstart=INITIAL_TSTART) # TODO: fix this so it's only on first block
             for proc_group in self.proc_groups:
                 qubit = proc_group[0].split('.')[0]
                 if qubit in compiled_block.keys():
-                    asm_progs[proc_group].extend(compiled_block[qubit])
+                    asm_progs[proc_group].extend(compiled_block[qubit]) 
+
+        for proc_group in self.proc_groups:
+            asm_progs[proc_group].append({'op': 'done_stb'})
 
         return CompiledProgram(asm_progs, self._fpga_config)
 
