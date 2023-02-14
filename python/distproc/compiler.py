@@ -385,7 +385,9 @@ class BasicBlock:
                     if pulse.is_zphase:
                         self.zphase[pulse.fcarriername] += pulse.pcarrier
                     else:
-                        pulse.pcarrier += self.zphase[pulse.fcarriername]
+                        if pulse.fcarriername is not None:
+                            # TODO: figure out if this is intended behavior...
+                            pulse.pcarrier += self.zphase[pulse.fcarriername]
                 gate.remove_virtualz()
                 if len(gate.contents) > 0:
                     zresolved_program.append(gate)
