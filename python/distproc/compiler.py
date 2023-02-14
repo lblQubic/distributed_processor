@@ -237,6 +237,7 @@ class Compiler:
     def compile(self):
         if not self.is_scheduled:
             self.schedule()
+            print('done scheduling')
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self.proc_groups}
         for blockname, block in self._basic_blocks.items():
             compiled_block = block.compile(tstart=INITIAL_TSTART) # TODO: fix this so it's only on first block
@@ -309,8 +310,10 @@ class BasicBlock:
     def schedule(self):
         if not self.is_resolved:
             self._resolve_gates()
+            print('done resolving block')
         if not self.is_zresolved:
             self._resolve_virtualz_pulses()
+            print('done z-resolving block')
         qubit_last_t = {q: 0 for q in self.scope}
         self.scheduled_program = []
         for gate in self.resolved_program:
@@ -325,7 +328,7 @@ class BasicBlock:
                     elif isinstance(gate['qubit'], str):
                         gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
-                        qubit_last_t[qubit] += gate['t']
+                        qubit_last_t[qubit] += self._get_pulse_nclks(gate['t'])
                 elif gate['name'] == 'alu':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
@@ -347,7 +350,10 @@ class BasicBlock:
                 min_pulse_t.append(qubit_t - self._get_pulse_nclks(pulse.t0))
             gate_t = max(min_pulse_t)
             for pulse in pulses:
-                qubit_last_t[pulse.dest[:2]] = gate_t + self._get_pulse_nclks(pulse.t0) + self._get_pulse_nclks(pulse.twidth)
+                qubit_last_t[pulse.dest[:2]] = max(qubit_last_t[pulse.dest[:2]], gate_t \
+                        + self._get_pulse_nclks(pulse.t0) + max(self._get_pulse_nclks(pulse.twidth),
+                        self._fpga_config.pulse_regwrite_clks))
+
             self.scheduled_program.append({'gate': gate, 't': gate_t})
         self.delta_t = max(qubit_last_t.values())
         self.is_scheduled = True
@@ -365,9 +371,11 @@ class BasicBlock:
             if isinstance(gatedict['qubit'], str):
                 gatedict['qubit'] = [gatedict['qubit']]
             gatename = ''.join(gatedict['qubit']) + gatedict['name']
-            gate = self.qchip.gates[gatename].copy()
+            gate = self.qchip.gates[gatename]
             if 'modi' in gatedict and gatedict['modi'] is not None:
                 gate = gate.get_updated_copy(gatedict['modi'])
+            else:
+                gate = gate.copy()
             gate.dereference()
             self.resolved_program.append(gate)
         self.is_resolved = True
@@ -379,7 +387,7 @@ class BasicBlock:
         zresolved_program = []
         for gate in self.resolved_program:
             if isinstance(gate, qc.Gate):
-                gate = gate.copy()
+                # gate = gate.copy()
                 for pulse in gate.contents:
                     # TODO: fix config/encoding of these
                     if pulse.is_zphase:
@@ -408,9 +416,10 @@ class BasicBlock:
                     envdict = pulse.env.env_desc[0]
                     if 'twidth' not in envdict['paradict'].keys():
                         envdict['paradict']['twidth'] = pulse.twidth
+                    start_time = instr['t'] + self._get_pulse_nclks(pulse.t0) + tstart
                     compiled_program[qubit_scope].append(
                             {'op': 'pulse', 'freq': pulse.fcarrier, 'phase': pulse.pcarrier, 'amp': pulse.amp,
-                             'env': pulse.env.env_desc[0], 'start_time': instr['t'] + tstart, 'dest': pulse.dest})
+                             'env': pulse.env.env_desc[0], 'start_time': start_time, 'dest': pulse.dest})
                     # lofreq = self.wiremap.lofreq[pulse.dest]
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))

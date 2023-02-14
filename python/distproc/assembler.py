@@ -496,6 +496,7 @@ class GlobalAssembler:
         """
         self.assemblers = {}
         self.channel_configs = channel_configs
+        compiled_program = copy.deepcopy(compiled_program)
 
         if int(np.round(channel_configs['fpga_clk_freq'])) != int(np.round(compiled_program.fpga_config.fpga_clk_freq)):
             raise Exception('Program target clock {} Hz does not match HW clock \
