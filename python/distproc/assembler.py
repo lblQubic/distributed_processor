@@ -400,7 +400,7 @@ class SingleCoreAssembler:
         for cmd in self._program:
             cmd = copy.deepcopy(cmd)
             if cmd['op'] == 'pulse':
-                cmd.update({'env':self._env_dicts[cmd['elem']][cmd['env']]})
+                cmd.update({'env': self._env_dicts[cmd['elem']][cmd['env']]})
             cmd_list.append(cmd)
 
         return cmd_list
@@ -489,6 +489,9 @@ class SingleCoreAssembler:
 
 
 class GlobalAssembler:
+    """
+    Takes a CompiledProgram object and convert to np arrays to be written to FPGA BRAM.
+    """
 
     def __init__(self, compiled_program, channel_configs, elementconfig_class):
         """
@@ -516,12 +519,27 @@ class GlobalAssembler:
             self.assemblers[core_ind].from_list(compiled_program.program[proc_group])
 
     def _resolve_element_inds(self, single_core_program):
+        """
+        Replace the 'dest' key in pulse commands with 'elem_ind' according to self.channel_configs
+        """
         for statement in single_core_program:
             if statement['op'] == 'pulse':
                 statement['elem_ind'] = self.channel_configs[statement['dest']].elem_ind
                 del statement['dest']
 
     def get_assembled_program(self):
+        """
+        Get assembled program to load onto FPGA.
+
+        Returns
+        -------
+            assembled_prog : dict
+                keys : proc core index
+                values : dict
+                    'cmd_list' : list of proc commands (128-bit wide)
+                    'env_buffers' : list of env buffers (one per element assigned to core)
+                    'freq_buffers' : list of freq buffers
+        """
         assembled_prog = {}
         for core_ind, asm in self.assemblers.items():
             cmd_list, env_raw, freq_raw = asm.get_compiled_program()

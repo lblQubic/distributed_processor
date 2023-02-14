@@ -11,11 +11,6 @@ Instruction dict format:
         from names reserved for other operations described below. Named gate in QChip 
         object is gatename concatenated with qubitid (e.g. for the 'Q0read' gate you'd 
         use gatename='read' and qubitid='Q0'
-    measure/store instruction: 
-        {'name': 'measure', 'qubit': qubitid, 'modi': gate_param_mod_dict, 'dest': var_name}
-        can store measurement result in named variable var_name, to be used for branching, etc,
-        later on. Optional 'scope' key to specify qubits using the variable. Otherwise, scope
-        is determined automatically by compiler.
     store fproc instruction:
         {'name': 'store_fproc', 'fproc_id': function_id, 'dest': var_name, 'scope': qubits}
         stores fproc result (next available from fproc_id) in variable var_name for use 
@@ -72,7 +67,44 @@ RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtua
 INITIAL_TSTART = 5
 
 class Compiler:
+    """
+    Class for compiling a quantum circuit encoded in the above format.
+    Compilation stages:
+        1. Determine the overall program scope (i.e. qubits used) as well
+            as the scope of any declared variables
+        2. Construct basic blocks -- these are sections of code with linear 
+            control flow (no branching/jumping/looping). In general, basic 
+            blocks are scoped to some subset of qubits.
+        3. Determine the (per qubit) control flow graph which outlines
+            the possible control flow paths between the different basic blocks
+            (for that qubit/proc core)
+        4. Schedule the gates within each basic block
+        5. Schedule the full program
+        6. Compile everything down to pulse level (CompiledProgram object)
+    General usage:
+        compiler = Compiler(...)
+        compiler.schedule() # optional
+        prog = compiler.compile()
+    """
     def __init__(self, program, proc_groups, fpga_config, qchip):
+        """
+        Parameters
+        ----------
+            program : list of dicts
+                program to compile, in QubiC circuit format
+            proc_groups : str or list of tuples
+                if list of tuples, indicates the channels controlled by each 
+                core. e.g. [(Q0.qdrv, Q0.rdrv), (Q1.qdrv, Q1.rdrv)] indicates
+                that two cores are used, one for Q0 rdrv/qdrv and another for Q1.
+                if 'by_qubit', groups channels such that there is one core per
+                qubit.
+            fpga_config : distproc.hwconfig.FPGAConfig object
+                specifies FPGA clock period and execution time for relevant
+                instructions
+            qchip : qubitconfig.qchip.QChip object
+                qubit calibration configuration; specifies constituent pulses
+                for each native gate
+        """
         self._fpga_config = fpga_config
 
         self.qchip = qchip
@@ -432,6 +464,18 @@ class BasicBlock:
 class CompiledProgram:
     """
     Simple class for reading/writing compiler output.
+
+    Attributes:
+        program : dict
+            keys : proc group tuples (e.g. ('Q0.qdrv', 'Q0.rdrv', 'Q0.rdlo'))
+            values : assembly program for corresponding proc core, in the format
+                specified at the top of assembler.py. 
+
+                NOTE: there is one deviation from this format; pulse commands 
+                have a 'dest' field indicating the pulse channel, instead of
+                an 'elem_ind'
+
+        proc groups : list of proc group tuples
 
     TODO: metadata to consider adding:
         qchip version?
