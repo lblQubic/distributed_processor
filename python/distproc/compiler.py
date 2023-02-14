@@ -58,7 +58,10 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import copy
-import ipdb
+try:
+    import ipdb
+except ImportError:
+    print('warning: failed to import ipdb')
 import json
 from collections import OrderedDict
 
