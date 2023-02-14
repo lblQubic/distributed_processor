@@ -5,7 +5,6 @@ import distproc.compiler as cm
 import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
-import qubitconfig.wiremap as wm
 
 class ElementConfigTest(hw.ElementConfig):
     def __init__(self, samples_per_clk, interp_ratio):
@@ -53,27 +52,31 @@ def test_phase_resolve():
     # assert resolved_prog[4].contents[0].pcarrier == 0
 
 def test_basic_schedule():
-    pass
-    # wiremap = wm.Wiremap('wiremap_test0.json')
-    # qchip = qc.QChip('qubitcfg.json')
-    # compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, ElementConfigTest())
-    # compiler.add_statement({'name':'X90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q1'})
-    # compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q1'})
-    # compiler.add_statement({'name':'read', 'qubit':'Q0'})
-    # resolved_prog = compiler._resolve_gates(compiler._program)
-    # resolved_prog = compiler._resolve_virtualz_pulses(resolved_prog)
-    # scheduled_prog = compiler.schedule(resolved_prog)
-    # assert scheduled_prog[0]['t'] == 0
-    # assert scheduled_prog[1]['t'] == 0
-    # assert scheduled_prog[2]['t'] == 8 #scheduled_prog[0]['gate'].contents[0].twidth
-    # assert scheduled_prog[3]['t'] == 16 #scheduled_prog[0]['gate'].contents[0].twidth \
-    #         #+ scheduled_prog[2]['gate'].contents[0].twidth
-    # assert scheduled_prog[4]['t'] == 4 #scheduled_prog[1]['gate'].contents[0].twidth
-    # assert scheduled_prog[5]['t'] == 24 #scheduled_prog[0]['gate'].contents[0].twidth \
-                #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name':'X90', 'qubit': ['Q0']},
+            {'name':'X90', 'qubit': ['Q1']},
+            {'name':'X90Z90', 'qubit': ['Q0']},
+            {'name':'X90', 'qubit': ['Q0']},
+            {'name':'X90', 'qubit': ['Q1']},
+            {'name':'read', 'qubit': ['Q0']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler.schedule()
+    scheduled_prog = compiler._basic_blocks['block_0'].scheduled_program
+    assert scheduled_prog[0]['t'] == 0
+    assert scheduled_prog[1]['t'] == 0
+    assert scheduled_prog[2]['t'] == 16 #scheduled_prog[0]['gate'].contents[0].twidth
+    assert scheduled_prog[3]['t'] == 32 #scheduled_prog[0]['gate'].contents[0].twidth \
+            #+ scheduled_prog[2]['gate'].contents[0].twidth
+    assert scheduled_prog[4]['t'] == 8 #scheduled_prog[1]['gate'].contents[0].twidth
+    assert scheduled_prog[5]['t'] == 48 #scheduled_prog[0]['gate'].contents[0].twidth \
+              #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
 
 def test_basic_compile():
     #can we compile without errors
