@@ -19,6 +19,7 @@ variables:
   DRIVER_TEST_PATH: python/test
   PROC_TEST_PATH: cocotb/proc
   FPROC_LUT_TEST_PATH: cocotb/fproc_lut
+  FPROC_MEAS_TEST_PATH: cocotb/fproc_meas
   PULSE_REG_TEST_PATH: cocotb/pulse_reg
 
 stages:          # List of stages for jobs, and their order of execution
@@ -46,6 +47,13 @@ test-fproc-lut:
   stage: test
   script:
     - cd $FPROC_LUT_TEST_PATH
+    - make
+    - /usr/bin/python3 ../.check_xml.py results.xml
+
+test-fproc-meas:
+  stage: test
+  script:
+    - cd $FPROC_MEAS_TEST_PATH
     - make
     - /usr/bin/python3 ../.check_xml.py results.xml
 
