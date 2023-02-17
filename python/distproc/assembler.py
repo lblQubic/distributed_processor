@@ -102,12 +102,14 @@ class SingleCoreAssembler:
                 self.add_done_stb(**cmdargs)
             elif cmd['op'] == 'declare_freq':
                 self.add_freq(**cmdargs)
+            elif cmd['op'] == 'declare_reg':
+                self.declare_reg(**cmdargs)
             elif cmd['op'] == 'inc_qclk':
                 self.add_inc_qclk(**cmdargs)
             else:
                 raise Exception('{} not supported!'.format(cmd))
 
-    def add_alu_cmd(self, op, in0, alu_op, in1_reg=None, out_reg=None, jump_label=None, fproc_id=None, label=None):
+    def add_alu_cmd(self, op, in0, alu_op, in1_reg=None, out_reg=None, jump_label=None, func_id=None, label=None):
         assert op in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']
         if in1_reg is not None:
             assert in1_reg in self._regs.keys()
@@ -118,7 +120,7 @@ class SingleCoreAssembler:
 
         if op in ['reg_alu', 'jump_cond']:
             assert in1_reg is not None
-            assert fproc_id is None
+            assert func_id is None
             if isinstance(in0, str):
                 assert self._regs[in0]['dtype'] == self._regs[in1_reg]['dtype']
             cmd['in1_reg'] = in1_reg
@@ -139,10 +141,10 @@ class SingleCoreAssembler:
             assert jump_label is not None
             cmd['jump_label'] = jump_label
 
-        if op in ['alu_fproc', 'jump_fproc']:  # None defaults to 0, implies fproc_id not used
-            cmd['fproc_id'] = fproc_id
+        if op in ['alu_fproc', 'jump_fproc']:  # None defaults to 0, implies func_id not used
+            cmd['func_id'] = func_id
         else:
-            assert fproc_id is None
+            assert func_id is None
 
         if label is not None:
             cmd['label'] = label
