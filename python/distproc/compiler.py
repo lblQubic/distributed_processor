@@ -159,23 +159,28 @@ class Compiler:
                 falseblock = statement['false']
                 trueblock = statement['true']
 
-                jump_label_true = '{}true_{}'.format(label_prefix, branchind)
+                flattened_trueblock = self._flatten_control_flow(trueblock, label_prefix='true_'+label_prefix)
+                flattened_falseblock = self._flatten_control_flow(falseblock, label_prefix='false_'+label_prefix)
+
                 jump_label_false = '{}false_{}'.format(label_prefix, branchind)
                 jump_label_end = '{}end_{}'.format(label_prefix, branchind)
 
-                statement['true'] = jump_label_true
-                statement['false'] = jump_label_false
+                if len(flattened_trueblock) > 0:
+                    jump_label_true = '{}true_{}'.format(label_prefix, branchind)
+                    statement['true'] = jump_label_true
+                else:
+                    statement['true'] = jump_label_end
 
-                # statement['jump_label'] = jump_label_true
+                statement['false'] = jump_label_false
                 flattened_program.append(statement)
-                flattened_falseblock = self._flatten_control_flow(falseblock, label_prefix='false_'+label_prefix)
+
                 flattened_falseblock.insert(0, {'name': 'jump_label', 'label': jump_label_false, 'scope': statement['scope']})
                 flattened_falseblock.append({'name': 'jump_i', 'jump_label': jump_label_end,
                                              'scope': statement['scope']})
                 flattened_program.extend(flattened_falseblock)
 
-                flattened_trueblock = self._flatten_control_flow(trueblock, label_prefix='true_'+label_prefix)
-                flattened_trueblock.insert(0, {'name': 'jump_label', 'label': jump_label_true, 'scope': statement['scope']})
+                if len(flattened_trueblock) > 0:
+                    flattened_trueblock.insert(0, {'name': 'jump_label', 'label': jump_label_true, 'scope': statement['scope']})
                 flattened_program.extend(flattened_trueblock)
                 flattened_program.append({'name': 'jump_label', 'label': jump_label_end, 'scope': statement['scope']})
 
@@ -321,7 +326,6 @@ class Compiler:
             print('done scheduling')
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self.proc_groups}
         for blockname, block in self._basic_blocks.items():
-            ipdb.set_trace()
             compiled_block = block.compile(tstart=self._block_start_time[blockname]) # TODO: fix this so it's only on first block
             for proc_group in self.proc_groups:
                 qubit = proc_group[0].split('.')[0]
