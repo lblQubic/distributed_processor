@@ -426,20 +426,23 @@ class BasicBlock:
                 elif gate['name'] == 'alu':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
+                    self.scheduled_program.append(gate)
                 elif gate['name'] == 'branch_fproc':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks
+                    self.scheduled_program.append(gate)
                 elif gate['name'] == 'jump_i':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks #todo: change to jump_i_clks
+                    self.scheduled_program.append(gate)
                 elif gate['name'] == 'branch_var':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_cond_clks
+                    self.scheduled_program.append(gate)
                 elif gate['name'] == 'jump_label':
-                    pass
+                    self.scheduled_program.append(gate)
                 else:
                     raise Exception('{} not yet implemented'.format(gate['name']))
-                self.scheduled_program.append(gate)
                 continue
             pulses = gate.get_pulses()
             min_pulse_t = []
