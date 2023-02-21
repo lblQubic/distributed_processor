@@ -63,7 +63,7 @@ from collections import OrderedDict
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
 
-RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtualz', 'jump_i', 'alu', 'declare']
+RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtualz', 'jump_i', 'alu', 'declare', 'jump_label']
 INITIAL_TSTART = 5
 
 class Compiler:
@@ -210,6 +210,16 @@ class Compiler:
 
         self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self._fpga_config, self.qchip)
 
+        basic_blocks_nonempty = {}
+        for blockname, block in self._basic_blocks.items():
+            if not block.is_empty:
+                basic_blocks_nonempty[blockname] = block
+
+        self._basic_blocks = basic_blocks_nonempty
+        self._basic_blocks['start'] = BasicBlock([], self._fpga_config, self.qchip)
+
+
+
     def _generate_cfg(self):
         self._control_flow_graph = {q: {'start': None} for q in self.qubits}
         qubit_lastblock = {q: 'start' for q in self.qubits}
@@ -217,7 +227,7 @@ class Compiler:
             for qubit in self.qubits:
                 if qubit in block.scope:
                     if qubit_lastblock[qubit] is not None:
-                        self._control_flow_graph[qubit][qubit_lastblock[qubit]] = blockname
+                        self._control_flow_graph[qubit][qubit_lastblock[qubit]] = [blockname]
 
                     if block.dest_nodes is not None:
                         self._control_flow_graph[qubit][blockname] = block.dest_nodes
@@ -225,14 +235,53 @@ class Compiler:
                     else:
                         qubit_lastblock[qubit] = blockname
 
+        self._global_cfg = {}
+        for qubit in self.qubits:
+            for block, dest in self._control_flow_graph[qubit].items():
+                if block in self._global_cfg.keys():
+                    self._global_cfg[block].extend(dest.copy())
+                else:
+                    self._global_cfg[block] = dest.copy()
+        
+        for block, dest in self._global_cfg.items():
+            #ipdb.set_trace()
+            dest = list(set(dest))
+                    
+
+    def _get_cfg_predecessors(self):
+        predecessors = {k: [] for k in self._basic_blocks.keys()}
+        for node, dests in self._global_cfg.items():
+            for dest in dests:
+                predecessors[dest].append(node)
+
+        return predecessors
+
     def schedule(self):
-        block_min_t = {blockname: 0 for blockname in self._basic_blocks.keys()}
+        block_start_time = {blockname: None for blockname, block in self._basic_blocks.items()}
+        block_start_time['start'] = INITIAL_TSTART
+        cfg_predecessors = self._get_cfg_predecessors()
         for _, block in self._basic_blocks.items():
             block.schedule()
-        #for qubit in self.qubits:
-        #    curnode = 'start'
-        #    for node, dest in self._control_flow_graph[qubit].items():
-        #        self._control_flow_graph[qubit]
+
+        node_queue = self._global_cfg['start']
+        while node_queue:
+            ipdb.set_trace()
+            cur_node = node_queue.pop(0)
+            cur_node_predecessors = cfg_predecessors[cur_node]
+            pred_block_start_times = [block_start_time[node] for node in cur_node_predecessors]
+            if None not in pred_block_start_times:
+                pred_block_dt = [block_start_time[node] 
+                        + self._basic_blocks[node].delta_t for node in cur_node_predecessors]
+                block_start_time[cur_node] = max(pred_block_dt)
+                try:
+                    node_queue.extend(self._global_cfg[cur_node])
+                except KeyError:
+                    pass
+            else:
+                node_queue.append(cur_node)
+
+        self._block_start_time = block_start_time
+
         self.is_scheduled = True
 
     def _from_list(self, prog_list):
@@ -330,6 +379,10 @@ class BasicBlock:
         else:
             return None
 
+    @property
+    def is_empty(self):
+        return len(self._program) == 0
+
     def _scope(self):
         self.scope = []
         for statement in self._program:
@@ -367,9 +420,14 @@ class BasicBlock:
                 elif gate['name'] == 'branch_fproc':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks
+                elif gate['name'] == 'jump_i':
+                    for qubit in self.scope:
+                        qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks #todo: change to jump_i_clks
                 elif gate['name'] == 'branch_var':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_cond_clks
+                elif gate['name'] == 'jump_label':
+                    pass
                 else:
                     raise Exception('{} not yet implemented'.format(gate['name']))
                 continue
@@ -387,7 +445,10 @@ class BasicBlock:
                         self._fpga_config.pulse_regwrite_clks))
 
             self.scheduled_program.append({'gate': gate, 't': gate_t})
-        self.delta_t = max(qubit_last_t.values())
+        try:
+            self.delta_t = max(qubit_last_t.values())
+        except ValueError:
+            self.delta_t = 0
         self.is_scheduled = True
 
     def _resolve_gates(self):
@@ -441,7 +502,7 @@ class BasicBlock:
         compiled_program = {qubit: [] for qubit in self.scope}
         if not (self.is_resolved and self.is_scheduled):
             raise Exception('schedule and resolve gates first!')
-        for instr in self.scheduled_program:
+        for i, instr in enumerate(self.scheduled_program):
             if 'gate' in instr.keys():
                 for pulse in instr['gate'].get_pulses():
                     qubit_scope = pulse.dest.split('.')[0]
@@ -453,6 +514,8 @@ class BasicBlock:
                             {'op': 'pulse', 'freq': pulse.fcarrier, 'phase': pulse.pcarrier, 'amp': pulse.amp,
                              'env': pulse.env.env_desc[0], 'start_time': start_time, 'dest': pulse.dest})
                     # lofreq = self.wiremap.lofreq[pulse.dest]
+            elif instr['name'] == 'jump_label':
+                self.scheduled_program[i + 1]['label'] = instr['label']
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
         return compiled_program
