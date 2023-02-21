@@ -39,6 +39,8 @@
         {'op': 'phase_reset'}
         {'op': 'done_stb'}
 
+        {'op': 'jump_label', 'dest_label': <labelname>}
+
 """
 
 import distproc.command_gen as cg
@@ -84,7 +86,7 @@ class SingleCoreAssembler:
         self._elem_cfgs = elem_cfgs
 
     def from_list(self, cmd_list):
-        for cmd in cmd_list:
+        for i, cmd in enumerate(cmd_list):
             cmdargs = cmd.copy()
             del cmdargs['op']
             if cmd['op'] == 'pulse':
@@ -106,8 +108,18 @@ class SingleCoreAssembler:
                 self.declare_reg(**cmdargs)
             elif cmd['op'] == 'inc_qclk':
                 self.add_inc_qclk(**cmdargs)
+            elif cmd['op'] == 'jump_label':
+                cmd_list[i + 1]['label'] = cmdargs['dest_label']
+            elif cmd['op'] == 'jump_i':
+                self.add_jump_i(**cmdargs)
             else:
                 raise Exception('{} not supported!'.format(cmd))
+
+    def add_jump_i(self, jump_label, label=None):
+        cmd = {'op': 'jump_i', 'jump_label': jump_label}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
 
     def add_alu_cmd(self, op, in0, alu_op, in1_reg=None, out_reg=None, jump_label=None, func_id=None, label=None):
         assert op in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']
@@ -381,6 +393,10 @@ class SingleCoreAssembler:
 
                 cmd_list.append(cg.alu_cmd(cmd['op'], im_or_reg, in0, cmd.get('alu_op'), \
                         cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id')))
+
+            elif cmd['op'] == 'jump_i':
+                cmd['jump_addr'] = cmd_label_addrmap[cmd['jump_label']]
+                cmd_list.append(cg.jump_i(cmd['jump_addr']))
 
             elif cmd['op'] == 'pulse_reset':
                 cmd_list.append(cg.pulse_reset())

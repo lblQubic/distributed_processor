@@ -220,14 +220,13 @@ def test_multrst_schedule():
                    'jump_fproc_clks': 4,
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_rhs': 1, 
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_rhs': 1, 
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
-               {'name': 'X90', 'qubit': ['Q1']},
-               {'name': 'done_stb'}]
+               {'name': 'X90', 'qubit': ['Q1']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     compiler._make_basic_blocks()
@@ -245,3 +244,4 @@ def test_multrst_schedule():
         print('{}: {}'.format(source, dest))
 
     assert True
+    return compiler.compile()

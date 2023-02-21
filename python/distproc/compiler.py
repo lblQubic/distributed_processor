@@ -12,8 +12,8 @@ Instruction dict format:
         object is gatename concatenated with qubitid (e.g. for the 'Q0read' gate you'd 
         use gatename='read' and qubitid='Q0'
     store fproc instruction:
-        {'name': 'store_fproc', 'fproc_id': function_id, 'dest': var_name, 'scope': qubits}
-        stores fproc result (next available from fproc_id) in variable var_name for use 
+        {'name': 'store_fproc', 'func_id': function_id, 'dest': var_name, 'scope': qubits}
+        stores fproc result (next available from func_id) in variable var_name for use 
         later in the program.
     barrier: {'name': 'barrier', 'qubits': qubitid_list}
         reference all subsequent gates to a common start time after the barrier (set by 
@@ -22,10 +22,11 @@ Instruction dict format:
         synchronizes the gate time references between the cores corresponding to the qubits
         in qubitid_list.
     branch instructions: 
-        branch on variable/measurement/fproc_id. General format is:
+        branch on variable/measurement/func_id. General format is:
         {'alu_cond': <le or ge or eq>, 'cond_rhs': <reg or ival>, 'scope': <list_of_qubits> True: [instruction_list], False: [instruction_list]...}
+        ** cond_rhs is cond_lhs for fproc
 
-        branch_fproc: {'name': 'branch_fproc', 'fproc_id': function_id, 'alu_cond': <alu_cond> ...}
+        branch_fproc: {'name': 'branch_fproc', 'func_id': function_id, 'alu_cond': <alu_cond> ...}
         branch directly on latest (next available) fproc result.
 
         branch_var: {'name': 'branch_var', 'var': var_name, ...}
@@ -43,7 +44,7 @@ Instruction dict format:
     to understand the configuration and schedule these instructions using appropriate delays, 
     etc as necessary.
 
-    The measure/store instruction assumes an fproc_id mapping between qubits and raw measurements;
+    The measure/store instruction assumes an func_id mapping between qubits and raw measurements;
     this is not guaranteed to work across all FPROC implementations (TODO: maybe add software checks
     for this...)
 """
@@ -63,7 +64,8 @@ from collections import OrderedDict
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
 
-RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 'virtualz', 'jump_i', 'alu', 'declare', 'jump_label']
+RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
+               'virtualz', 'jump_i', 'alu', 'declare', 'jump_label', 'done']
 INITIAL_TSTART = 5
 
 class Compiler:
@@ -244,7 +246,6 @@ class Compiler:
                     self._global_cfg[block] = dest.copy()
         
         for block, dest in self._global_cfg.items():
-            #ipdb.set_trace()
             dest = list(set(dest))
                     
 
@@ -265,7 +266,6 @@ class Compiler:
 
         node_queue = self._global_cfg['start']
         while node_queue:
-            ipdb.set_trace()
             cur_node = node_queue.pop(0)
             cur_node_predecessors = cfg_predecessors[cur_node]
             pred_block_start_times = [block_start_time[node] for node in cur_node_predecessors]
@@ -321,7 +321,8 @@ class Compiler:
             print('done scheduling')
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self.proc_groups}
         for blockname, block in self._basic_blocks.items():
-            compiled_block = block.compile(tstart=INITIAL_TSTART) # TODO: fix this so it's only on first block
+            ipdb.set_trace()
+            compiled_block = block.compile(tstart=self._block_start_time[blockname]) # TODO: fix this so it's only on first block
             for proc_group in self.proc_groups:
                 qubit = proc_group[0].split('.')[0]
                 if qubit in compiled_block.keys():
@@ -331,6 +332,10 @@ class Compiler:
             asm_progs[proc_group].append({'op': 'done_stb'})
 
         return CompiledProgram(asm_progs, self._fpga_config)
+
+    def _resolve_duplicate_jumps(self):
+        #todo: write method to deal with multiple jump labels in a row
+        pass
 
 
 class BasicBlock:
@@ -430,6 +435,7 @@ class BasicBlock:
                     pass
                 else:
                     raise Exception('{} not yet implemented'.format(gate['name']))
+                self.scheduled_program.append(gate)
                 continue
             pulses = gate.get_pulses()
             min_pulse_t = []
@@ -513,9 +519,27 @@ class BasicBlock:
                     compiled_program[qubit_scope].append(
                             {'op': 'pulse', 'freq': pulse.fcarrier, 'phase': pulse.pcarrier, 'amp': pulse.amp,
                              'env': pulse.env.env_desc[0], 'start_time': start_time, 'dest': pulse.dest})
-                    # lofreq = self.wiremap.lofreq[pulse.dest]
+
             elif instr['name'] == 'jump_label':
-                self.scheduled_program[i + 1]['label'] = instr['label']
+                for q in instr['scope']:
+                    compiled_program[q].append({'op': 'jump_label', 'dest_label': instr['label']})
+
+            elif instr['name'] == 'done':
+                for q in instr['scope']:
+                    compiled_program[q].append({'op': 'done_stb'})
+
+            elif instr['name'] == 'branch_fproc':
+                if 'func_id' not in instr.keys():
+                    instr['func_id'] = 0
+                statement = {'op': 'jump_fproc', 'in0': instr['cond_lhs'], 'alu_op': instr['alu_cond'], 'jump_label': instr['true'], 'func_id': instr['func_id']}
+                for q in instr['scope']:
+                    compiled_program[q].append(statement)
+
+            elif instr['name'] == 'jump_i':
+                statement = {'op': 'jump_i', 'jump_label': instr['jump_label']}
+                for q in instr['scope']:
+                    compiled_program[q].append(statement)
+
             else:
                 raise Exception('{} not yet implemented'.format(instr['name']))
         return compiled_program
