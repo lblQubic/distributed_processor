@@ -8,4 +8,4 @@ All FPGA gateware is written in Verilog/SystemVerilog and can be found in [/hdl]
 
 ## Software
 
-The [distproc](https://gitlab.com/LBL-QubiC/distributed_processor/-/tree/master/python/distproc) consists of a series of tools for compiling gate-level quantum programs (including measurement-based control flow) to distributed processor machine code. The stack consists of a [compiler](https://gitlab.com/LBL-QubiC/distributed_processor/-/tree/master/python/distproc/compiler.py) and [assembler](https://gitlab.com/LBL-QubiC/distributed_processor/-/tree/master/python/distproc/assembler.py) layer.
+The software stack [(distproc)](https://gitlab.com/LBL-QubiC/distributed_processor/-/tree/master/python/distproc) consists of a series of tools for compiling gate-level quantum programs (including measurement-based control flow) to distributed processor machine code. The stack consists of a [compiler](https://gitlab.com/LBL-QubiC/distributed_processor/-/tree/master/python/distproc/compiler.py) and [assembler](https://gitlab.com/LBL-QubiC/distributed_processor/-/tree/master/python/distproc/assembler.py) layer.
