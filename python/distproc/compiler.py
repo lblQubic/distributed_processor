@@ -63,6 +63,7 @@ from collections import OrderedDict
 
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
+import distproc.hwconfig as hw
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
                'virtualz', 'jump_i', 'alu', 'declare', 'jump_label', 'done']
@@ -591,3 +592,10 @@ class CompiledProgram:
 
     def load(self, filename):
         pass
+
+
+def load_compiled_program(filename):
+    with open(filename) as f:
+        progdict = json.load(f)
+
+    return hw.FPGAConfig(**progdict['fpga_config'])
