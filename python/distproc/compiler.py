@@ -95,12 +95,13 @@ class Compiler:
         ----------
             program : list of dicts
                 program to compile, in QubiC circuit format
-            proc_groups : str or list of tuples
-                if list of tuples, indicates the channels controlled by each 
-                core. e.g. [(Q0.qdrv, Q0.rdrv), (Q1.qdrv, Q1.rdrv)] indicates
-                that two cores are used, one for Q0 rdrv/qdrv and another for Q1.
+            proc_groups : str 
                 if 'by_qubit', groups channels such that there is one core per
                 qubit.
+                if 'by_channel', groups channels such that there is one core per
+                channel per qubit.
+                if 'by_drive_ro', groups channels such that there is one core per
+                drive channel per qubit, and another for both readout channels (per qubit)
             fpga_config : distproc.hwconfig.FPGAConfig object
                 specifies FPGA clock period and execution time for relevant
                 instructions
@@ -129,6 +130,9 @@ class Compiler:
             self.proc_groups = [('{}.qdrv'.format(q)) for q in self.qubits] 
             self.proc_groups.extend([('{}.rdrv'.format(q)) for q in self.qubits])
             self.proc_groups.extend([('{}.rdlo'.format(q)) for q in self.qubits])
+        elif proc_groups == 'by_drive_ro':
+            self.proc_groups = [('{}.qdrv'.format(q)) for q in self.qubits] 
+            self.proc_groups.extend([('{}.rdrv'.format(q), '{}.rdlo'.format(q)) for q in self.qubits])
         else:
             raise ValueError('{} group not supported'.format(proc_groups))
 
@@ -367,7 +371,7 @@ class BasicBlock:
         self._fpga_config = fpga_config
         self._scope()
         self.zphase = {}
-        for qubit in self.scope:
+        for qubit in self.qubit_scope:
             for freqname in qchip.qubit_dict[qubit].keys():
                 self.zphase[qubit + '.' + freqname] = 0
         self.is_resolved = False
@@ -392,13 +396,13 @@ class BasicBlock:
         return len(self._program) == 0
 
     def _scope(self):
-        self.scope = []
+        self.qubit_scope = []
         for statement in self._program:
             if 'qubit' in statement.keys():
-                self.scope.extend(statement['qubit'])
+                self.qubit_scope.extend(statement['qubit'])
             elif 'scope' in statement.keys():
-                self.scope.extend(statement['scope'])
-        self.scope = list(np.unique(np.asarray(self.scope)))
+                self.qubit_scope.extend(statement['scope'])
+        self.qubit_scope = list(np.unique(np.asarray(self.qubit_scope)))
 
     def schedule(self):
         if not self.is_resolved:
@@ -407,7 +411,7 @@ class BasicBlock:
         if not self.is_zresolved:
             self._resolve_virtualz_pulses()
             print('done z-resolving block')
-        qubit_last_t = {q: 0 for q in self.scope}
+        qubit_last_t = {q: 0 for q in self.qubit_scope}
         self.scheduled_program = []
         for gate in self.resolved_program:
             if isinstance(gate, dict):
@@ -417,7 +421,7 @@ class BasicBlock:
                         qubit_last_t[qubit] = qubit_max_t
                 elif gate['name'] == 'delay':
                     if 'qubit' not in gate:
-                        gate['qubit'] = self.scope
+                        gate['qubit'] = self.qubit_scope
                     elif isinstance(gate['qubit'], str):
                         gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
@@ -425,19 +429,19 @@ class BasicBlock:
                 elif gate['name'] == 'declare':
                     self.scheduled_program.append(gate)
                 elif gate['name'] == 'alu':
-                    for qubit in self.scope:
+                    for qubit in self.qubit_scope:
                         qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
                     self.scheduled_program.append(gate)
                 elif gate['name'] == 'branch_fproc':
-                    for qubit in self.scope:
+                    for qubit in self.qubit_scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks
                     self.scheduled_program.append(gate)
                 elif gate['name'] == 'jump_i':
-                    for qubit in self.scope:
+                    for qubit in self.qubit_scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks #todo: change to jump_i_clks
                     self.scheduled_program.append(gate)
                 elif gate['name'] == 'branch_var':
-                    for qubit in self.scope:
+                    for qubit in self.qubit_scope:
                         qubit_last_t[qubit] += self._fpga_config.jump_cond_clks
                     self.scheduled_program.append(gate)
                 elif gate['name'] == 'jump_label':
@@ -449,7 +453,7 @@ class BasicBlock:
             min_pulse_t = []
             for pulse in pulses:
                 qubit = pulse.dest[:2]
-                assert qubit in self.scope
+                assert qubit in self.qubit_scope
                 qubit_t = qubit_last_t[qubit]
                 min_pulse_t.append(qubit_t - self._get_pulse_nclks(pulse.t0))
             gate_t = max(min_pulse_t)
@@ -513,7 +517,7 @@ class BasicBlock:
 
     def compile(self, tstart=0):
         # TODO: add twidth attribute to env, not pulse
-        compiled_program = {qubit: [] for qubit in self.scope}
+        compiled_program = {qubit: [] for qubit in self.qubit_scope}
         if not (self.is_resolved and self.is_scheduled):
             raise Exception('schedule and resolve gates first!')
         for i, instr in enumerate(self.scheduled_program):
@@ -600,7 +604,7 @@ class CompiledProgram:
             json.dumps(progdict, f, indent=4)
 
     def load(self, filename):
-        pass
+        raise NotImplementedError()
 
 
 def load_compiled_program(filename):
