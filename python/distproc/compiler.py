@@ -32,7 +32,7 @@ Instruction dict format:
         branch_var: {'name': 'branch_var', 'var': var_name, ...}
         branch on previously stored variable
     ALU instructions:
-        {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'in0': var_name, 'in1': var_name or value, 'out': output reg}
+        {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'lhs': var_name, 'rhs': var_name or value, 'out': output reg}
     variable declaration:
         {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}
 
@@ -267,10 +267,8 @@ class Compiler:
         block_start_time = {blockname: None for blockname, block in self._basic_blocks.items()}
         block_start_time['start'] = INITIAL_TSTART
         cfg_predecessors = self._get_cfg_predecessors()
-        for _, block in self._basic_blocks.items():
-            block.schedule()
-
         node_queue = self._global_cfg['start']
+
         while node_queue:
             cur_node = node_queue.pop(0)
             cur_node_predecessors = cfg_predecessors[cur_node]
@@ -424,6 +422,8 @@ class BasicBlock:
                         gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] += self._get_pulse_nclks(gate['t'])
+                elif gate['name'] == 'declare':
+                    self.scheduled_program.append(gate)
                 elif gate['name'] == 'alu':
                     for qubit in self.scope:
                         qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
@@ -535,6 +535,15 @@ class BasicBlock:
             elif instr['name'] == 'done':
                 for q in instr['scope']:
                     compiled_program[q].append({'op': 'done_stb'})
+
+            elif instr['name'] == 'declare':
+                for q in instr['scope']:
+                    compiled_program[q].append({'op': 'declare_reg', 'name': instr['var'], 'dtype': instr['dtype']})
+
+            elif instr['name'] == 'alu':
+                for q in instr['scope']:
+                    compiled_program[q].append({'op': 'reg_alu', 'in0': instr['lhs'], 'in1': instr['rhs'], 'alu_op': instr['alu_op'],
+                                                'out_reg': instr['out']})
 
             elif instr['name'] == 'branch_fproc':
                 if 'func_id' not in instr.keys():
