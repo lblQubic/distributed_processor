@@ -107,8 +107,8 @@ def test_linear_cfg():
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     compiler._make_basic_blocks()
-    compiler._generate_cfg()
     print('basic_blocks{}'.format(compiler._basic_blocks))
+    compiler._generate_cfg()
     print('cfg {}'.format(compiler._control_flow_graph))
     assert True
 
@@ -121,8 +121,8 @@ def test_onebranch_cfg():
                    'jump_fproc_clks': 4,
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_rhs': 0, 
-                'true': [{'name': 'X90', 'qubit': ['Q0']}],
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 0, 
+                'func_id': 0, 'true': [{'name': 'X90', 'qubit': ['Q0']}],
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q0', 'Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
@@ -147,10 +147,10 @@ def test_multrst_cfg():
                    'jump_fproc_clks': 4,
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_rhs': 1, 
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 1,
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_rhs': 1, 
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 0,
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
@@ -181,7 +181,6 @@ def test_linear_compile():
                {'name': 'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.schedule()
     for blockname, block in compiler._basic_blocks.items():
         print('{}: {}'.format(blockname, block))
 
@@ -189,6 +188,7 @@ def test_linear_compile():
         print('{}: {}'.format(source, dest))
     for source, dest in compiler._global_cfg.items():
         print('{}: {}'.format(source, dest))
+    compiler.schedule()
     compiledprog = compiler.compile()
     print(compiledprog)
     assert True
@@ -220,7 +220,47 @@ def test_multrst_schedule():
                    'jump_fproc_clks': 4,
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 0,
+                'true': [],
+                'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
+               {'name': 'read', 'qubit': ['Q1']},
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 1,
+                'true': [],
+                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
+               {'name': 'X90', 'qubit': ['Q1']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+
+    compiler._make_basic_blocks()
+    print('basic_blocks:')
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    compiler._generate_cfg()
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
+    for source, dest in compiler._global_cfg.items():
+        print('{}: {}'.format(source, dest))
+
+    compiler.schedule()
+    for source, dest in compiler._block_start_time.items():
+        print('{}: {}'.format(source, dest))
+
+    assert True
+    return compiler.compile()
+
+def test_multrst_schedule2():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'read', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'read', 'qubit': ['Q1']},
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 1,
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
                {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 
@@ -229,17 +269,19 @@ def test_multrst_schedule():
                {'name': 'X90', 'qubit': ['Q1']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+
     compiler._make_basic_blocks()
-    compiler._generate_cfg()
-    compiler.schedule()
     print('basic_blocks:')
     for blockname, block in compiler._basic_blocks.items():
         print('{}: {}'.format(blockname, block))
 
+    compiler._generate_cfg()
     for source, dest in compiler._control_flow_graph.items():
         print('{}: {}'.format(source, dest))
     for source, dest in compiler._global_cfg.items():
         print('{}: {}'.format(source, dest))
+
+    compiler.schedule()
     for source, dest in compiler._block_start_time.items():
         print('{}: {}'.format(source, dest))
 
