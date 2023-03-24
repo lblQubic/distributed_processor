@@ -287,3 +287,81 @@ def test_multrst_schedule2():
 
     assert True
     return compiler.compile()
+
+def test_simple_loop():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'read', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'declare', 'var': 'loopind', 'dtype': 'int', 'scope': ['Q0']},
+               {'name': 'loop', 'cond_lhs': 10, 'cond_rhs': 'loopind', 'alu_cond': 'ge', 
+                'scope': ['Q0'], 'body':[
+                    {'name': 'X90', 'qubit': ['Q0']},
+                    {'name': 'X90', 'qubit': ['Q0']}]},
+               {'name': 'read', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']}]
+
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+
+    compiler._make_basic_blocks()
+    print('basic_blocks:')
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    compiler._generate_cfg()
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
+    for source, dest in compiler._global_cfg.items():
+        print('{}: {}'.format(source, dest))
+
+    compiler.schedule()
+    for source, dest in compiler.block_end_times.items():
+        print('{}: {}'.format(source, dest))
+
+    assert True
+    return compiler.compile()
+
+def test_compound_loop():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'read', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'declare', 'var': 'loopind', 'dtype': 'int', 'scope': ['Q0']},
+               {'name': 'loop', 'cond_lhs': 10, 'cond_rhs': 'loopind', 'alu_cond': 'ge', 
+                'scope': ['Q0', 'Q1'], 'body':[
+                    {'name': 'X90', 'qubit': ['Q0']},
+                    {'name': 'X90', 'qubit': ['Q0']}]},
+               {'name': 'CR', 'qubit': ['Q1', 'Q0']},
+               {'name': 'X90', 'qubit': ['Q1']}]
+
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+
+    compiler._make_basic_blocks()
+    print('basic_blocks:')
+    for blockname, block in compiler._basic_blocks.items():
+        print('{}: {}'.format(blockname, block))
+
+    compiler._generate_cfg()
+    for source, dest in compiler._control_flow_graph.items():
+        print('{}: {}'.format(source, dest))
+    for source, dest in compiler._global_cfg.items():
+        print('{}: {}'.format(source, dest))
+
+    compiler.schedule()
+    for source, dest in compiler.block_end_times.items():
+        print('{}: {}'.format(source, dest))
+
+    assert True
+    return compiler.compile()

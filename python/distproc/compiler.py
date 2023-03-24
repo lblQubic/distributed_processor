@@ -81,7 +81,7 @@ import distproc.hwconfig as hw
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
                'virtualz', 'jump_i', 'alu', 'declare', 'jump_label', 'done',
-               'jump_fproc', 'jump_cond', 'loop_end']
+               'jump_fproc', 'jump_cond', 'loop_end', 'loop']
 INITIAL_TSTART = 5
 
 class Compiler:
@@ -169,7 +169,7 @@ class Compiler:
         blockind = 1
         cur_block = []
         for statement in self._program_ir:
-            if statement['name'] in ['jump_fproc', 'jump_var', 'jump_i']:
+            if statement['name'] in ['jump_fproc', 'jump_cond', 'jump_i']:
                 self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self.proc_group_type, self._fpga_config, self.qchip)
                 if statement['jump_label'].split('_')[-1] == 'loopctrl': #todo: break this out
                     ctrl_blockname = '{}_ctrl'.format(statement['jump_label'])
@@ -228,7 +228,7 @@ class Compiler:
                     self._global_cfg[block] = dest.copy()
         
         for block, dest in self._global_cfg.items():
-            dest = list(set(dest))
+            self._global_cfg[block] = list(set(dest))
                     
 
     def _get_cfg_predecessors(self):
@@ -236,7 +236,7 @@ class Compiler:
         for node, dests in self._global_cfg.items():
             for dest in dests:
                 # check for loops -- todo: break this out
-                if dest.split('_')[-1] == 'loopctrl' and node.split('_') == 'ctrl':
+                if dest.split('_')[-1] == 'loopctrl' and node.split('_')[-1] == 'ctrl':
                     continue
                 predecessors[dest].append(node)
 
@@ -275,17 +275,17 @@ class Compiler:
                 if cur_node.split('_')[-1] == 'loopctrl': #start a loop
                     loop_dict[cur_node] = {'start_time': max([t for t in block_start_times.values()])}
                     block_prev_loops[cur_node] = {qubit: block_prev_loops[cur_node][qubit] + (cur_node,) 
-                                                  for qubit in self._basic_blocks[cur_node]._qubit_scope}
+                                                  for qubit in self._basic_blocks[cur_node].qubit_scope}
 
                 elif cur_node[-13:] == 'loopctrl_ctrl':
                     # end loop
-                    loopname = cur_node[-5:]
-                    loop_dict[loopname]['delta_t'] = max(block_start_times.values) - loop_dict[loopname]['start_time']
+                    loopname = cur_node[:-5]
+                    loop_dict[loopname]['delta_t'] = max(block_start_times.values()) - loop_dict[loopname]['start_time']
                     for qubit in self._basic_blocks[cur_node].qubit_scope:
-                        block_end_times[cur_node][qubit] = loop_dict['start_time']
+                        block_end_times[cur_node][qubit] = loop_dict[loopname]['start_time']
 
                 try:
-                    node_queue.extend(self._global_cfg[cur_node])
+                    node_queue.extend([node for node in self._global_cfg[cur_node] if not self._basic_blocks[node].is_scheduled])
                 except KeyError:
                     pass
             else:
@@ -308,6 +308,7 @@ class Compiler:
         self.qubits = list(np.unique(np.asarray(self.qubits)))
 
     def _lint_and_scopevars(self):
+        #todo: add in loop stuff here
         vars = {}
         for statement in self._program:
             if 'qubit' in statement.keys():
@@ -325,6 +326,7 @@ class Compiler:
                     assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
                     assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
                 statement['scope'] = vars[statement['out']]['scope']
+
 
     def compile(self):
         if not self.is_scheduled:
@@ -425,8 +427,8 @@ class BasicBlock:
             self._resolve_virtualz_pulses()
             print('done z-resolving block')
         #qubit_last_t = {q: 0 for q in self.qubit_scope}
-        for qubit in qubit_loop_dict.keys():
-            assert qubit_loop_dict[qubit] == list(qubit_loop_dict.values())[0]
+
+        qubit_last_t = qubit_last_t.copy()
 
         self.scheduled_program = []
         for gate in self.resolved_program:
@@ -470,10 +472,12 @@ class BasicBlock:
                     raise Exception('{} not yet implemented'.format(gate['name']))
                 continue
             pulses = gate.get_pulses()
+            loop_history = qubit_loop_dict[pulses[0].dest.split('.')[0]]
             min_pulse_t = []
             for pulse in pulses:
-                qubit = pulse.dest[:2]
+                qubit = pulse.dest.split('.')[0]
                 assert qubit in self.qubit_scope
+                assert qubit_loop_dict[qubit] == loop_history
                 qubit_t = qubit_last_t[qubit]
                 min_pulse_t.append(qubit_t - self._get_pulse_nclks(pulse.t0))
             gate_t = max(min_pulse_t)
@@ -584,8 +588,8 @@ class BasicBlock:
                         compiled_program[grp].append(statement)
 
             elif instr['name'] == 'jump_cond':
-                statement = {'op': 'jump_fproc', 'in0': instr['cond_lhs'], 'alu_op': instr['alu_cond'], 
-                             'jump_label': instr['jump_label'], 'func_id': instr['func_id']}
+                statement = {'op': 'jump_cond', 'in0': instr['cond_lhs'], 'alu_op': instr['alu_cond'], 
+                             'jump_label': instr['jump_label'], 'in1': instr['cond_rhs']}
                 for q in instr['scope']:
                     for grp in proc_groups_byqubit[q]:
                         compiled_program[grp].append(statement)
@@ -597,7 +601,7 @@ class BasicBlock:
                         compiled_program[grp].append(statement)
 
             elif instr['name'] == 'loop_end':
-                statement = {'op': 'inc_qclk', 'in0': loop_dict[instr['loop_label']['delta_t']]}
+                statement = {'op': 'inc_qclk', 'in0': -loop_dict[instr['loop_label']]['delta_t']}
                 for q in instr['scope']:
                     for grp in proc_groups_byqubit[q]:
                         compiled_program[grp].append(statement)
@@ -695,11 +699,11 @@ def generate_ir_program(program, label_prefix=''):
             loop_label = '{}loop_{}_loopctrl'.format(label_prefix, branchind)
 
             flattened_program.append({'name': 'jump_label', 'label': loop_label, 'scope': statement['scope']})
-            flattened_program.append({'name': 'barrier', 'scope': statement['scope']})
+            flattened_program.append({'name': 'barrier', 'qubit': statement['scope']})
             flattened_program.extend(flattened_body)
             flattened_program.append({'name': 'loop_end', 'loop_label': loop_label, 'scope': statement['scope']})
             flattened_program.append({'name': 'jump_cond', 'cond_lhs': statement['cond_lhs'], 'cond_rhs': statement['cond_rhs'], 
-                                      'alu_cond': statement['alu_cond'], 'jump_label': loop_label})
+                                      'alu_cond': statement['alu_cond'], 'jump_label': loop_label, 'scope': statement['scope']})
             branchind += 1
 
         elif statement['name'] == 'alu_op':

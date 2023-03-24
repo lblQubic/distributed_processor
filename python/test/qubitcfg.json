@@ -1104,6 +1104,25 @@
                 "twidth": 2e-06
             }
         ],
+        "Q1Q0CR": [
+            {
+                "dest": "Q1.qdrv",
+                "pcarrier": 0.0,
+                "t0": 0.0,
+                "twidth": 0.0,
+                "env": [
+                    {
+                        "env_func": "cos_edge_square",
+                        "paradict": {
+                            "ramp_fraction": 0.25,
+                            "ramp_length": 3.2e-08
+                        }
+                    }
+                ],
+                "fcarrier": "Q0.freq",
+                "amp": 0.5
+            }
+        ],
         "Q5Q4CR": [
             {
                 "dest": "Q5.qdrv",
