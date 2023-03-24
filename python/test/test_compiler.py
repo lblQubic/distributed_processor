@@ -243,7 +243,7 @@ def test_multrst_schedule():
         print('{}: {}'.format(source, dest))
 
     compiler.schedule()
-    for source, dest in compiler._block_start_time.items():
+    for source, dest in compiler.block_end_times.items():
         print('{}: {}'.format(source, dest))
 
     assert True
@@ -263,7 +263,7 @@ def test_multrst_schedule2():
                {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 1,
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 0,
                 'true': [],
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
@@ -282,7 +282,7 @@ def test_multrst_schedule2():
         print('{}: {}'.format(source, dest))
 
     compiler.schedule()
-    for source, dest in compiler._block_start_time.items():
+    for source, dest in compiler.block_end_times.items():
         print('{}: {}'.format(source, dest))
 
     assert True
