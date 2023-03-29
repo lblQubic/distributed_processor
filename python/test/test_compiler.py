@@ -69,13 +69,13 @@ def test_basic_schedule():
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     compiler.schedule()
     scheduled_prog = compiler._basic_blocks['block_0'].scheduled_program
-    assert scheduled_prog[0]['t'] == 0
-    assert scheduled_prog[1]['t'] == 0
-    assert scheduled_prog[2]['t'] == 16 #scheduled_prog[0]['gate'].contents[0].twidth
-    assert scheduled_prog[3]['t'] == 32 #scheduled_prog[0]['gate'].contents[0].twidth \
+    assert scheduled_prog[0]['t'] == 5
+    assert scheduled_prog[1]['t'] == 5
+    assert scheduled_prog[2]['t'] == 21 #scheduled_prog[0]['gate'].contents[0].twidth
+    assert scheduled_prog[3]['t'] == 37 #scheduled_prog[0]['gate'].contents[0].twidth \
             #+ scheduled_prog[2]['gate'].contents[0].twidth
-    assert scheduled_prog[4]['t'] == 8 #scheduled_prog[1]['gate'].contents[0].twidth
-    assert scheduled_prog[5]['t'] == 48 #scheduled_prog[0]['gate'].contents[0].twidth \
+    assert scheduled_prog[4]['t'] == 13 #scheduled_prog[1]['gate'].contents[0].twidth
+    assert scheduled_prog[5]['t'] == 53 #scheduled_prog[0]['gate'].contents[0].twidth \
               #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
 
 def test_basic_compile():
