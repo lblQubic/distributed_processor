@@ -90,14 +90,15 @@ class Compiler:
     Compilation stages:
         1. Determine the overall program scope (i.e. qubits used) as well
             as the scope of any declared variables
-        2. Construct basic blocks -- these are sections of code with linear 
+        2. Convert program to intermediate representation: at the moment,
+            this is just flattening the control flow heirarchy to jump statements
+        3. Construct basic blocks -- these are sections of code with linear 
             control flow (no branching/jumping/looping). In general, basic 
             blocks are scoped to some subset of qubits.
-        3. Determine the (per qubit) control flow graph which outlines
+        4. Determine the control flow graph which outlines
             the possible control flow paths between the different basic blocks
             (for that qubit/proc core)
-        4. Schedule the gates within each basic block
-        5. Schedule the full program
+        5. Schedule all pulses
         6. Compile everything down to pulse level (CompiledProgram object)
     General usage:
         compiler = Compiler(...)
@@ -110,7 +111,7 @@ class Compiler:
         ----------
             program : list of dicts
                 program to compile, in QubiC circuit format
-            proc_groups : str 
+            proc_grouping : str 
                 if 'by_qubit', groups channels such that there is one core per
                 qubit.
                 if 'by_channel', groups channels such that there is one core per
@@ -161,6 +162,9 @@ class Compiler:
 
 
     def _make_basic_blocks(self):
+        """
+        Generates a dict of BasicBlock objects, stored in self._basic_blocks
+        """
         self._basic_blocks = OrderedDict()
         self._basic_blocks['start'] = BasicBlock([], self.proc_group_type, self._fpga_config, self.qchip)
         self._basic_blocks['start'].qubit_scope = self.qubits
@@ -196,6 +200,11 @@ class Compiler:
         self._basic_blocks = basic_blocks_nonempty
 
     def _generate_cfg(self):
+        """
+        Generates a global and per-qubit control flow graph of the (IR) program. 
+        Graph is stored in a dictionary, where graph['source_block'] has a list 
+        of destination block names.
+        """
         self._control_flow_graph = {q: {'start': ['next_block']} for q in self.qubits}
         qubit_lastblock = {q: 'start' for q in self.qubits}
         for blockname, block in self._basic_blocks.items():
@@ -538,6 +547,9 @@ class BasicBlock:
         self.resolved_program = zresolved_program
 
     def compile(self, loop_dict):
+        """
+        Converts gates to pulses, and all IR instructions to proc ASM code
+        """
         # TODO: add twidth attribute to env, not pulse
         proc_groups_byqubit = generate_proc_groups(self.proc_group_type, self.qubit_scope, perqubit=True)
         proc_groups_flat = [grp for grouplist in proc_groups_byqubit.values() for grp in grouplist]
