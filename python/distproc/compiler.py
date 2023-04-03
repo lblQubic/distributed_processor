@@ -43,6 +43,7 @@ Instruction dict format:
 
         {'name': 'loop', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>, 
             'body': [instruction_list]}
+        repeats the instruction list 'body' when condition is true
 
     ALU instructions:
         {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'lhs': var_name, 'rhs': var_name or value, 'out': output reg}
@@ -628,8 +629,9 @@ class BasicBlock:
 
 def generate_ir_program(program, label_prefix=''):
     """
-    Generates an intermediate representation with control flow
-    resolved into simple conditional jump statements
+    Generates an intermediate representation with control flow resolved into simple 
+    conditional jump statements. This function is recursive to allow for nested control 
+    flow structures.
 
     instruction format is the same as compiler input, with the following modifications:
 
