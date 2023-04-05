@@ -179,6 +179,13 @@
                 "twidth": 3.2e-08
             }
         ],
+        "Q0Z90": [
+            {
+                "pcarrier": "np.pi/2",
+                "fcarrier": "Q0.freq",
+                "t0": 0.0
+            }
+        ],
         "Q0X90Z90": [
             {
                 "dest": "Q0.qdrv",

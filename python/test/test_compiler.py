@@ -298,6 +298,8 @@ def test_simple_loop():
     program = [{'name': 'X90', 'qubit': ['Q0']},
                {'name': 'read', 'qubit': ['Q0']},
                {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'Z90', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q0']},
                {'name': 'declare', 'var': 'loopind', 'dtype': 'int', 'scope': ['Q0']},
                {'name': 'loop', 'cond_lhs': 10, 'cond_rhs': 'loopind', 'alu_cond': 'ge', 
                 'scope': ['Q0'], 'body':[
