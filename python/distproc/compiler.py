@@ -1,19 +1,40 @@
 """
 Compiler layer for distributed processor. Program is input as a list of 
-dicts encoding gates + branching operations. Each instruction dict has a 
+dicts encoding gates and processor instructions. Each instruction dict has a 
 'name' key followed by other instruction specific keys. 
-
-TODO: add coredest to wiremap and parse this out in compiler
 
 Instruction dict format:
     gate instructions: 
-        {'name': gatename, 'qubit': qubitid, 'modi': gate_param_mod_dict}
+        {'name': gatename, 'qubit': qubitid, 'modi': gate_param_mod_dict, 'reg_param': (pulseind, attribute, name)}
 
         gatename can be any named gate in the QChip object (qubitconfig.json), aside
         from names reserved for other operations described below. Named gate in QChip 
         object is gatename concatenated with qubitid (e.g. for the 'Q0read' gate you'd 
-        use gatename='read' and qubitid='Q0'
+        use gatename='read' and qubitid='Q0'. 'modi' and 'reg_param' are optional.
 
+    frequency declaration:
+        {'name': 'declare_freq', 'freq': freq_in_Hz, scope: <list_of_qubits_or_channels>, 'freq_ind': <hw_index>}
+
+        Declares a frequency to be used by the specified qubits or channels. 'freq_ind' can subsequently be 
+        referenced by a register (i.e. if 'reg_param' is set to parameterize a pulse frequency). If 'freq_ind' 
+        is not set in the instruction, it is inferred implicitly by incrementing the previous freq_ind, starting from 
+        0. Note that scheduling a gate/pulse with a previously unused frequency will implicitly cause it to
+        be declared in the assembly program.
+
+    z-phase parameterization:
+        By default, all z-gates are implemented in software; all X90, etc pulse phases are set according to
+        the preceding z-gates, and the z-gate instructions are removed from the program. However, this
+        is not always possible when z-gates need to be applied conditionally. A z-phase can be bound
+        to a processor register using the following instruction:
+
+        {'name': 'bind_phase', 'freq': fcarrier_name, 'reg': reg_name}
+
+        If this instruction is used, all z-gates applied to fcarrier_name (frequency referenced in qchip;
+        e.g. Q0.freq, Q1.readfreq, etc), are done in realtime on the processor, and all pulses using
+        fcarrier_name are phase parameterized by reg_name. reg_name must be declared separately.
+
+        (this seems more like a compiler directive?)
+        
     read fproc instruction:
         {'name': 'read_fproc', 'func_id': function_id, 'dest': var_name, 'scope': qubits}
 
