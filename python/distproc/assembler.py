@@ -475,7 +475,7 @@ class SingleCoreAssembler:
         env_word_maps = []
         for i in range(self.n_element):
             d, m = self._get_env_buffer(i)
-            env_data.append(d)
+            env_data.append(d.tobytes())
             env_word_maps.append(m)
 
         return env_data, env_word_maps
@@ -493,7 +493,7 @@ class SingleCoreAssembler:
         freq_ind_maps = []
         for i in range(self.n_element):
             d, m = self._get_freq_buffer(i)
-            freq_data.append(d)
+            freq_data.append(d.tobytes())
             freq_ind_maps.append(m)
 
         return freq_data, freq_ind_maps
