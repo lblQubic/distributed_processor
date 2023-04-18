@@ -529,7 +529,7 @@ class GlobalAssembler:
             core_ind = str(channel_configs[proc_group[0]].core_ind)
             for chan in proc_group:
                 chan_cfg = channel_configs[chan]
-                assert chan_cfg.core_ind == core_ind
+                assert chan_cfg.core_ind == int(core_ind)
                 elem_cfgs[chan_cfg.elem_ind] = elementconfig_class(**chan_cfg.elem_params)
             elem_cfgs = [elem_cfgs[elem_ind] for elem_ind in sorted(elem_cfgs.keys())]
 
@@ -562,6 +562,6 @@ class GlobalAssembler:
         assembled_prog = {}
         for core_ind, asm in self.assemblers.items():
             cmd_buf, env_raw, freq_raw = asm.get_compiled_program()
-            assembled_prog[core_ind] = {'cmd_list': cmd_buf, 'env_buffers': env_raw, 'freq_buffers': freq_raw}
+            assembled_prog[core_ind] = {'cmd_buf': cmd_buf, 'env_buffers': env_raw, 'freq_buffers': freq_raw}
 
         return assembled_prog
