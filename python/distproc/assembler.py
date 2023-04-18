@@ -475,6 +475,8 @@ class SingleCoreAssembler:
         env_word_maps = []
         for i in range(self.n_element):
             d, m = self._get_env_buffer(i)
+            # todo: figure out if dtype should be enforced in hwconfig
+            d = np.array(d, dtype=np.uint32)
             env_data.append(d.tobytes())
             env_word_maps.append(m)
 
@@ -493,6 +495,7 @@ class SingleCoreAssembler:
         freq_ind_maps = []
         for i in range(self.n_element):
             d, m = self._get_freq_buffer(i)
+            d = np.array(d, dtype=np.uint32)
             freq_data.append(d.tobytes())
             freq_ind_maps.append(m)
 
