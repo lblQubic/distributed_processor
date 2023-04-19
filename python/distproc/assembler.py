@@ -471,6 +471,10 @@ class SingleCoreAssembler:
         return env_raw, env_word_map
     
     def _get_env_buffers(self):
+        """
+        Get all env_buffers and index maps for each element connected to this core. 
+        Env buffers are converted to packed byte array
+        """
         env_data = []
         env_word_maps = []
         for i in range(self.n_element):
@@ -491,6 +495,10 @@ class SingleCoreAssembler:
         return freq_buffer, freq_ind_map
 
     def _get_freq_buffers(self):
+        """
+        Get all freq_buffers and index maps for each element connected to this core. 
+        Freq buffers are converted to packed byte array
+        """
         freq_data = []
         freq_ind_maps = []
         for i in range(self.n_element):
