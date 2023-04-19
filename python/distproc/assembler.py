@@ -326,7 +326,7 @@ class SingleCoreAssembler:
     def get_compiled_program(self):
         # consider splitting this into a few different functions
         # at top case level
-        cmd_list = []
+        cmd_buf = bytes()
         freq_list = []
         env_raw, env_word_map = self._get_env_buffers()
         cmd_label_addrmap = self._get_cmd_labelmap()
@@ -364,7 +364,7 @@ class SingleCoreAssembler:
                 if 'elem' in cmd.keys():
                     pulseargs['cfg_word'] = self._elem_cfgs[cmd['elem']].get_cfg_word(cmd['elem'], None)
                     
-                cmd_list.append(cg.pulse_cmd(**pulseargs))
+                cmd_buf += cg.pulse_cmd(**pulseargs).to_bytes(16, 'little')
 
             elif cmd['op'] in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']:
                 if isinstance(cmd['in0'], str):
@@ -391,23 +391,24 @@ class SingleCoreAssembler:
                 if 'in1_reg' in cmd.keys():
                     cmd['in1_reg'] = self._regs[cmd['in1_reg']]['index']
 
-                cmd_list.append(cg.alu_cmd(cmd['op'], im_or_reg, in0, cmd.get('alu_op'), \
-                        cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id')))
+                cmd_raw = cg.alu_cmd(cmd['op'], im_or_reg, in0, cmd.get('alu_op'),
+                        cmd.get('in1_reg'), cmd.get('out_reg'), cmd.get('jump_addr'), cmd.get('func_id'))
+                cmd_buf += cmd_raw.to_bytes(16, 'little')
 
             elif cmd['op'] == 'jump_i':
                 cmd['jump_addr'] = cmd_label_addrmap[cmd['jump_label']]
-                cmd_list.append(cg.jump_i(cmd['jump_addr']))
+                cmd_buf += cg.jump_i(cmd['jump_addr']).to_bytes(16, 'little')
 
             elif cmd['op'] == 'pulse_reset':
-                cmd_list.append(cg.pulse_reset())
+                cmd_buf += cg.pulse_reset().to_bytes(16, 'little')
 
             elif cmd['op'] == 'done_stb':
-                cmd_list.append(cg.done_cmd())
+                cmd_buf += cg.done_cmd().to_bytes(16, 'little')
 
             else:
                 raise Exception('{} not supported'.format(cmd['op']))
 
-        return cmd_list, env_raw, freq_raw
+        return cmd_buf, env_raw, freq_raw
 
     def get_sim_program(self):
         """
@@ -470,11 +471,17 @@ class SingleCoreAssembler:
         return env_raw, env_word_map
     
     def _get_env_buffers(self):
+        """
+        Get all env_buffers and index maps for each element connected to this core. 
+        Env buffers are converted to packed byte array
+        """
         env_data = []
         env_word_maps = []
         for i in range(self.n_element):
             d, m = self._get_env_buffer(i)
-            env_data.append(d)
+            # todo: figure out if dtype should be enforced in hwconfig
+            d = np.array(d, dtype=np.uint32)
+            env_data.append(d.tobytes())
             env_word_maps.append(m)
 
         return env_data, env_word_maps
@@ -488,11 +495,16 @@ class SingleCoreAssembler:
         return freq_buffer, freq_ind_map
 
     def _get_freq_buffers(self):
+        """
+        Get all freq_buffers and index maps for each element connected to this core. 
+        Freq buffers are converted to packed byte array
+        """
         freq_data = []
         freq_ind_maps = []
         for i in range(self.n_element):
             d, m = self._get_freq_buffer(i)
-            freq_data.append(d)
+            d = np.array(d, dtype=np.uint32)
+            freq_data.append(d.tobytes())
             freq_ind_maps.append(m)
 
         return freq_data, freq_ind_maps
@@ -525,10 +537,10 @@ class GlobalAssembler:
 
         for proc_group in compiled_program.proc_groups:
             elem_cfgs = {}
-            core_ind = channel_configs[proc_group[0]].core_ind
+            core_ind = str(channel_configs[proc_group[0]].core_ind)
             for chan in proc_group:
                 chan_cfg = channel_configs[chan]
-                assert chan_cfg.core_ind == core_ind
+                assert chan_cfg.core_ind == int(core_ind)
                 elem_cfgs[chan_cfg.elem_ind] = elementconfig_class(**chan_cfg.elem_params)
             elem_cfgs = [elem_cfgs[elem_ind] for elem_ind in sorted(elem_cfgs.keys())]
 
@@ -560,7 +572,7 @@ class GlobalAssembler:
         """
         assembled_prog = {}
         for core_ind, asm in self.assemblers.items():
-            cmd_list, env_raw, freq_raw = asm.get_compiled_program()
-            assembled_prog[core_ind] = {'cmd_list': cmd_list, 'env_buffers': env_raw, 'freq_buffers': freq_raw}
+            cmd_buf, env_raw, freq_raw = asm.get_compiled_program()
+            assembled_prog[core_ind] = {'cmd_buf': cmd_buf, 'env_buffers': env_raw, 'freq_buffers': freq_raw}
 
         return assembled_prog
