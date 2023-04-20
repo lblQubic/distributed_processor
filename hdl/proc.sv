@@ -45,8 +45,6 @@ module proc
     wire phase_write_sel; //0 for i, 1 for r
     wire freq_write_sel;
     wire env_write_sel;
-    wire write_pulse_en;
-    wire instr_load_en;
 
     assign cmd_buf_out = cmd_iface.cmd_read;
     
@@ -59,13 +57,16 @@ module proc
     //wire reg_write_sel;
     wire[1:0] inst_ptr_en_sel;
     wire[1:0] inst_ptr_load_en_sel;
-    wire qclk_load_en;
+    wire qclk_load_en; //enable loading new value in qclk
     reg cstrobe;
 
-    wire qclk_resetin;
-    wire inst_ptr_resetin;
-    wire inst_ptr_load_en;
-    wire inst_ptr_enable;
+    wire write_pulse_en; //enable writes to the local pulse register
+    wire instr_load_en; //enable loading a new command into local buffer for decoding
+    wire qclk_reset; //global qclk reset
+    wire qclk_reset_ctrl; //qclk reset from control unit (currently just sync interface)
+
+    wire inst_ptr_load_en; //enable loading a new address into the instruction pointer
+    wire inst_ptr_enable; //enable the instruction pointer to increment/output a new value
 
     //local cmd buffer
     reg[CMD_WIDTH-1:0] local_cmd;
@@ -115,12 +116,15 @@ module proc
     //        alu_in1 = fproc_data;
     //end
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
-	reg [4:0] reset_sr=0;
-	reg dummy_resetsr=0;
-	always @(posedge clk) begin
-		{dummy_resetsr,reset_sr}<={reset_sr,reset};
+    reg [4:0] reset_sr=0;
+    reg dummy_resetsr=0;
+    always @(posedge clk) begin
+	{dummy_resetsr,reset_sr}<={reset_sr,reset};
         cstrobe <= (qclk_out == pulse_cmd_time) & c_strobe_enable;
-	end
+    end
+
+    //qclk reset logic
+    assign qclk_reset = qclk_reset_ctrl || (|reset_sr[3:0]);
 
     //instantiate modules
     //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
@@ -133,12 +137,12 @@ module proc
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
     ctrl #(.MEM_READ_CYCLES(CMD_MEM_READ_LATENCY)) ctu(.clk(clk), .reset(reset), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
-              .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
+              .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_ready(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
-              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),
-              .sync_out_ready(sync.enable), .fproc_enable(fproc.enable), .write_pulse_en(write_pulse_en), .done_gate(done_gate), .pulse_reset(pulseout.reset));
+              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .qclk_reset(qclk_reset_ctrl), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),
+              .sync_enable(sync.enable), .fproc_enable(fproc.enable), .write_pulse_en(write_pulse_en), .done_gate(done_gate), .pulse_reset(pulseout.reset));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
-    qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(|reset_sr[3:0]), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
+    qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(qclk_reset), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
     pulse_reg #(.DATA_WIDTH(DATA_WIDTH)) pulsereg(.clk(clk), .pulse_cmd_in(pulse_cmd_i), .reg_in(reg_file_out0), 
         .pulse_write_en(write_pulse_en), .cstrobe_in(cstrobe), .pulseout(pulseout));
 
