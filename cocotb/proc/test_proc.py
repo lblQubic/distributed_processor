@@ -578,7 +578,7 @@ async def pulse_sync_test(dut):
     env_read_list = []
     pulse_read_times = []
 
-    for i in range(40):
+    for i in range(45):
         if(dut.cstrobe_out.value == 1):
             freq_read_list.append(dut.freq.value)
             phase_read_list.append(dut.phase.value)
