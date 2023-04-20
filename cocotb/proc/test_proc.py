@@ -386,7 +386,7 @@ async def jump_i_cond_test(dut):
 @cocotb.test()
 async def inc_qclk_i_test(dut):
     cmd_list = []
-    cmd_wait_range = 20
+    cmd_wait_range = 25
     qclk_inc_val = random.randint(-2**31, 2**31-1-cmd_wait_range)
     qclk_wait_t = random.randint(0, cmd_wait_range-1)
 
