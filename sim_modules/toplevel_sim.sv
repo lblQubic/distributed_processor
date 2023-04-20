@@ -12,7 +12,7 @@ module toplevel_sim#(
     parameter MEM_READ_LATENCY=2)(
     input clk,
     input reset,
-    input sync_enable,
+    input sync_ready,
     input fproc_ready,
     input[DATA_WIDTH-1:0] fproc_data,
     input[CMD_ADDR_WIDTH-1:0] cmd_write_addr,
@@ -25,7 +25,7 @@ module toplevel_sim#(
     output[CFG_WIDTH-1:0] cfg,
     output cstrobe_out,
     output[SYNC_BARRIER_WIDTH-1:0] sync_barrier,
-    output sync_barrier_en_out,
+    output sync_enable,
     output[SYNC_BARRIER_WIDTH-1:0] fproc_id,
     output fproc_en_out,
     output pulse_reset,
@@ -49,8 +49,8 @@ module toplevel_sim#(
     assign fproc_id = fproc.id;
     assign fproc_en_out = fproc.enable;
     assign sync_barrier = sync.barrier;
-    assign sync_barrier_en_out = sync.enable;
-    assign sync.ready = sync_enable;
+    assign sync_enable = sync.enable;
+    assign sync.ready = sync_ready;
 
   
     proc #(.DATA_WIDTH(DATA_WIDTH), .CMD_WIDTH(CMD_WIDTH), .CMD_MEM_READ_LATENCY(MEM_READ_LATENCY),

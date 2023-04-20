@@ -323,6 +323,8 @@ def done_cmd():
 def pulse_reset():
     return opcodes['pulse_reset'] << 123
 
+def sync(barrier_id):
+    return (opcodes['sync'] << 123) + (barrier_id << 112)
 
 def twos_complement(value, nbits=32):
     """
