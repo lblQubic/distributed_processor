@@ -735,6 +735,7 @@ class CompiledProgram:
     Attributes:
         program : dict
             keys : proc group tuples (e.g. ('Q0.qdrv', 'Q0.rdrv', 'Q0.rdlo'))
+                this is a tuple of channels that are driven by that proc core
             values : assembly program for corresponding proc core, in the format
                 specified at the top of assembler.py. 
 
@@ -749,7 +750,7 @@ class CompiledProgram:
         git revision?
     """
 
-    def __init__(self, program, fpga_config):
+    def __init__(self, program, fpga_config=None):
         self.fpga_config = fpga_config
         self.program = program
 
@@ -758,7 +759,10 @@ class CompiledProgram:
         return self.program.keys()
 
     def save(self, filename):
-        progdict = {'fpga_config': self.fpga_config.__dict__, **self.program}
+        progdict = copy.deepcopy(self.program)
+        if self.fpga_config is not None:
+            progdict['fpga_config'] = self.fpga_config.__dict__
+
         with open(filename) as f:
             json.dumps(progdict, f, indent=4)
 

@@ -13,8 +13,9 @@
 
     pulse cmd:
         {'op': 'pulse', 'freq': <freq_in_Hz, regname>, 'env': <np_array, dict, regname>, 'phase': <phaserad, regname>,
-            'amp': <float (normalized to 1), regname>, 'start_time': <starttime_in_clks>, 'elem_ind': <int>, 'label':<string>} 
-            #todo: should elem_ind be replaced by chan name/string?
+            'amp': <float (normalized to 1), regname>, 'start_time': <starttime_in_clks>, 'dest': <destname>, 'label':<string>} 
+        Note: if feeding program dict to SingleUnitAssembler (as opposed to generating a CompiledProgram object and compiling 
+        using GlobalAssembler) 'dest' is 'elem_ind' and corresponds to the elem_ind of dest in the ChannelConfig object.
 
         ways to specify the envelope:
             1. numpy array of samples, normalized to 1
@@ -531,7 +532,8 @@ class GlobalAssembler:
         self.channel_configs = channel_configs
         compiled_program = copy.deepcopy(compiled_program)
 
-        if int(np.round(channel_configs['fpga_clk_freq'])) != int(np.round(compiled_program.fpga_config.fpga_clk_freq)):
+        if compiled_program.fpga_config is not None \
+                and int(np.round(channel_configs['fpga_clk_freq'])) != int(np.round(compiled_program.fpga_config.fpga_clk_freq)):
             raise Exception('Program target clock {} Hz does not match HW clock \
                     {}'.format(compiled_program.fpga_config.fpga_clk_freq, channel_configs['fpga_clk_freq']))
 
