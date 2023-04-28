@@ -36,7 +36,7 @@ Instruction dict format:
         is not always possible when z-gates need to be applied conditionally. A z-phase can be bound
         to a processor register using the following instruction:
 
-        {'name': 'bind_phase', 'freq': fcarrier_name, 'reg': reg_name}
+        {'name': 'bind_phase', 'freq': fcarrier_name, 'var': reg_name}
 
         If this instruction is used, all z-gates applied to fcarrier_name (frequency referenced in qchip;
         e.g. Q0.freq, Q1.readfreq, etc), are done in realtime on the processor, and all pulses using
