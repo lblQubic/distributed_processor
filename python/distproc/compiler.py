@@ -369,6 +369,9 @@ class Compiler:
                     assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
                     assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
                 statement['scope'] = vars[statement['out']]['scope']
+            elif statement['name'] == 'barrier' or statement['name'] == 'delay':
+                if 'qubit' not in statement.keys():
+                    statement['qubit'] = self.qubits
 
 
     def compile(self):
@@ -481,10 +484,6 @@ class BasicBlock:
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] = qubit_max_t
                 elif gate['name'] == 'delay':
-                    if 'qubit' not in gate:
-                        gate['qubit'] = self.qubit_scope
-                    elif isinstance(gate['qubit'], str):
-                        gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] += self._get_pulse_nclks(gate['t'])
                 elif gate['name'] == 'declare':
