@@ -14,8 +14,10 @@ Instruction dict format:
 
     virtualz gates:
         {'name': 'virtualz', 'qubit': [qubitid], 'phase': phase_in_rad, 'freqname': fcarrier_name}
+        {'name': 'virtualz', 'qubit': ['Q0'], 'freqname': 'freq_ef'}
+        'Q0.freq_ef'
 
-        'freqname' is optional; default is 'freq', which gets resolved into '<qubitid>.freq' from qchip.
+        'freqname' is optional; default is 'freq', which gets resolved into '<qubitid>.<freqname>' from qchip.
         This generally corresponds to the qubit drive frequency in the qchip file. Other frequencies include 
         readfreq and freq_ef.
 
