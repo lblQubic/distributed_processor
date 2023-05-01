@@ -1,19 +1,51 @@
 """
 Compiler layer for distributed processor. Program is input as a list of 
-dicts encoding gates + branching operations. Each instruction dict has a 
+dicts encoding gates and processor instructions. Each instruction dict has a 
 'name' key followed by other instruction specific keys. 
-
-TODO: add coredest to wiremap and parse this out in compiler
 
 Instruction dict format:
     gate instructions: 
-        {'name': gatename, 'qubit': qubitid, 'modi': gate_param_mod_dict}
+        {'name': gatename, 'qubit': [qubitid], 'modi': gate_param_mod_dict, 'reg_param': (pulseind, attribute, name)}
 
         gatename can be any named gate in the QChip object (qubitconfig.json), aside
         from names reserved for other operations described below. Named gate in QChip 
         object is gatename concatenated with qubitid (e.g. for the 'Q0read' gate you'd 
-        use gatename='read' and qubitid='Q0'
+        use gatename='read' and qubitid='Q0'). 'modi' and 'reg_param' are optional.
 
+    virtualz gates:
+        {'name': 'virtualz', 'qubit': [qubitid], 'phase': phase_in_rad, 'freqname': fcarrier_name}
+        {'name': 'virtualz', 'qubit': ['Q0'], 'freqname': 'freq_ef'}
+        'Q0.freq_ef'
+
+        'freqname' is optional; default is 'freq', which gets resolved into '<qubitid>.<freqname>' from qchip.
+        This generally corresponds to the qubit drive frequency in the qchip file. Other frequencies include 
+        readfreq and freq_ef.
+
+        'phase' is phase in radians
+
+    frequency declaration:
+        {'name': 'declare_freq', 'freq': freq_in_Hz, scope: <list_of_qubits_or_channels>, 'freq_ind': <hw_index>}
+
+        Declares a frequency to be used by the specified qubits or channels. 'freq_ind' can subsequently be 
+        referenced by a register (i.e. if 'reg_param' is set to parameterize a pulse frequency). If 'freq_ind' 
+        is not set in the instruction, it is inferred implicitly by incrementing the previous freq_ind, starting from 
+        0. Note that scheduling a gate/pulse with a previously unused frequency will implicitly cause it to
+        be declared in the assembly program.
+
+    z-phase parameterization:
+        By default, all z-gates are implemented in software; all X90, etc pulse phases are set according to
+        the preceding z-gates, and the z-gate instructions are removed from the program. However, this
+        is not always possible when z-gates need to be applied conditionally. A z-phase can be bound
+        to a processor register using the following instruction:
+
+        {'name': 'bind_phase', 'freq': fcarrier_name, 'var': reg_name}
+
+        If this instruction is used, all z-gates applied to fcarrier_name (frequency referenced in qchip;
+        e.g. Q0.freq, Q1.readfreq, etc), are done in realtime on the processor, and all pulses using
+        fcarrier_name are phase parameterized by reg_name. reg_name must be declared separately.
+
+        (this seems more like a compiler directive?)
+        
     read fproc instruction:
         {'name': 'read_fproc', 'func_id': function_id, 'dest': var_name, 'scope': qubits}
 
@@ -81,9 +113,10 @@ import distproc.assembler as asm
 import distproc.hwconfig as hw
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
-               'virtualz', 'jump_i', 'alu', 'declare', 'jump_label', 'done',
+               'jump_i', 'alu', 'declare', 'jump_label', 'done',
                'jump_fproc', 'jump_cond', 'loop_end', 'loop']
 INITIAL_TSTART = 5
+DEFAULT_FREQNAME = 'freq'
 
 class Compiler:
     """
@@ -336,6 +369,9 @@ class Compiler:
                     assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
                     assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
                 statement['scope'] = vars[statement['out']]['scope']
+            elif statement['name'] == 'barrier' or statement['name'] == 'delay':
+                if 'qubit' not in statement.keys():
+                    statement['qubit'] = self.qubits
 
 
     def compile(self):
@@ -448,10 +484,6 @@ class BasicBlock:
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] = qubit_max_t
                 elif gate['name'] == 'delay':
-                    if 'qubit' not in gate:
-                        gate['qubit'] = self.qubit_scope
-                    elif isinstance(gate['qubit'], str):
-                        gate['qubit'] = [gate['qubit']]
                     for qubit in gate['qubit']:
                         qubit_last_t[qubit] += self._get_pulse_nclks(gate['t'])
                 elif gate['name'] == 'declare':
@@ -504,23 +536,28 @@ class BasicBlock:
     def _resolve_gates(self):
         """
         convert gatedict references to objects, then dereference (i.e.
-        all gate.contents elements are GatePulse objects)
+        all gate.contents elements are GatePulse or VirtualZ objects)
         """
         self.resolved_program = []
         for gatedict in self._program:
             if gatedict['name'] in RESRV_NAMES:
                 self.resolved_program.append(gatedict)
-                continue
-            if isinstance(gatedict['qubit'], str):
-                gatedict['qubit'] = [gatedict['qubit']]
-            gatename = ''.join(gatedict['qubit']) + gatedict['name']
-            gate = self.qchip.gates[gatename]
-            if 'modi' in gatedict and gatedict['modi'] is not None:
-                gate = gate.get_updated_copy(gatedict['modi'])
+
+            elif gatedict['name'] == 'virtualz':
+                assert len(gatedict['qubit']) == 1
+                self.resolved_program.append(qc.VirtualZ(gatedict.pop('freqname', DEFAULT_FREQNAME),
+                                                         gatedict.pop('phase'), gatedict.pop('qubit')[0]))
+
             else:
-                gate = gate.copy()
-            gate.dereference()
-            self.resolved_program.append(gate)
+                gatename = ''.join(gatedict['qubit']) + gatedict['name']
+                gate = self.qchip.gates[gatename]
+                if 'modi' in gatedict and gatedict['modi'] is not None:
+                    gate = gate.get_updated_copy(gatedict['modi'])
+                else:
+                    gate = gate.copy()
+                gate.dereference()
+                self.resolved_program.append(gate)
+
         self.is_resolved = True
 
     def _get_pulse_nclks(self, length_secs):
@@ -533,8 +570,8 @@ class BasicBlock:
                 # gate = gate.copy()
                 for pulse in gate.contents:
                     # TODO: fix config/encoding of these
-                    if pulse.is_zphase:
-                        self.zphase[pulse.fcarriername] += pulse.pcarrier
+                    if isinstance(pulse, qc.VirtualZ):
+                        self.zphase[pulse.global_freqname] += pulse.phase
                     else:
                         if pulse.fcarriername is not None:
                             # TODO: figure out if this is intended behavior...
@@ -542,6 +579,10 @@ class BasicBlock:
                 gate.remove_virtualz()
                 if len(gate.contents) > 0:
                     zresolved_program.append(gate)
+
+            elif isinstance(gate, qc.VirtualZ): 
+                self.zphase[gate.global_freqname] += gate.phase
+
             else:
                 zresolved_program.append(gate)
 

@@ -181,9 +181,9 @@
         ],
         "Q0Z90": [
             {
-                "pcarrier": "np.pi/2",
-                "fcarrier": "Q0.freq",
-                "t0": 0.0
+                "gate": "virtualz",
+                "freq": "Q0.freq",
+                "phase": "np.pi/2"
             }
         ],
         "Q0X90Z90": [
@@ -206,9 +206,9 @@
                 "twidth": 3.2e-08
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q0.freq",
-                "t0": 0.0
+                "gate": "virtualz",
+                "freq": "Q0.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q0X90_ef": [
@@ -1151,23 +1151,23 @@
         ],
         "Q5Q4CNOT": [
             {
-                "pcarrier": 0.0,
-                "t0": 0.0,
-                "fcarrier": "Q4.freq"
+                "gate": "virtualz",
+                "freq": "Q4.freq",
+                "phase": 0.0
             },
-            {   
+            {
                 "gate": "Q5Q4CR",
-                "t0" : 0.0
+                "t0": 0.0
             },
             {
-                "pcarrier": 0.0,
-                "t0": 2.8e-07,
-                "fcarrier": "Q4.freq"
+                "gate": "virtualz",
+                "freq": "Q4.freq",
+                "phase": 0.0
             },
             {
-                "pcarrier": 0.0,
-                "fcarrier": "Q5.freq",
-                "t0": 2.8e-07
+                "gate": "virtualz",
+                "freq": "Q5.freq",
+                "phase": 0.0
             },
             {
                 "dest": "Q4.qdrv",
@@ -1190,98 +1190,98 @@
         ],
         "Q1Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q1.freq",
-                "t0": 0.0
+                "gate": "virtualz",
+                "freq": "Q1.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
                 "gate": "Q1X90",
                 "t0": 0.0
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q1.freq",
-                "t0": "3.200000e-08"
+                "gate": "virtualz",
+                "freq": "Q1.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q2Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q2.freq",
-                "t0": 0.0
-            },
-            {   
-                "gate": "Q2X90",
-                "t0" : 0.0
+                "gate": "virtualz",
+                "freq": "Q2.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q2.freq",
-                "t0": "3.200000e-08"
+                "gate": "Q2X90",
+                "t0": 0.0
+            },
+            {
+                "gate": "virtualz",
+                "freq": "Q2.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q3Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q3.freq",
-                "t0": 0.0
-            },
-            {   
-                "gate": "Q3X90",
-                "t0" : 0.0
+                "gate": "virtualz",
+                "freq": "Q3.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q3.freq",
-                "t0": "3.200000e-08"
+                "gate": "Q3X90",
+                "t0": 0.0
+            },
+            {
+                "gate": "virtualz",
+                "freq": "Q3.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q7Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q7.freq",
-                "t0": 0.0
-            },
-            {   
-                "gate": "Q7X90",
-                "t0" : 0.0
+                "gate": "virtualz",
+                "freq": "Q7.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q7.freq",
-                "t0": "3.200000e-08"
+                "gate": "Q7X90",
+                "t0": 0.0
+            },
+            {
+                "gate": "virtualz",
+                "freq": "Q7.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q5Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q5.freq",
-                "t0": 0.0
-            },
-            {   
-                "gate": "Q5X90",
-                "t0" : 0.0
+                "gate": "virtualz",
+                "freq": "Q5.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q5.freq",
-                "t0": "3.200000e-08"
+                "gate": "Q5X90",
+                "t0": 0.0
+            },
+            {
+                "gate": "virtualz",
+                "freq": "Q5.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q4Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q4.freq",
-                "t0": 0.0
-            },
-            {   
-                "gate": "Q4X90",
-                "t0" : 0.0
+                "gate": "virtualz",
+                "freq": "Q4.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q4.freq",
-                "t0": "3.200000e-08"
+                "gate": "Q4X90",
+                "t0": 0.0
+            },
+            {
+                "gate": "virtualz",
+                "freq": "Q4.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q6Q5CR": [
@@ -1305,23 +1305,23 @@
         ],
         "Q6Q5CNOT": [
             {
-                "pcarrier": 0.8825714228129482,
-                "t0": 0.0,
-                "fcarrier": "Q5.freq"
+                "gate": "virtualz",
+                "freq": "Q5.freq",
+                "phase": 0.8825714228129482
             },
-            {   
+            {
                 "gate": "Q6Q5CR",
-                "t0" : 0.0
+                "t0": 0.0
             },
             {
-                "pcarrier": -0.8825714228129482,
-                "t0": 3.9199999999999996e-07,
-                "fcarrier": "Q5.freq"
+                "gate": "virtualz",
+                "freq": "Q5.freq",
+                "phase": -0.8825714228129482
             },
             {
-                "pcarrier": -1.81297365549029,
-                "fcarrier": "Q6.freq",
-                "t0": 3.9199999999999996e-07
+                "gate": "virtualz",
+                "freq": "Q6.freq",
+                "phase": -1.81297365549029
             },
             {
                 "dest": "Q5.qdrv",
@@ -1344,18 +1344,18 @@
         ],
         "Q6Y-90": [
             {
-                "pcarrier": "-numpy.pi/2.0",
-                "fcarrier": "Q6.freq",
-                "t0": 0.0
-            },
-            {   
-                "gate": "Q6X90",
-                "t0" : 0.0
+                "gate": "virtualz",
+                "freq": "Q6.freq",
+                "phase": "-numpy.pi/2.0"
             },
             {
-                "pcarrier": "numpy.pi/2.0",
-                "fcarrier": "Q6.freq",
-                "t0": "6.400000e-08"
+                "gate": "Q6X90",
+                "t0": 0.0
+            },
+            {
+                "gate": "virtualz",
+                "freq": "Q6.freq",
+                "phase": "numpy.pi/2.0"
             }
         ],
         "Q4Q3CR": [
@@ -1379,23 +1379,23 @@
         ],
         "Q4Q3CNOT": [
             {
-                "pcarrier": 0.0,
-                "t0": 0.0,
-                "fcarrier": "Q3.freq"
+                "gate": "virtualz",
+                "freq": "Q3.freq",
+                "phase": 0.0
             },
-            {   
+            {
                 "gate": "Q4Q3CR",
-                "t0" : 0.0
+                "t0": 0.0
             },
             {
-                "pcarrier": 0.0,
-                "t0": 2.8e-07,
-                "fcarrier": "Q3.freq"
+                "gate": "virtualz",
+                "freq": "Q3.freq",
+                "phase": 0.0
             },
             {
-                "pcarrier": 0.0,
-                "fcarrier": "Q4.freq",
-                "t0": 2.8e-07
+                "gate": "virtualz",
+                "freq": "Q4.freq",
+                "phase": 0.0
             },
             {
                 "dest": "Q3.qdrv",
@@ -1437,23 +1437,23 @@
         ],
         "Q3Q2CNOT": [
             {
-                "pcarrier": -3.4421663163516745,
-                "t0": 0.0,
-                "fcarrier": "Q2.freq"
+                "gate": "virtualz",
+                "freq": "Q2.freq",
+                "phase": -3.4421663163516745
             },
-            {   
+            {
                 "gate": "Q3Q2CR",
-                "t0" : 0.0
+                "t0": 0.0
             },
             {
-                "pcarrier": 3.4421663163516745,
-                "t0": 3.9199999999999996e-07,
-                "fcarrier": "Q2.freq"
+                "gate": "virtualz",
+                "freq": "Q2.freq",
+                "phase": 3.4421663163516745
             },
             {
-                "pcarrier": 2.9198158160617593,
-                "fcarrier": "Q3.freq",
-                "t0": 3.9199999999999996e-07
+                "gate": "virtualz",
+                "freq": "Q3.freq",
+                "phase": 2.9198158160617593
             },
             {
                 "dest": "Q2.qdrv",

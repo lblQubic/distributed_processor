@@ -35,21 +35,29 @@ class ElementConfigTest(hw.ElementConfig):
         return elem_ind
 
 def test_phase_resolve():
-    pass
-    # wiremap = wm.Wiremap('wiremap_test0.json')
-    # qchip = qc.QChip('qubitcfg.json')
-    # compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, ElementConfigTest())
-    # compiler.add_statement({'name':'X90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q1'})
-    # compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q1'})
-    # resolved_prog = compiler._resolve_gates(compiler._program)
-    # resolved_prog = compiler._resolve_virtualz_pulses(resolved_prog)
-    # assert resolved_prog[0].contents[0].pcarrier == 0
-    # assert resolved_prog[1].contents[0].pcarrier == 0
-    # assert resolved_prog[3].contents[0].pcarrier == np.pi/2
-    # assert resolved_prog[4].contents[0].pcarrier == 0
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    qchip = qc.QChip('qubitcfg.json')
+    program = []
+    program.append({'name':'X90', 'qubit': ['Q0']})
+    program.append({'name':'X90', 'qubit': ['Q1']})
+    program.append({'name':'X90Z90', 'qubit': ['Q0']})
+    program.append({'name':'X90', 'qubit': ['Q0']})
+    program.append({'name':'virtualz', 'qubit': ['Q0'], 'phase': np.pi/4})
+    program.append({'name':'X90', 'qubit': ['Q0']})
+    program.append({'name':'X90', 'qubit': ['Q1']})
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler.compile()
+    resolved_prog = compiler._basic_blocks['block_0'].resolved_program
+    assert resolved_prog[0].contents[0].pcarrier == 0
+    assert resolved_prog[1].contents[0].pcarrier == 0
+    assert resolved_prog[3].contents[0].pcarrier == np.pi/2
+    assert resolved_prog[4].contents[0].pcarrier == 3*np.pi/4
+    assert resolved_prog[5].contents[0].pcarrier == 0
 
 def test_basic_schedule():
     qchip = qc.QChip('qubitcfg.json')
