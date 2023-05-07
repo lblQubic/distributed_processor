@@ -101,10 +101,11 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import copy
+import logging 
 try:
     import ipdb
 except ImportError:
-    print('warning: failed to import ipdb')
+    logging.warning('failed to import ipdb')
 import json
 from collections import OrderedDict
 
@@ -377,7 +378,7 @@ class Compiler:
     def compile(self):
         if not self.is_scheduled:
             self.schedule()
-            print('done scheduling')
+            logging.info('done scheduling')
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self.proc_groups}
         for blockname, block in self._basic_blocks.items():
             compiled_block = block.compile(self.loop_dict) # TODO: fix this so it's only on first block
@@ -468,10 +469,10 @@ class BasicBlock:
         """
         if not self.is_resolved:
             self._resolve_gates()
-            print('done resolving block')
+            logging.info('done resolving block')
         if not self.is_zresolved:
             self._resolve_virtualz_pulses()
-            print('done z-resolving block')
+            logging.info('done z-resolving block')
         #qubit_last_t = {q: 0 for q in self.qubit_scope}
 
         qubit_last_t = qubit_last_t.copy()
