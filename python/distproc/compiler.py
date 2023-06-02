@@ -623,7 +623,7 @@ class BasicBlock:
 
                     if isinstance(pulse.env[0], dict):
                         env = pulse.env[0]
-                        if 'twidth' not in pulse.env['paradict'].keys():
+                        if 'twidth' not in env['paradict'].keys():
                             env['twidth'] = pulse.twidth
                     else:
                         env = pulse.env
@@ -631,7 +631,7 @@ class BasicBlock:
                     start_time = instr['t'] + self._get_pulse_nclks(pulse.t0)
                     compiled_program[proc_group].append(
                             {'op': 'pulse', 'freq': pulse.freq, 'phase': pulse.phase, 'amp': pulse.amp,
-                             'env': pulse.env, 'start_time': start_time, 'dest': pulse.dest})
+                             'env': env, 'start_time': start_time, 'dest': pulse.dest})
 
             elif instr['name'] == 'jump_label':
                 for q in instr['scope']:

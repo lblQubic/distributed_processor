@@ -53,11 +53,11 @@ def test_phase_resolve():
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     compiler.compile()
     resolved_prog = compiler._basic_blocks['block_0'].resolved_program
-    assert resolved_prog[0].contents[0].pcarrier == 0
-    assert resolved_prog[1].contents[0].pcarrier == 0
-    assert resolved_prog[3].contents[0].pcarrier == np.pi/2
-    assert resolved_prog[4].contents[0].pcarrier == 3*np.pi/4
-    assert resolved_prog[5].contents[0].pcarrier == 0
+    assert resolved_prog[0].contents[0].phase == 0
+    assert resolved_prog[1].contents[0].phase == 0
+    assert resolved_prog[3].contents[0].phase == np.pi/2
+    assert resolved_prog[4].contents[0].phase == 3*np.pi/4
+    assert resolved_prog[5].contents[0].phase == 0
 
 def test_basic_schedule():
     qchip = qc.QChip('qubitcfg.json')
