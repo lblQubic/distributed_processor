@@ -124,6 +124,7 @@ RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync',
                'jump_fproc', 'jump_cond', 'loop_end', 'loop']
 INITIAL_TSTART = 5
 DEFAULT_FREQNAME = 'freq'
+PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 
 class Compiler:
     """
@@ -363,8 +364,9 @@ class Compiler:
         for statement in self._program:
             if 'qubit' in statement.keys():
                 assert isinstance(statement['qubit'], list)
-            else: # this is not a gate
-                assert statement['name'] in RESRV_NAMES
+
+            if statement['name'] == 'pulse':
+                assert sorted(statement.keys()) == sorted(PULSE_VALID_FIELDS)
 
             if statement['name'] == 'declare':
                 assert statement['var'] not in vars.keys()
@@ -376,6 +378,8 @@ class Compiler:
                     assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
                     assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
                 statement['scope'] = vars[statement['out']]['scope']
+
+            #todo: make this local scope?
             elif statement['name'] == 'barrier' or statement['name'] == 'delay':
                 if 'qubit' not in statement.keys():
                     statement['qubit'] = self.qubits
@@ -556,10 +560,10 @@ class BasicBlock:
                                                          gatedict.pop('phase'), gatedict.pop('qubit')[0]))
 
             elif gatedict['name'] == 'pulse':
-                gatepulse = qc.GatePulse(gatedict['phase'], gatedict['freq'], gatedict['dest'], gatedict['amp'],
-                                         twidth=gatedict['twidth'], env=gatedict['env'], gate=None, chip=None)
+                gatepulse = qc.GatePulse(gatedict['phase'], gatedict['freq'], gatedict['dest'], gatedict['amp'], t0=0,
+                                         twidth=gatedict['twidth'], env=gatedict['env'], gate=None, chip=self.qchip)
 
-                gate = qc.Gate([gatepulse], None, 'custom_pulse_{}'.format(hash(json.dumps(gatepulse.cfg_dict, 
+                gate = qc.Gate([gatepulse], self.qchip, 'custom_pulse_{}'.format(hash(json.dumps(gatepulse.cfg_dict, 
                                                                                 sort_keys=True))%1000))
                 self.resolved_program.append(gate)
 

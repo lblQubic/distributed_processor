@@ -85,6 +85,25 @@ def test_basic_schedule():
     assert scheduled_prog[4]['t'] == 13 #scheduled_prog[1]['gate'].contents[0].twidth
     assert scheduled_prog[5]['t'] == 53 #scheduled_prog[0]['gate'].contents[0].twidth \
               #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
+def test_pulse_compile():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name':'X90', 'qubit': ['Q0']},
+               {'name':'X90', 'qubit': ['Q1']},
+               {'name':'X90Z90', 'qubit': ['Q0']},
+               {'name':'X90', 'qubit': ['Q0']},
+               {'name':'X90', 'qubit': ['Q1']},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
+               {'name':'read', 'qubit': ['Q0']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    prog = compiler.compile()
 
 def test_basic_compile():
     #can we compile without errors
