@@ -252,14 +252,6 @@ class Compiler:
         for blockname, block in self._basic_blocks.items():
             for qubit in self.qubits:
                 if qubit in block.qubit_scope:
-                    #if qubit_lastblock[qubit] is not None:
-                    #    self._control_flow_graph[qubit][qubit_lastblock[qubit]] = [blockname]
-
-                    #if block.dest_nodes is not None:
-                    #    self._control_flow_graph[qubit][blockname] = block.dest_nodes
-                    #     qubit_lastblock[qubit] = None
-                    # else:
-                    #     qubit_lastblock[qubit] = blockname
                     if blockname == 'start':
                         continue
                     self._control_flow_graph[qubit][qubit_lastblock[qubit]] = \
