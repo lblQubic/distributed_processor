@@ -285,8 +285,6 @@ class SingleCoreAssembler:
         else:
             raise Exception('env must be string, dict, or np array')
 
-        length = len(self._env_dicts[elem_ind][envkey])
-
         if isinstance(freq, str):
             assert freq in self._regs.keys()
             assert self._regs[freq]['dtype'] == ('int',)
@@ -307,18 +305,18 @@ class SingleCoreAssembler:
             self._program.append({'op': 'pulse', 'freq': freq})
             self._program.append({'op': 'pulse', 'amp': amp})
             cmd = {'op': 'pulse', 'phase': phase, 'start_time': start_time,
-                   'length': length, 'env': envkey, 'elem': elem_ind}
+                   'env': envkey, 'elem': elem_ind}
         elif (isinstance(freq, str) and (isinstance(phase, str)) or isinstance(amp, str)):
             self._program.append({'op': 'pulse', 'freq': freq})
             cmd = {'op': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time,
-                   'length': length, 'env': envkey, 'elem': elem_ind}
+                   'env': envkey, 'elem': elem_ind}
         elif isinstance(phase, str) and isinstance(amp, str):
             self._program.append({'op': 'pulse', 'freq': phase})
             cmd = {'op': 'pulse', 'freq': freq, 'amp': amp, 'start_time': start_time,
-                   'length': length, 'env': envkey, 'elem': elem_ind}
+                   'env': envkey, 'elem': elem_ind}
         else:
             cmd = {'op': 'pulse', 'freq': freq, 'phase': phase, 'amp': amp, 
-                   'start_time': start_time, 'length': length, 'env': envkey, 'elem': elem_ind}
+                   'start_time': start_time, 'env': envkey, 'elem': elem_ind}
 
         if label is not None:
             cmd['label'] = label
@@ -357,7 +355,10 @@ class SingleCoreAssembler:
                         pulseargs['amp_word'] = self._elem_cfgs[cmd['elem']].get_amp_word(cmd['amp'])
 
                 if 'env' in cmd.keys():
-                    pulseargs['env_word'] = env_word_map[cmd['elem']][cmd['env']] 
+                    if cmd['env'] == 'cw':
+                        pulseargs['env_word'] = 0
+                    else:
+                        pulseargs['env_word'] = env_word_map[cmd['elem']][cmd['env']] 
 
                 if 'start_time' in cmd.keys():
                     pulseargs['cmd_time'] = cmd['start_time']
