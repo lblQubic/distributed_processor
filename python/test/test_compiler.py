@@ -17,10 +17,10 @@ class ElementConfigTest(hw.ElementConfig):
         return 0
 
     def get_env_buffer(self, env_samples):
-        return 0
+        return np.zeros(10)
 
     def get_freq_buffer(self, freqs):
-        return 0
+        return np.zeros(10)
 
     def get_freq_addr(self, freq_ind):
         return 0
@@ -104,6 +104,9 @@ def test_pulse_compile():
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     prog = compiler.compile()
+    with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
+        assert str(prog.program) == f.read()
+    return prog
 
 def test_basic_compile():
     #can we compile without errors
@@ -194,6 +197,11 @@ def test_multrst_cfg():
     for source, dest in compiler._global_cfg.items():
         print('{}: {}'.format(source, dest))
 
+    prog = compiler.compile()
+    with open('test_outputs/test_multirst_cfg.txt', 'r') as f:
+        #f.write(str(prog.program))
+        assert str(prog.program) == f.read()
+
     assert True
 
 def test_linear_compile():
@@ -216,9 +224,10 @@ def test_linear_compile():
     for source, dest in compiler._global_cfg.items():
         print('{}: {}'.format(source, dest))
     compiler.schedule()
-    compiledprog = compiler.compile()
-    print(compiledprog)
-    assert True
+    prog = compiler.compile()
+    with open('test_outputs/test_linear_compile_out.txt', 'r') as f:
+        #f.write(str(prog.program))
+        assert str(prog.program) == f.read()
 
 def test_linear_compile_globalasm():
     qchip = qc.QChip('qubitcfg.json')
@@ -237,7 +246,10 @@ def test_linear_compile_globalasm():
     #compiled_prog = cm.CompiledProgram(compiler.asm_progs, fpga_config)
 
     globalasm = am.GlobalAssembler(compiled_prog, channel_configs, ElementConfigTest)
-    assert True
+    asm_prog = globalasm.get_assembled_program()
+    with open('test_outputs/test_linear_compile_globalasm.txt', 'w') as f:
+        f.write(str(asm_prog))
+        #assert str(asm_prog) == f.read()
 
 def test_multrst_schedule():
     qchip = qc.QChip('qubitcfg.json')
@@ -354,7 +366,10 @@ def test_simple_loop():
         print('{}: {}'.format(source, dest))
 
     assert True
-    return compiler.compile()
+    prog = compiler.compile()
+    with open('test_outputs/test_simple_loop.txt', 'w') as f:
+        f.write(str(prog.program))
+        #assert str(prog.program) == f.read()
 
 def test_compound_loop():
     qchip = qc.QChip('qubitcfg.json')
@@ -392,8 +407,11 @@ def test_compound_loop():
     for source, dest in compiler.block_end_times.items():
         print('{}: {}'.format(source, dest))
 
-    assert True
-    return compiler.compile()
+    prog = compiler.compile()
+    with open('test_outputs/test_compound_loop.txt', 'r') as f:
+        #f.write(str(prog.program))
+        assert str(prog.program) == f.read()
+    return prog
 
 def test_nested_loop():
     qchip = qc.QChip('qubitcfg.json')
@@ -436,7 +454,8 @@ def test_nested_loop():
     for source, dest in compiler.block_end_times.items():
         print('{}: {}'.format(source, dest))
 
-    assert True
-    compiled_prog = compiler.compile()
-    print(compiled_prog)
-    return compiled_prog
+    prog = compiler.compile()
+    with open('test_outputs/test_nested_loop.txt', 'w') as f:
+        f.write(str(prog.program))
+        #assert str(prog.program) == f.read()
+    return prog
