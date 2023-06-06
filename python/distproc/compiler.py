@@ -12,8 +12,14 @@ Instruction dict format:
         object is gatename concatenated with qubitid (e.g. for the 'Q0read' gate you'd 
         use gatename='read' and qubitid='Q0'). 'modi' and 'reg_param' are optional.
 
+    pulse instructions:
+        {'name': 'pulse', **params}
+
+        params is a dict of pulse parameters, formatted the same way as pulses in qubitcfg.json files 
+        (or alternatively GatePulse object cfg_dicts)
+
     virtualz gates:
-        {'name': 'virtualz', 'qubit': [qubitid], 'phase': phase_in_rad, 'freqname': fcarrier_name}
+        {'name': 'virtualz', 'qubit': [qubitid], 'phase': phase_in_rad, 'freqname': freq_name}
         {'name': 'virtualz', 'qubit': ['Q0'], 'freqname': 'freq_ef'}
         'Q0.freq_ef'
 
@@ -38,11 +44,11 @@ Instruction dict format:
         is not always possible when z-gates need to be applied conditionally. A z-phase can be bound
         to a processor register using the following instruction:
 
-        {'name': 'bind_phase', 'freq': fcarrier_name, 'var': reg_name}
+        {'name': 'bind_phase', 'freq': freq_name, 'var': reg_name}
 
-        If this instruction is used, all z-gates applied to fcarrier_name (frequency referenced in qchip;
+        If this instruction is used, all z-gates applied to freq_name (frequency referenced in qchip;
         e.g. Q0.freq, Q1.readfreq, etc), are done in realtime on the processor, and all pulses using
-        fcarrier_name are phase parameterized by reg_name. reg_name must be declared separately.
+        freq_name are phase parameterized by reg_name. reg_name must be declared separately.
 
         (this seems more like a compiler directive?)
         
@@ -118,6 +124,7 @@ RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync',
                'jump_fproc', 'jump_cond', 'loop_end', 'loop']
 INITIAL_TSTART = 5
 DEFAULT_FREQNAME = 'freq'
+PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 
 class Compiler:
     """
@@ -245,14 +252,6 @@ class Compiler:
         for blockname, block in self._basic_blocks.items():
             for qubit in self.qubits:
                 if qubit in block.qubit_scope:
-                    #if qubit_lastblock[qubit] is not None:
-                    #    self._control_flow_graph[qubit][qubit_lastblock[qubit]] = [blockname]
-
-                    #if block.dest_nodes is not None:
-                    #    self._control_flow_graph[qubit][blockname] = block.dest_nodes
-                    #     qubit_lastblock[qubit] = None
-                    # else:
-                    #     qubit_lastblock[qubit] = blockname
                     if blockname == 'start':
                         continue
                     self._control_flow_graph[qubit][qubit_lastblock[qubit]] = \
@@ -357,8 +356,9 @@ class Compiler:
         for statement in self._program:
             if 'qubit' in statement.keys():
                 assert isinstance(statement['qubit'], list)
-            else: # this is not a gate
-                assert statement['name'] in RESRV_NAMES
+
+            if statement['name'] == 'pulse':
+                assert sorted(statement.keys()) == sorted(PULSE_VALID_FIELDS)
 
             if statement['name'] == 'declare':
                 assert statement['var'] not in vars.keys()
@@ -370,6 +370,8 @@ class Compiler:
                     assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
                     assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
                 statement['scope'] = vars[statement['out']]['scope']
+
+            #todo: make this local scope?
             elif statement['name'] == 'barrier' or statement['name'] == 'delay':
                 if 'qubit' not in statement.keys():
                     statement['qubit'] = self.qubits
@@ -549,6 +551,14 @@ class BasicBlock:
                 self.resolved_program.append(qc.VirtualZ(gatedict.pop('freqname', DEFAULT_FREQNAME),
                                                          gatedict.pop('phase'), gatedict.pop('qubit')[0]))
 
+            elif gatedict['name'] == 'pulse':
+                gatepulse = qc.GatePulse(gatedict['phase'], gatedict['freq'], gatedict['dest'], gatedict['amp'], t0=0,
+                                         twidth=gatedict['twidth'], env=gatedict['env'], gate=None, chip=self.qchip)
+
+                gate = qc.Gate([gatepulse], self.qchip, 'custom_pulse_{}'.format(hash(json.dumps(gatepulse.cfg_dict, 
+                                                                                sort_keys=True))%1000))
+                self.resolved_program.append(gate)
+
             else:
                 gatename = ''.join(gatedict['qubit']) + gatedict['name']
                 gate = self.qchip.gates[gatename]
@@ -574,9 +584,9 @@ class BasicBlock:
                     if isinstance(pulse, qc.VirtualZ):
                         self.zphase[pulse.global_freqname] += pulse.phase
                     else:
-                        if pulse.fcarriername is not None:
+                        if pulse.freqname is not None:
                             # TODO: figure out if this is intended behavior...
-                            pulse.pcarrier += self.zphase[pulse.fcarriername]
+                            pulse.phase += self.zphase[pulse.freqname]
                 gate.remove_virtualz()
                 if len(gate.contents) > 0:
                     zresolved_program.append(gate)
@@ -606,13 +616,18 @@ class BasicBlock:
             if 'gate' in instr.keys():
                 for pulse in instr['gate'].get_pulses():
                     proc_group = proc_groups_bydest[pulse.dest]
-                    envdict = pulse.env.env_desc[0]
-                    if 'twidth' not in envdict['paradict'].keys():
-                        envdict['paradict']['twidth'] = pulse.twidth
+
+                    if isinstance(pulse.env[0], dict):
+                        env = pulse.env[0]
+                        if 'twidth' not in env['paradict'].keys():
+                            env['paradict']['twidth'] = pulse.twidth
+                    else:
+                        env = pulse.env
+
                     start_time = instr['t'] + self._get_pulse_nclks(pulse.t0)
                     compiled_program[proc_group].append(
-                            {'op': 'pulse', 'freq': pulse.fcarrier, 'phase': pulse.pcarrier, 'amp': pulse.amp,
-                             'env': pulse.env.env_desc[0], 'start_time': start_time, 'dest': pulse.dest})
+                            {'op': 'pulse', 'freq': pulse.freq, 'phase': pulse.phase, 'amp': pulse.amp,
+                             'env': env, 'start_time': start_time, 'dest': pulse.dest})
 
             elif instr['name'] == 'jump_label':
                 for q in instr['scope']:
