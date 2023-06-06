@@ -105,7 +105,7 @@ def test_pulse_compile():
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     prog = compiler.compile()
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
-        assert str(prog.program) == f.read()
+        assert str(prog.program) == f.read().rstrip('\n')
     return prog
 
 def test_basic_compile():
@@ -200,7 +200,7 @@ def test_multrst_cfg():
     prog = compiler.compile()
     with open('test_outputs/test_multirst_cfg.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(prog.program) == f.read()
+        assert str(prog.program) == f.read().rstrip('\n')
 
     assert True
 
@@ -227,7 +227,7 @@ def test_linear_compile():
     prog = compiler.compile()
     with open('test_outputs/test_linear_compile_out.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(prog.program) == f.read()
+        assert str(prog.program) == f.read().rstrip('\n')
 
 def test_linear_compile_globalasm():
     qchip = qc.QChip('qubitcfg.json')
@@ -410,7 +410,7 @@ def test_compound_loop():
     prog = compiler.compile()
     with open('test_outputs/test_compound_loop.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(prog.program) == f.read()
+        assert str(prog.program) == f.read().rstrip('\n')
     return prog
 
 def test_nested_loop():

@@ -620,7 +620,7 @@ class BasicBlock:
                     if isinstance(pulse.env[0], dict):
                         env = pulse.env[0]
                         if 'twidth' not in env['paradict'].keys():
-                            env['twidth'] = pulse.twidth
+                            env['paradict']['twidth'] = pulse.twidth
                     else:
                         env = pulse.env
 
