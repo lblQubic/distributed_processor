@@ -13,7 +13,8 @@ Instruction dict format:
         use gatename='read' and qubitid='Q0'). 'modi' and 'reg_param' are optional.
 
     pulse instructions:
-        {'name': 'pulse', **params}
+        {'name': 'pulse', 'freq': <float or str> , 'phase': <float (radians)>, 'amp': <float>, 
+         'twidth': <float>, 'env': <np.ndarray (samples) or dict>, 'dest': <str>}
 
         params is a dict of pulse parameters, formatted the same way as pulses in qubitcfg.json files 
         (or alternatively GatePulse object cfg_dicts)
