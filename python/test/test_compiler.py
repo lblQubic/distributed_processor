@@ -128,6 +128,7 @@ def test_pulse_compile_nogate():
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     prog = compiler.compile()
+    ipdb.set_trace()
     print(prog.program)
     return prog
 

@@ -182,7 +182,7 @@ class Compiler:
         self._lint_and_scopevars()
 
         self.proc_group_type = proc_grouping
-        self.proc_groups = generate_proc_groups(proc_grouping, self.qubits)
+        self.proc_groups = set(generate_proc_groups(proc_grouping, self.qubits))
 
         self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
         self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
