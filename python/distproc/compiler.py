@@ -194,7 +194,7 @@ class Compiler:
                         self.chan_to_core[chan] = grp
                         break
 
-            for freqname in qchip.qubit_dict[qubit].keys():
+            for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
                 self.zphase[qubit + '.' + freqname] = 0
 
         self._program_ir = generate_ir_program(self._program)
@@ -349,6 +349,8 @@ class Compiler:
                 self.qubits.extend(statement['qubit'])
             if 'scope' in statement.keys():
                 self.qubits.extend(statement['scope'])
+            if statement['name'] == 'pulse':
+                self.qubits.append(statement['dest'])
         self.qubits = list(np.unique(np.asarray(self.qubits)))
 
     def _lint_and_scopevars(self):
@@ -427,7 +429,7 @@ class BasicBlock:
         self.proc_group_type = proc_grouping
         self.zphase = {}
         for qubit in self.qubit_scope:
-            for freqname in qchip.qubit_dict[qubit].keys():
+            for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
                 self.zphase[qubit + '.' + freqname] = 0
         self.is_resolved = False
         self.is_scheduled = False
@@ -459,6 +461,8 @@ class BasicBlock:
                 self.qubit_scope.extend(statement['qubit'])
             elif 'scope' in statement.keys():
                 self.qubit_scope.extend(statement['scope'])
+            elif statement['name'] == 'pulse':
+                self.qubit_scope.append(statement['dest'])
         self.qubit_scope = list(np.unique(np.asarray(self.qubit_scope)))
 
     def schedule(self, qubit_last_t, qubit_loop_dict):
@@ -521,14 +525,21 @@ class BasicBlock:
             loop_history = qubit_loop_dict[pulses[0].dest.split('.')[0]]
             min_pulse_t = []
             for pulse in pulses:
-                qubit = pulse.dest.split('.')[0]
+                if hasattr(pulse, 'qubit'):
+                    qubit = pulse.qubit
+                else:
+                    qubit = pulse.dest.split('.')[0]
                 assert qubit in self.qubit_scope
                 assert qubit_loop_dict[qubit] == loop_history
                 qubit_t = qubit_last_t[qubit]
                 min_pulse_t.append(qubit_t - self._get_pulse_nclks(pulse.t0))
             gate_t = max(min_pulse_t)
             for pulse in pulses:
-                qubit_last_t[pulse.dest[:2]] = max(qubit_last_t[pulse.dest[:2]], gate_t \
+                if hasattr(pulse, 'qubit'):
+                    qubit = pulse.qubit
+                else:
+                    qubit = pulse.dest.split('.')[0]
+                qubit_last_t[qubit] = max(qubit_last_t[qubit], gate_t \
                         + self._get_pulse_nclks(pulse.t0) + max(self._get_pulse_nclks(pulse.twidth),
                         self._fpga_config.pulse_regwrite_clks))
 
@@ -555,6 +566,7 @@ class BasicBlock:
             elif gatedict['name'] == 'pulse':
                 gatepulse = qc.GatePulse(gatedict['phase'], gatedict['freq'], gatedict['dest'], gatedict['amp'], t0=0,
                                          twidth=gatedict['twidth'], env=gatedict['env'], gate=None, chip=self.qchip)
+                gatepulse.qubit = gatedict['dest']
 
                 gate = qc.Gate([gatepulse], self.qchip, 'custom_pulse_{}'.format(hash(json.dumps(gatepulse.cfg_dict, 
                                                                                 sort_keys=True))%1000))

@@ -108,6 +108,28 @@ def test_pulse_compile():
         assert str(prog.program) == f.read().rstrip('\n')
     return prog
 
+def test_pulse_compile_nogate():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.rdrv'},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
+               {'name':'read', 'qubit': ['Q0']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    prog = compiler.compile()
+    ipdb.set_trace()
+    print(prog.program)
+    return prog
+
 def test_basic_compile():
     #can we compile without errors
     pass
