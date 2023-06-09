@@ -121,12 +121,13 @@ def test_pulse_compile_nogate():
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.rdrv'},
                {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 1234234, 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q1.qdrv'},
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     prog = compiler.compile()
-    ipdb.set_trace()
     print(prog.program)
     return prog
 

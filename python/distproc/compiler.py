@@ -351,6 +351,7 @@ class Compiler:
                 self.qubits.extend(statement['scope'])
             if statement['name'] == 'pulse':
                 self.qubits.append(statement['dest'])
+                self.qubits.append(statement['dest'].split('.')[0])
         self.qubits = list(np.unique(np.asarray(self.qubits)))
 
     def _lint_and_scopevars(self):
@@ -522,7 +523,10 @@ class BasicBlock:
                     raise Exception('{} not yet implemented'.format(gate['name']))
                 continue
             pulses = gate.get_pulses()
-            loop_history = qubit_loop_dict[pulses[0].dest.split('.')[0]]
+            try:
+                loop_history = qubit_loop_dict[pulses[0].qubit]
+            except AttributeError:
+                loop_history = qubit_loop_dict[pulses[0].dest.split('.')[0]]
             min_pulse_t = []
             for pulse in pulses:
                 if hasattr(pulse, 'qubit'):
@@ -849,10 +853,18 @@ def load_compiled_program(filename):
 
 def generate_proc_groups(proc_grouping, qubits, perqubit=False):
     if proc_grouping == 'by_qubit':
-        proc_grouping = {q: [('{}.qdrv'.format(q), '{}.rdrv'.format(q), '{}.rdlo'.format(q))] for q in qubits}
-        # proc_grouping = [('{}.qdrv'.format(q), '{}.rdrv'.format(q), '{}.rdlo'.format(q)) for q in qubits]
+        proc_grouping = {}
+        for q in qubits:
+            if len(q.split('.')) > 0:
+                qb = q.split('.')[0]
+                proc_grouping[q] = [('{}.qdrv'.format(qb), '{}.rdrv'.format(qb), '{}.rdlo'.format(qb))]
     elif proc_grouping == 'by_channel':
         proc_grouping = {q: [('{}.qdrv'.format(q)), ('{}.rdrv'.format(q)), ('{}.rdlo'.format(q))] for q in qubits}
+        proc_grouping = {}
+        for q in qubits:
+            if len(q.split('.')) > 0:
+                qb = q.split('.')[0]
+                proc_grouping[q] = [('{}.qdrv'.format(q)), ('{}.rdrv'.format(q)), ('{}.rdlo'.format(q))]
 
         # proc_grouping.extend([('{}.rdrv'.format(q)) for q in qubits])
         # proc_grouping.extend([('{}.rdlo'.format(q)) for q in qubits])
