@@ -60,10 +60,13 @@ Instruction dict format:
         later in the program.
 
     barrier: 
-        {'name': 'barrier', 'qubits': qubitid_list}
+        {'name': 'barrier', 't': <delaytime in seconds> 'qubits': qubitid_list}
 
-        reference all subsequent gates to a common start time after the barrier (set by 
-        the latest gate/measurement on any qubit in qubitid_list)
+        add (software) delay between gates. 'qubits' is optional; if not specified assumed to be
+        all qubits in the program
+
+    delay: 
+        {'name': 'delay', 'qubits': qubitid_list}
 
     sync: 
         {'name': 'sync', 'barrier_id': id, 'qubits': qubitid_list}
