@@ -575,8 +575,7 @@ class BasicBlock:
                                          twidth=gatedict['twidth'], env=gatedict['env'], gate=None, chip=self.qchip)
                 gatepulse.qubit = gatedict['dest']
 
-                gate = qc.Gate([gatepulse], self.qchip, 'custom_pulse_{}'.format(hash(json.dumps(gatepulse.cfg_dict, 
-                                                                                sort_keys=True))%1000))
+                gate = qc.Gate([gatepulse], self.qchip, 'custom_pulse_{}'.format(hash(gatepulse)%1000))
                 self.resolved_program.append(gate)
 
             else:
