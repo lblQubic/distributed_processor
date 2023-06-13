@@ -117,7 +117,7 @@ def test_pulse_compile_nogate():
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
-               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100, dtype=np.float32), 
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.rdrv'},
                {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
@@ -248,6 +248,9 @@ def test_linear_compile():
         print('{}: {}'.format(source, dest))
     compiler.schedule()
     prog = compiler.compile()
+    print()
+    print('lincomp_prog')
+    print(prog.program)
     with open('test_outputs/test_linear_compile_out.txt', 'r') as f:
         #f.write(str(prog.program))
         assert str(prog.program) == f.read().rstrip('\n')
