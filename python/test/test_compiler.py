@@ -5,6 +5,7 @@ import distproc.compiler as cm
 import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
+import json
 
 class ElementConfigTest(hw.ElementConfig):
     def __init__(self, samples_per_clk, interp_ratio):
@@ -104,8 +105,9 @@ def test_pulse_compile():
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
     prog = compiler.compile()
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
-        assert str(prog.program) == f.read().rstrip('\n')
+        assert str(sorted_program) == f.read().rstrip('\n')
     return prog
 
 def test_pulse_compile_nogate():
@@ -221,9 +223,10 @@ def test_multrst_cfg():
         print('{}: {}'.format(source, dest))
 
     prog = compiler.compile()
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_multirst_cfg.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(prog.program) == f.read().rstrip('\n')
+        assert str(sorted_program) == f.read().rstrip('\n')
 
     assert True
 
@@ -251,9 +254,10 @@ def test_linear_compile():
     print()
     print('lincomp_prog')
     print(prog.program)
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_linear_compile_out.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(prog.program) == f.read().rstrip('\n')
+        assert str(sorted_program) == f.read().rstrip('\n')
 
 def test_linear_compile_globalasm():
     qchip = qc.QChip('qubitcfg.json')
@@ -273,9 +277,10 @@ def test_linear_compile_globalasm():
 
     globalasm = am.GlobalAssembler(compiled_prog, channel_configs, ElementConfigTest)
     asm_prog = globalasm.get_assembled_program()
-    with open('test_outputs/test_linear_compile_globalasm.txt', 'w') as f:
-        f.write(str(asm_prog))
-        #assert str(asm_prog) == f.read()
+    sorted_prog = {chan_ind: {buffer: asm_prog[chan_ind][buffer] for buffer in sorted(asm_prog[chan_ind].keys())} 
+                      for chan_ind in sorted(asm_prog.keys())}
+    with open('test_outputs/test_linear_compile_globalasm.txt', 'r') as f:
+        assert str(sorted_prog) == f.read().rstrip('\n')
 
 def test_multrst_schedule():
     qchip = qc.QChip('qubitcfg.json')
@@ -393,9 +398,10 @@ def test_simple_loop():
 
     assert True
     prog = compiler.compile()
-    with open('test_outputs/test_simple_loop.txt', 'w') as f:
-        f.write(str(prog.program))
-        #assert str(prog.program) == f.read()
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+    with open('test_outputs/test_simple_loop.txt', 'r') as f:
+        #f.write(str(sorted_program))
+        assert str(sorted_program) == f.read().rstrip('\n')
 
 def test_compound_loop():
     qchip = qc.QChip('qubitcfg.json')
@@ -434,9 +440,10 @@ def test_compound_loop():
         print('{}: {}'.format(source, dest))
 
     prog = compiler.compile()
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_compound_loop.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(prog.program) == f.read().rstrip('\n')
+        assert str(sorted_program) == f.read().rstrip('\n')
     return prog
 
 def test_nested_loop():
@@ -481,7 +488,7 @@ def test_nested_loop():
         print('{}: {}'.format(source, dest))
 
     prog = compiler.compile()
-    with open('test_outputs/test_nested_loop.txt', 'w') as f:
-        f.write(str(prog.program))
-        #assert str(prog.program) == f.read()
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+    with open('test_outputs/test_nested_loop.txt', 'r') as f:
+        assert str(sorted_program) == f.read().rstrip('\n')
     return prog
