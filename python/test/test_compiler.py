@@ -492,3 +492,19 @@ def test_nested_loop():
     with open('test_outputs/test_nested_loop.txt', 'r') as f:
         assert str(sorted_program) == f.read().rstrip('\n')
     return prog
+
+def test_scoper_procgroup_gen():
+    scoper = cm._Scoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'))
+    grouping = {dest: ('Q0.qdrv', 'Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv')}
+    grouping.update({dest: ('Q1.qdrv', 'Q1.rdrv', 'Q1.rdlo') for dest in ('Q1.rdrv', 'Q1.rdlo', 'Q1.qdrv')})
+    assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)
+
+def test_scoper_procgroup_gen_bychan():
+    scoper = cm._Scoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'), 
+                        proc_grouping=[('{qubit}.qdrv',), ('{qubit}.rdrv', '{qubit}.rdlo')])
+    grouping = {dest: ('Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo')}
+    grouping.update({'Q0.qdrv': ('Q0.qdrv',)})
+    grouping.update({dest: ('Q1.rdrv', 'Q1.rdlo') for dest in ('Q1.rdrv', 'Q1.rdlo')})
+    grouping.update({'Q1.qdrv': ('Q1.qdrv',)})
+    #print(scoper.proc_groupings)
+    assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)

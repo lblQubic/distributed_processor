@@ -112,6 +112,8 @@ import os
 import sys
 import copy
 import logging 
+import parse
+import re
 try:
     import ipdb
 except ImportError:
@@ -851,6 +853,58 @@ def load_compiled_program(filename):
         progdict = json.load(f)
 
     return hw.FPGAConfig(**progdict['fpga_config'])
+
+class _Scoper:
+    """
+    Class for handling qubit -> scope/core mapping.
+    "Scope" here refers to the set of channels a given pulse will affect (blcok)
+    for scheduling and control flow purposes. For example, an X90 gate on Q1 will 
+    be scoped to all channels Q1.*, since we don't want any other pulses playing on
+    the other Q1 channels simultaneously. 
+    """
+
+    def __init__(self, qchip_or_dest_channels=None, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
+        if isinstance(qchip_or_dest_channels, qc.QChip):
+            self._dest_channels = qchip_or_dest_channels.dest_channels
+        else:
+            self._dest_channels = qchip_or_dest_channels
+        self._qubit_scope_dict = {}
+        self._generate_proc_groups(proc_grouping)
+
+    def scope_from_qubit(self, qubits):
+        """
+        Returns the complete channel scope from a list of qubits. A channel is assumed
+        to be within a qubit's scope if it matches '{qubit}.*'
+        """
+        if isinstance(qubits, str):
+            qubits = [qubits]
+
+        scope = ()
+        for qubit in qubits:
+            if qubit in self._qubit_scope_dict:
+                scope += self._qubit_scope_dict[qubit]
+            else:
+                qscope = ()
+                for dest in self._dest_channels:
+                    if re.match(f'{qubit}.*', dest) is not None:
+                        qscope += dest
+                self._qubit_scope_dict[qubit] = tuple(sorted(qscope))
+                scope += qscope
+
+        return tuple(sorted(set(scope)))
+
+    def _generate_proc_groups(self, proc_grouping):
+        proc_groupings = {}
+        for dest in self._dest_channels:
+            for group in proc_grouping:
+                for dest_pattern in group:
+                    sub_dict = parse.parse(dest_pattern, dest)
+                    if sub_dict is not None:
+                        proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
+
+        self.proc_groupings = proc_groupings
+
+
 
 
 def generate_proc_groups(proc_grouping, qubits, perqubit=False):
