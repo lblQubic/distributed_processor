@@ -21,8 +21,6 @@ Instruction dict format:
 
     virtualz gates:
         {'name': 'virtualz', 'qubit': [qubitid], 'phase': phase_in_rad, 'freqname': freq_name}
-        {'name': 'virtualz', 'qubit': ['Q0'], 'freqname': 'freq_ef'}
-        'Q0.freq_ef'
 
         'freqname' is optional; default is 'freq', which gets resolved into '<qubitid>.<freqname>' from qchip.
         This generally corresponds to the qubit drive frequency in the qchip file. Other frequencies include 
@@ -124,6 +122,7 @@ from collections import OrderedDict
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
 import distproc.hwconfig as hw
+import distproc.ir as ir
 
 RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
                'jump_i', 'alu', 'declare', 'jump_label', 'done',
@@ -153,7 +152,8 @@ class Compiler:
         compiler.schedule() # optional
         prog = compiler.compile()
     """
-    def __init__(self, program, proc_grouping, fpga_config, qchip):
+    def __init__(self, program, proc_grouping, fpga_config=None, qchip=None, 
+                 passes=[ir.ScopeProgram(('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'))])
         """
         Parameters
         ----------
@@ -177,12 +177,6 @@ class Compiler:
 
         self.qchip = qchip
 
-        if isinstance(program, list):
-            self._from_list(program)
-
-        else:
-            raise TypeError('program must be of type list')
-
         self._scope_program()
         self._lint_and_scopevars()
 
@@ -191,16 +185,17 @@ class Compiler:
 
         self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
         self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
-        for qubit in self.qubits:
-            for chantype in ['qdrv', 'rdrv', 'rdlo']:
-                chan = '{}.{}'.format(qubit, chantype)
-                for grp in self.proc_groups:
-                    if chan in grp:
-                        self.chan_to_core[chan] = grp
-                        break
 
-            for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
-                self.zphase[qubit + '.' + freqname] = 0
+        # for qubit in self.qubits:
+        #     for chantype in ['qdrv', 'rdrv', 'rdlo']:
+        #         chan = '{}.{}'.format(qubit, chantype)
+        #         for grp in self.proc_groups:
+        #             if chan in grp:
+        #                 self.chan_to_core[chan] = grp
+        #                 break
+
+        #     for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
+        #         self.zphase[qubit + '.' + freqname] = 0
 
         self._program_ir = generate_ir_program(self._program)
         self._make_basic_blocks()
@@ -348,7 +343,7 @@ class Compiler:
         self._program = prog_list
 
     def _scope_program(self):
-        self.qubits = []
+        self.channels = {}
         for statement in self._program:
             if 'qubit' in statement.keys():
                 self.qubits.extend(statement['qubit'])
@@ -705,7 +700,7 @@ class BasicBlock:
         return 'BasicBlock(' + str(self._program) + ')'
 
 
-def generate_ir_program(program, label_prefix=''):
+def generate_flat_ir(program, label_prefix=''):
     """
     Generates an intermediate representation with control flow resolved into simple 
     conditional jump statements. This function is recursive to allow for nested control 
@@ -752,8 +747,8 @@ def generate_ir_program(program, label_prefix=''):
             falseblock = statement['false']
             trueblock = statement['true']
 
-            flattened_trueblock = generate_ir_program(trueblock, label_prefix='true_'+label_prefix)
-            flattened_falseblock = generate_ir_program(falseblock, label_prefix='false_'+label_prefix)
+            flattened_trueblock = generate_flat_ir(trueblock, label_prefix='true_'+label_prefix)
+            flattened_falseblock = generate_flat_ir(falseblock, label_prefix='false_'+label_prefix)
 
             jump_label_false = '{}false_{}'.format(label_prefix, branchind)
             jump_label_end = '{}end_{}'.format(label_prefix, branchind)
@@ -787,7 +782,7 @@ def generate_ir_program(program, label_prefix=''):
 
         elif statement['name'] == 'loop':
             body = statement['body']
-            flattened_body = generate_ir_program(body, label_prefix='loop_body_'+label_prefix)
+            flattened_body = generate_flat_ir(body, label_prefix='loop_body_'+label_prefix)
             loop_label = '{}loop_{}_loopctrl'.format(label_prefix, branchind)
 
             flattened_program.append({'name': 'jump_label', 'label': loop_label, 'scope': statement['scope']})
@@ -854,44 +849,16 @@ def load_compiled_program(filename):
 
     return hw.FPGAConfig(**progdict['fpga_config'])
 
-class _Scoper:
-    """
-    Class for handling qubit -> scope/core mapping.
-    "Scope" here refers to the set of channels a given pulse will affect (blcok)
-    for scheduling and control flow purposes. For example, an X90 gate on Q1 will 
-    be scoped to all channels Q1.*, since we don't want any other pulses playing on
-    the other Q1 channels simultaneously. 
-    """
+
+
+class _CoreScoper:
 
     def __init__(self, qchip_or_dest_channels=None, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
         if isinstance(qchip_or_dest_channels, qc.QChip):
             self._dest_channels = qchip_or_dest_channels.dest_channels
         else:
             self._dest_channels = qchip_or_dest_channels
-        self._qubit_scope_dict = {}
         self._generate_proc_groups(proc_grouping)
-
-    def scope_from_qubit(self, qubits):
-        """
-        Returns the complete channel scope from a list of qubits. A channel is assumed
-        to be within a qubit's scope if it matches '{qubit}.*'
-        """
-        if isinstance(qubits, str):
-            qubits = [qubits]
-
-        scope = ()
-        for qubit in qubits:
-            if qubit in self._qubit_scope_dict:
-                scope += self._qubit_scope_dict[qubit]
-            else:
-                qscope = ()
-                for dest in self._dest_channels:
-                    if re.match(f'{qubit}.*', dest) is not None:
-                        qscope += dest
-                self._qubit_scope_dict[qubit] = tuple(sorted(qscope))
-                scope += qscope
-
-        return tuple(sorted(set(scope)))
 
     def _generate_proc_groups(self, proc_grouping):
         proc_groupings = {}
@@ -903,36 +870,4 @@ class _Scoper:
                         proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
 
         self.proc_groupings = proc_groupings
-
-
-
-
-def generate_proc_groups(proc_grouping, qubits, perqubit=False):
-    if proc_grouping == 'by_qubit':
-        proc_grouping = {}
-        for q in qubits:
-            if len(q.split('.')) > 0:
-                qb = q.split('.')[0]
-                proc_grouping[q] = [('{}.qdrv'.format(qb), '{}.rdrv'.format(qb), '{}.rdlo'.format(qb))]
-    elif proc_grouping == 'by_channel':
-        proc_grouping = {q: [('{}.qdrv'.format(q)), ('{}.rdrv'.format(q)), ('{}.rdlo'.format(q))] for q in qubits}
-        proc_grouping = {}
-        for q in qubits:
-            if len(q.split('.')) > 0:
-                qb = q.split('.')[0]
-                proc_grouping[q] = [('{}.qdrv'.format(q)), ('{}.rdrv'.format(q)), ('{}.rdlo'.format(q))]
-
-        # proc_grouping.extend([('{}.rdrv'.format(q)) for q in qubits])
-        # proc_grouping.extend([('{}.rdlo'.format(q)) for q in qubits])
-    elif proc_grouping == 'by_drive_ro':
-        proc_grouping = {q: [('{}.qdrv'.format(q)), ('{}.rdrv'.format(q), '{}.rdlo'.format(q))] for q in qubits}
-        # proc_grouping.extend([('{}.rdrv'.format(q), '{}.rdlo'.format(q)) for q in qubits])
-    else:
-        raise ValueError('{} group not supported'.format(proc_grouping))
-    
-    if not perqubit:
-        proc_grouping = [group for grouplist in proc_grouping.values() for group in grouplist]
-
-    return proc_grouping
-
 
