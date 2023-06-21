@@ -4,13 +4,23 @@ import numpy as np
 import networkx as nx
 import parse
 from abc import ABC, abstractmethod
+import qubitconfig.qchip as qc
 
 @define
 class Gate:
     name: str
-    qubit: list
+    _qubit: list | str
     modi: dict = None
     start_time: int = None
+
+    @property
+    def qubit(self):
+        if isinstance(self._qubit, list):
+            return self._qubit
+        elif isinstance(self._qubit, str):
+            return [self._qubit]
+        else:
+            raise TypeError
 
 @define
 class Pulse:
@@ -26,15 +36,37 @@ class Pulse:
 @define
 class VirtualZ:
     name: str = 'virtualz'
-    qubit: str = None
-    freq: str | float = 'freq'
+    _qubit: str = None
+    _freq: str | float = 'freq'
+    phase: float
+
+    @property
+    def freq(self):
+        if isinstance(self._freq, str):
+            if self.qubit is not None:
+                return ''.join(self.qubit) + f'.{self._freq}'
+            else:
+                return self._freq
+
+        else:
+            return self._freq
+
+    @property
+    def qubit(self):
+        if isinstance(self._qubit, list):
+            return self._qubit
+        elif isinstance(self._qubit, str):
+            return [self._qubit]
+        else:
+            raise TypeError
+
 
 @define
 class DeclareFreq:
     name: str = 'declare_freq'
     freq: float
     scope: list
-    freq_ind: int
+    freq_ind: int 
 
 @define
 class Barrier:
@@ -64,7 +96,7 @@ class ReadFproc:
     alu_cond: str
     cond_lhs: int | str
     func_id: int
-    scope: list
+    scope: list | set
     jump_label: str
 
 @define
@@ -77,10 +109,20 @@ class JumpCond:
     name: str = 'jump_cond'
     cond_lhs: int | str
     cond_rhs: str
-    scope: list
+    scope: list | set
     jump_label: str
     jump_type: str = None
 
+class JumpI:
+    name: str = 'jump_i'
+    scope: list | set
+    jump_label: str
+    jump_type: str = None
+
+class _Frequency:
+    freq: float
+    zphase: float
+    scope: set = None
 
 class IRProgram:
 
@@ -92,6 +134,7 @@ class IRProgram:
         """
         full_program = self._resolve_instr_objects(source)
         self._make_basic_blocks(full_program)
+        self._freqs = {}
     
     def _resolve_instr_objects(self, source):
         full_program = []
@@ -137,6 +180,28 @@ class IRProgram:
             if self.control_flow_graph.nodes[node]['instructions'] == []:
                 self.control_flow_graph.remove_nodes(node)
 
+    @property
+    def blocks(self):
+        return self.control_flow_graph.nodes
+
+    @property
+    def blocknames_by_ind(self):
+        return sorted(self.control_flow_graph.nodes, key=lambda node: self.control_flow_graph.nodes[node]['ind'])
+
+    @property
+    def freqs(self):
+        return self._freqs
+
+    @property
+    def scope(self):
+        return set().union(self.control_flow_graph.nodes[node]['scope'] for node in self.blocks)
+
+    def register_freq(self, key, freq):
+        if key in self._freqs and self._freqs[key] != freq:
+            raise Exception(f'frequency {key} already registered; provided freq {freq}\
+                    does not match {self._freqs[key]}')
+        self._freqs[key] = freq
+
 
 def _get_instr_classname(name):
     return ''.join(word.capitalize for word in name.split('_'))
@@ -179,16 +244,32 @@ class Pass(ABC):
         pass
 
     @abstractmethod
-    def run_pass(self, ir_prog):
+    def run_pass(self, ir_prog: IRProgram):
         pass
 
 class ScopeProgram(Pass):
+    """
+    Determines the scope of all blocks in the program graph. For instructions
+    with a 'qubit' attribute, scope is determined using the 'qubit_grouping' 
+    argument
+    """
+
     def __init__(self, qubit_grouping: tuple):
+        """
+        Parameters
+        ----------
+            qubit_grouping : tuple
+                tuple of channels scoped to a qubit. Qubits are specified 
+                using format strings with a 'qubit' attribute, for example:
+                    ('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')
+                forms a valid qubit grouping of channels that will be scoped to 
+                'qubit'
+        """
         self._scoper = _QubitScoper(qubit_grouping) 
 
     def run_pass(self, ir_prog):
-        for node in ir_prog.control_flow_graph.nodes:
-            block = ir_prog.control_flow_graph.nodes[node]['instructions']
+        for node in ir_prog.blocks:
+            block = ir_prog.blocks[node]['instructions']
             scope = set()
             for instr in block:
                 if hasattr(instr, 'scope'):
@@ -199,3 +280,98 @@ class ScopeProgram(Pass):
                     scope.add(self._scoper.get_scope(instr.dest))
     
             ir_prog.control_flow_graph.nodes[node]['scope'] = scope
+
+class ResolveGates(Pass):
+    """
+    Resolves all Gate objects into constituent pulses, as determined by the 
+    provided qchip object. 
+    """
+    def __init__(self, qchip, qubit_grouping):
+        self._qchip = qchip
+        self._scoper = _QubitScoper(qubit_grouping)
+    
+    def run_pass(self, ir_prog: IRProgram):
+        for node in ir_prog.blocks:
+            block = ir_prog.blocks[node]['instructions']
+
+            i = 0
+            while i < len(block):
+                if isinstance(block[i], Gate):
+                    # remove gate instruction from block and decrement index
+                    instr = block.pop(i)
+                    i -= 1
+
+                    gate = self._qchip.gates[''.join(instr.qubit) + instr.name]
+                    if instr.modi is not None:
+                        gate = gate.get_updated_copy(instr.modi)
+                    gate.dereference()
+
+                    pulses = gate.get_pulses()
+
+                    block.insert(i, Barrier(scope=self._scoper.get_scope(instr.qubit)))
+                    i += 1
+
+                    for pulse in pulses:
+                        if isinstance(pulse, qc.GatePulse):
+                            if pulse.freqname is not None:
+                                if pulse.freqname not in ir_prog.freqs.keys():
+                                    ir_prog.register_freq(pulse.freqname, pulse.freq)
+                                freq = pulse.freqname
+                            else:
+                                if pulse.freq not in ir_prog.freqs.keys():
+                                    ir_prog.register_freq(pulse.freq, pulse.freq)
+                                freq = pulse.freq
+                            if pulse.t0 != 0:
+                                # TODO: figure out how to resolve these t0s...
+                                block.insert(i, Delay(t=pulse.t0, scope={pulse.dest}))
+                                i += 1
+
+                            block.insert(i, Pulse(freq=freq, phase=pulse.phase, amp=pulse.amp, env=pulse.env,
+                                                  twidth=pulse.twidth, dest=pulse.dest))
+                            i += 1
+
+                        elif isinstance(pulse, qc.VirtualZ):
+                            block.insert(i, VirtualZ(freq=pulse.global_freqname, phase=pulse.phase))
+                            i += 1
+
+                        else:
+                            raise TypeError(f'invalid type {type(pulse)}')
+
+class GenerateCFG(Pass):
+
+    def __init__(self):
+        pass
+
+    def run_pass(self, ir_prog: IRProgram):
+        lastblock = {dest: None for dest in ir_prog.scope}
+        for blockname in ir_prog.blocknames_by_ind:
+            block = ir_prog.blocks[blockname]
+            for dest in block['scope']:
+                if lastblock[dest] is not None:
+                    ir_prog.control_flow_graph.add_edge(lastblock[dest], blockname)
+
+            if block['instructions'][-1].name in ['jump_fproc', 'jump_cond']:
+                if block['instructions'][-1].jump_type != 'loopctrl': 
+                    # we want to keep this a DAG, so exclude loops and treat them separately for scheduling
+                    ir_prog.control_flow_graph.add_edge(blockname, block['instructions'][-1].jump_label)
+                for dest in block['scope']:
+                    lastblock[dest] = block
+            elif block['instructions'][-1].name == 'jump_i':
+                ir_prog.control_flow_graph.add_edge(blockname, block['instructions'][-1].jump_label)
+                for dest in block['scope']:
+                    lastblock[dest] = None
+            else:
+                for dest in block['scope']:
+                    lastblock[dest] = blockname
+
+class ResolveVirtualZ(Pass):
+    pass
+
+class Schedule(Pass):
+
+    def __init__(self):
+        pass
+
+    def run_pass(self, ir_prog: IRProgram):
+        pass
+
