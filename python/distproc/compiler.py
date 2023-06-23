@@ -790,7 +790,8 @@ def generate_flat_ir(program, label_prefix=''):
             flattened_program.extend(flattened_body)
             flattened_program.append({'name': 'loop_end', 'loop_label': loop_label, 'scope': statement['scope']})
             flattened_program.append({'name': 'jump_cond', 'cond_lhs': statement['cond_lhs'], 'cond_rhs': statement['cond_rhs'], 
-                                      'alu_cond': statement['alu_cond'], 'jump_label': loop_label, 'scope': statement['scope']})
+                                      'alu_cond': statement['alu_cond'], 'jump_label': loop_label, 'scope': statement['scope'],
+                                      'jump_type': 'loopctrl'})
             branchind += 1
 
         elif statement['name'] == 'alu_op':

@@ -1,10 +1,13 @@
 from attrs import define, field
 from collections import OrderedDict
 import numpy as np
+import copy
 import networkx as nx
 import parse
 from abc import ABC, abstractmethod
 import qubitconfig.qchip as qc
+import logging
+import distproc.hwconfig as hw
 
 @define
 class Gate:
@@ -26,8 +29,8 @@ class Gate:
 class Pulse:
     name: str = 'pulse'
     freq: str | float
-    phase: float
-    amp: float
+    phase: str | float
+    amp: str | float
     twidth: float
     env: np.ndarray | dict
     dest: str
@@ -64,9 +67,10 @@ class VirtualZ:
 @define
 class DeclareFreq:
     name: str = 'declare_freq'
+    freqname: str = None
     freq: float
     scope: list
-    freq_ind: int 
+    freq_ind: int = None
 
 @define
 class Barrier:
@@ -113,16 +117,32 @@ class JumpCond:
     jump_label: str
     jump_type: str = None
 
+@define
 class JumpI:
     name: str = 'jump_i'
     scope: list | set
     jump_label: str
     jump_type: str = None
 
+@define
+class Declare:
+    name: str = 'declare'
+    scope: list | set
+    var: str
+    dtype: str = 'int' # 'int', 'phase', or 'amp'
+
+@define
 class _Frequency:
     freq: float
     zphase: float
     scope: set = None
+
+@define
+class _Variable:
+    name: str
+    scope: set = None
+    dtype: str # 'int', 'phase', or 'amp'
+
 
 class IRProgram:
 
@@ -135,6 +155,7 @@ class IRProgram:
         full_program = self._resolve_instr_objects(source)
         self._make_basic_blocks(full_program)
         self._freqs = {}
+        self._vars = {}
     
     def _resolve_instr_objects(self, source):
         full_program = []
@@ -158,8 +179,8 @@ class IRProgram:
             if statement.name in ['jump_fproc', 'jump_cond', 'jump_i']:
                 self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
                 block_ind += 1
-                if statement['jump_label'].split('_')[-1] == 'loopctrl': #todo: break this out
-                    ctrl_blockname = '{}_ctrl'.format(statement['jump_label'])
+                if statement.jump_label.split('_')[-1] == 'loopctrl': #todo: break this out
+                    ctrl_blockname = '{}_ctrl'.format(statement.jump_label)
                 else:
                     ctrl_blockname = '{}_ctrl'.format(cur_blockname)
                 self.control_flow_graph.add_node(ctrl_blockname, instructions=[statement], ind=block_ind)
@@ -167,10 +188,10 @@ class IRProgram:
                 cur_blockname = 'block_{}'.format(blockname_ind)
                 blockname_ind += 1
                 cur_block = []
-            elif statement['name'] == 'jump_label':
+            elif statement.name == 'jump_label':
                 self.control_flow_graph.add_node(cur_blockname, instructions=[cur_block], ind=block_ind)
                 cur_block = [statement]
-                cur_blockname = statement['label']
+                cur_blockname = statement.label
             else:
                 cur_block.append(statement)
 
@@ -193,6 +214,10 @@ class IRProgram:
         return self._freqs
 
     @property
+    def vars(self):
+        return self._vars
+
+    @property
     def scope(self):
         return set().union(self.control_flow_graph.nodes[node]['scope'] for node in self.blocks)
 
@@ -201,6 +226,11 @@ class IRProgram:
             raise Exception(f'frequency {key} already registered; provided freq {freq}\
                     does not match {self._freqs[key]}')
         self._freqs[key] = freq
+
+    def register_var(self, varname, scope, dtype):
+        if varname in self._vars.keys():
+            raise Exception(f'Variable {varname} already declared!')
+        self._vars[varname] = _Variable(varname, scope, dtype)
 
 
 def _get_instr_classname(name):
@@ -275,11 +305,31 @@ class ScopeProgram(Pass):
                 if hasattr(instr, 'scope'):
                     scope.add(self._scoper.get_scope(instr.scope))
                 elif hasattr(instr, 'qubit'):
-                    scope.add(self._scoper.get_scope(instr.qubit))
+                    instr_scope = self._scoper.get_scope(instr.qubit)
+                    instr.scope = instr_scope
+                    scope.add(instr_scope)
                 elif hasattr(instr, 'dest'):
                     scope.add(self._scoper.get_scope(instr.dest))
     
             ir_prog.control_flow_graph.nodes[node]['scope'] = scope
+
+class RegisterVarsAndFreqs(Pass):
+    """
+    Register the (explicitly declared) frequencies and variables into the 
+    ir program
+    """
+
+    def __init__(self):
+        pass
+
+    def run_pass(self, ir_prog: IRProgram):
+        for node in ir_prog.blocks:
+            for instr in ir_prog.blocks[node]['instructions']:
+                if instr.name == 'declare_freq':
+                    freqname = instr.freqname if instr.freqname is not None else instr.freq
+                    ir_prog.register_freq(freqname, instr.freq)
+                elif instr.name == 'declare':
+                    ir_prog.register_var(instr.var, instr.scope, instr.dtype)
 
 class ResolveGates(Pass):
     """
@@ -316,6 +366,9 @@ class ResolveGates(Pass):
                             if pulse.freqname is not None:
                                 if pulse.freqname not in ir_prog.freqs.keys():
                                     ir_prog.register_freq(pulse.freqname, pulse.freq)
+                                elif pulse.freq != ir_prog.freqs[pulse.freqname]:
+                                    logging.getLogger(__name__).warning(f'{pulse.freqname} = {ir_prog.freqs[pulse.freqname]}\
+                                                                        differs from qchip value: {pulse.freq}')
                                 freq = pulse.freqname
                             else:
                                 if pulse.freq not in ir_prog.freqs.keys():
@@ -338,6 +391,11 @@ class ResolveGates(Pass):
                             raise TypeError(f'invalid type {type(pulse)}')
 
 class GenerateCFG(Pass):
+    """
+    Generate the control flow graph. Specifically, add directed edges between basic blocks
+    encoded in ir_prog.control_flow_graph. Conditional jumps associated with loops are NOT
+    included.
+    """
 
     def __init__(self):
         pass
@@ -364,14 +422,109 @@ class GenerateCFG(Pass):
                 for dest in block['scope']:
                     lastblock[dest] = blockname
 
-class ResolveVirtualZ(Pass):
+class ResolveHWVirtualZ(Pass):
+    """
+    Apply BindPhase instructions:
+        - turn all VirtualZ instructions into register operations
+        - if force=True, force all pulse phases using this frequency 
+          to that register
+    Run this BEFORE ResolveVirtualZ
+    """
     pass
 
-class Schedule(Pass):
+class ResolveVirtualZ(Pass):
+    """
+    For software VirtualZ (default) only. Resolve VirtualZ gates into
+    hardcoded phase offsets
+    """
 
     def __init__(self):
         pass
 
     def run_pass(self, ir_prog: IRProgram):
-        pass
+        for nodename in nx.topological_sort(ir_prog.control_flow_graph):
+            zphase_acc = {}
+            for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
+                for freqname, phase in ir_prog.blocks[pred_node]['ending_zphases']:
+                    if freqname in zphase_acc.keys():
+                        if phase != zphase_acc[freqname]:
+                            raise ValueError(f'Phase mismatch in {freqname} at {nodename} predecessor {pred_node}\
+                                    ({phase} rad)')
+                    else:
+                        zphase_acc[freqname] = phase
+
+            for instr in ir_prog.blocks[nodename]['instructions']:
+                if isinstance(instr, Pulse):
+                    if instr.freq in zphase_acc.keys():
+                        instr.phase += zphase_acc
+                elif isinstance(instr, VirtualZ):
+                    zphase_acc[instr.freq] += instr.phase
+                elif isinstance(instr, Gate):
+                    raise Exception('Must resolve Gates first!')
+                elif isinstance(instr, JumpCond) and instr.jump_type == 'loopctrl':
+                    logging.getLogger(__name__).warning('Z-phase resolution inside loops not supported, be careful!')
+
+            ir_prog.blocks[nodename]['ending_zphases'] = zphase_acc
+                
+
+class Schedule(Pass):
+
+    def __init__(self, fpga_config: hw.FPGAConfig):
+        self._fpga_config = fpga_config
+        self._start_nclks = 5
+
+    def run_pass(self, ir_prog: IRProgram):
+        for nodename in nx.topological_sort(ir_prog.control_flow_graph):
+            start_t = {dest: self._start_nclks for dest in ir_prog.blocks[nodename]['scope']}
+            for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
+                for dest in start_t.keys():
+                    if dest in ir_prog.blocks[pred_node]['scope']:
+                        start_t[dest] = max(start_t, ir_prog.blocks[pred_node]['block_end_t'][dest])
+
+            cur_t = copy.copy(start_t)
+
+            self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t)
+
+            if self._check_nodename_loopstart(nodename):
+                ir_prog.blocks[nodename]['block_end_t'] = start_t
+            else:
+                ir_prog.blocks[nodename]['block_end_t'] = cur_t
+
+    def _schedule_block(self, instructions, cur_t):
+        for instr in instructions:
+            if instr.name == 'pulse':
+                instr.start_time = cur_t[instr.dest]
+                cur_t[instr.dest] += self._get_pulse_nclks(instr.twidth)
+            elif instr.name == 'barrier':
+                max_t = max(cur_t[dest] for dest in instr.scope)
+                for dest in instr.scope:
+                    cur_t = max_t
+            elif instr.name == 'delay':
+                for dest in instr.scope:
+                    cur_t += self._get_pulse_nclks(instr.t)
+
+            # TODO: this is very conservative scheduling; some of this time can be 
+            #   absorbed by pulse execution
+            elif instr.name == 'alu':
+                for dest in instr.scope:
+                    cur_t[dest] += self._fpga_config.alu_instr_clks
+            elif instr.name == 'jump_fproc':
+                for dest in instr.scope:
+                    cur_t[dest] += self._fpga_config.jump_fproc_clks
+            elif instr.name == 'jump_i':
+                for dest in instr.scope:
+                    cur_t[dest] += self._fpga_config.jump_cond_clks
+            elif instr.name == 'jump_cond':
+                for dest in instr.scope:
+                    cur_t[dest] += self._fpga_config.jump_cond_clks
+            elif instr.name == 'loop_end':
+                for dest in instr.scope:
+                    cur_t[dest] += self._fpga_config.alu_instr_clks
+
+    def _get_pulse_nclks(self, length_secs):
+        return int(np.ceil(length_secs/self._fpga_config.fpga_clk_period))
+
+
+    def _check_nodename_loopstart(self, nodename):
+        return nodename.split('_')[-1] == 'loopctrl'
 
