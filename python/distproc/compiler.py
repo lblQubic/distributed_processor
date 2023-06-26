@@ -86,7 +86,7 @@ Instruction dict format:
         repeats the instruction list 'body' when condition is true
 
     ALU instructions:
-        {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'lhs': var_name, 'rhs': var_name or value, 'out': output reg}
+        {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'lhs': var_name or value, 'rhs': var_name, 'out': output reg}
 
     variable declaration:
         {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}

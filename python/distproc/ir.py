@@ -132,6 +132,14 @@ class Declare:
     dtype: str = 'int' # 'int', 'phase', or 'amp'
 
 @define
+class Alu:
+    name: str = 'alu'
+    op: str
+    lhs: str | int
+    rhs: str
+    out: str
+
+@define
 class _Frequency:
     freq: float
     zphase: float
@@ -140,9 +148,15 @@ class _Frequency:
 @define
 class _Variable:
     name: str
-    scope: set = None
-    dtype: str # 'int', 'phase', or 'amp'
+    scope: set
+    dtype: str = 'int' # 'int', 'phase', or 'amp'
 
+@define
+class _Loop:
+    name: str
+    scope: set 
+    start_time: int
+    delta_t: int
 
 class IRProgram:
 
@@ -156,6 +170,7 @@ class IRProgram:
         self._make_basic_blocks(full_program)
         self._freqs = {}
         self._vars = {}
+        self.loops = {}
     
     def _resolve_instr_objects(self, source):
         full_program = []
@@ -231,6 +246,9 @@ class IRProgram:
         if varname in self._vars.keys():
             raise Exception(f'Variable {varname} already declared!')
         self._vars[varname] = _Variable(varname, scope, dtype)
+
+    def register_loop(self, name, scope, start_time, delta_t=None):
+        self.loops[name] = _Loop(name, scope, start_time, delta_t)
 
 
 def _get_instr_classname(name):
@@ -349,7 +367,6 @@ class ResolveGates(Pass):
                 if isinstance(block[i], Gate):
                     # remove gate instruction from block and decrement index
                     instr = block.pop(i)
-                    i -= 1
 
                     gate = self._qchip.gates[''.join(instr.qubit) + instr.name]
                     if instr.modi is not None:
@@ -389,6 +406,8 @@ class ResolveGates(Pass):
 
                         else:
                             raise TypeError(f'invalid type {type(pulse)}')
+                else:
+                    i += 1 
 
 class GenerateCFG(Pass):
     """
@@ -453,16 +472,22 @@ class ResolveVirtualZ(Pass):
                     else:
                         zphase_acc[freqname] = phase
 
-            for instr in ir_prog.blocks[nodename]['instructions']:
+            instructions = ir_prog.blocks[nodename]['instructions']
+            i = 0
+            while i < len(instructions):
+                instr = instructions[i]
                 if isinstance(instr, Pulse):
                     if instr.freq in zphase_acc.keys():
                         instr.phase += zphase_acc
                 elif isinstance(instr, VirtualZ):
+                    instructions.pop(i)
+                    i -= 1
                     zphase_acc[instr.freq] += instr.phase
                 elif isinstance(instr, Gate):
                     raise Exception('Must resolve Gates first!')
                 elif isinstance(instr, JumpCond) and instr.jump_type == 'loopctrl':
                     logging.getLogger(__name__).warning('Z-phase resolution inside loops not supported, be careful!')
+                i += 1
 
             ir_prog.blocks[nodename]['ending_zphases'] = zphase_acc
                 
@@ -475,23 +500,29 @@ class Schedule(Pass):
 
     def run_pass(self, ir_prog: IRProgram):
         for nodename in nx.topological_sort(ir_prog.control_flow_graph):
-            start_t = {dest: self._start_nclks for dest in ir_prog.blocks[nodename]['scope']}
+            cur_t = {dest: self._start_nclks for dest in ir_prog.blocks[nodename]['scope']}
             for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
-                for dest in start_t.keys():
+                for dest in cur_t.keys():
                     if dest in ir_prog.blocks[pred_node]['scope']:
-                        start_t[dest] = max(start_t, ir_prog.blocks[pred_node]['block_end_t'][dest])
+                        cur_t[dest] = max(cur_t, ir_prog.blocks[pred_node]['block_end_t'][dest])
 
-            cur_t = copy.copy(start_t)
+
+            if self._check_nodename_loopstart(nodename):
+                ir_prog.register_loop(nodename, ir_prog.blocks[nodename]['scope'],
+                                      max(cur_t.values()))
 
             self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t)
 
-            if self._check_nodename_loopstart(nodename):
-                ir_prog.blocks[nodename]['block_end_t'] = start_t
-            else:
-                ir_prog.blocks[nodename]['block_end_t'] = cur_t
+            if isinstance(ir_prog.blocks[nodename]['instructions'][-1], JumpCond) \
+                    and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
+                        ir_prog.blocks[nodename]['block_end_t'] = 
+            ir_prog.blocks[nodename]['block_end_t'] = cur_t
+
 
     def _schedule_block(self, instructions, cur_t):
-        for instr in instructions:
+        i = 0
+        while i < len(instructions):
+            instr = instructions[i]
             if instr.name == 'pulse':
                 instr.start_time = cur_t[instr.dest]
                 cur_t[instr.dest] += self._get_pulse_nclks(instr.twidth)
@@ -499,9 +530,13 @@ class Schedule(Pass):
                 max_t = max(cur_t[dest] for dest in instr.scope)
                 for dest in instr.scope:
                     cur_t = max_t
+                instructions.pop(i)
+                i -= 1
             elif instr.name == 'delay':
                 for dest in instr.scope:
                     cur_t += self._get_pulse_nclks(instr.t)
+                instructions.pop(i)
+                i -= 1
 
             # TODO: this is very conservative scheduling; some of this time can be 
             #   absorbed by pulse execution
@@ -520,6 +555,10 @@ class Schedule(Pass):
             elif instr.name == 'loop_end':
                 for dest in instr.scope:
                     cur_t[dest] += self._fpga_config.alu_instr_clks
+            elif isinstance(instr, Gate):
+                raise Exception('Must resolve gates first!')
+
+            i += 1
 
     def _get_pulse_nclks(self, length_secs):
         return int(np.ceil(length_secs/self._fpga_config.fpga_clk_period))
