@@ -159,6 +159,10 @@ class _Loop:
     delta_t: int
 
 class IRProgram:
+    """
+    Defines and stores an intermediate representation for qubic programs. All program 
+    instructions are defined by one of the (public) classes above.
+    """
 
     def __init__(self, source):
         """
@@ -455,6 +459,12 @@ class ResolveVirtualZ(Pass):
     """
     For software VirtualZ (default) only. Resolve VirtualZ gates into
     hardcoded phase offsets
+
+    Requirements:
+        - all blocks (and relevant instructions) are scoped
+            e.g. ScopeProgram
+        - all gates are resolved
+        - control flow graph is generated
     """
 
     def __init__(self):
@@ -515,7 +525,10 @@ class Schedule(Pass):
 
             if isinstance(ir_prog.blocks[nodename]['instructions'][-1], JumpCond) \
                     and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
-                        ir_prog.blocks[nodename]['block_end_t'] = 
+                    loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
+                    ir_prog.blocks[nodename]['block_end_t'] = ir_prog.loops[loopname].start_time
+                    ir_prog.loops[loopname].delta_t = max(cur_t.values()) - ir_prog.loops[loopname].start_time
+
             ir_prog.blocks[nodename]['block_end_t'] = cur_t
 
 

@@ -131,6 +131,14 @@ INITIAL_TSTART = 5
 DEFAULT_FREQNAME = 'freq'
 PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 
+def get_default_passes(fpga_config, qchip, qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')):
+    return [ir.ScopeProgram(qubit_grouping),
+            ir.RegisterVarsAndFreqs(),
+            ir.ResolveGates(qchip, qubit_grouping),
+            ir.GenerateCFG(),
+            ir.ResolveVirtualZ(),
+            ir.Schedule(fpga_config)]
+
 class Compiler:
     """
     Class for compiling a quantum circuit encoded in the above format.
@@ -152,8 +160,7 @@ class Compiler:
         compiler.schedule() # optional
         prog = compiler.compile()
     """
-    def __init__(self, program, proc_grouping, fpga_config=None, qchip=None, 
-                 passes=[ir.ScopeProgram(('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'))])
+    def __init__(self, program, proc_grouping):
         """
         Parameters
         ----------
@@ -173,10 +180,6 @@ class Compiler:
                 qubit calibration configuration; specifies constituent pulses
                 for each native gate
         """
-        self._fpga_config = fpga_config
-
-        self.qchip = qchip
-
         self._scope_program()
         self._lint_and_scopevars()
 
@@ -203,88 +206,14 @@ class Compiler:
 
         self.is_scheduled = False
 
-
-    def _make_basic_blocks(self):
+    def _preprocess(self, input_program):
         """
-        Generates a dict of BasicBlock objects, stored in self._basic_blocks
+        flatten control flow and optionally lint
         """
-        self._basic_blocks = OrderedDict()
-        self._basic_blocks['start'] = BasicBlock([], self.proc_group_type, self._fpga_config, self.qchip)
-        self._basic_blocks['start'].qubit_scope = self.qubits
 
-        cur_blockname = 'block_0'
-        blockind = 1
-        cur_block = []
-        for statement in self._program_ir:
-            if statement['name'] in ['jump_fproc', 'jump_cond', 'jump_i']:
-                self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self.proc_group_type, self._fpga_config, self.qchip)
-                if statement['jump_label'].split('_')[-1] == 'loopctrl': #todo: break this out
-                    ctrl_blockname = '{}_ctrl'.format(statement['jump_label'])
-                else:
-                    ctrl_blockname = '{}_ctrl'.format(cur_blockname)
-                self._basic_blocks[ctrl_blockname] = BasicBlock([statement], self.proc_group_type, self._fpga_config, self.qchip)
-                cur_blockname = 'block_{}'.format(blockind)
-                blockind += 1
-                cur_block = []
-            elif statement['name'] == 'jump_label':
-                self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self.proc_group_type, self._fpga_config, self.qchip)
-                cur_block = [statement]
-                cur_blockname = statement['label']
-            else:
-                cur_block.append(statement)
 
-        self._basic_blocks[cur_blockname] = BasicBlock(cur_block, self.proc_group_type, self._fpga_config, self.qchip)
-
-        basic_blocks_nonempty = {}
-        for blockname, block in self._basic_blocks.items():
-            if not block.is_empty or blockname == 'start':
-                basic_blocks_nonempty[blockname] = block
-
-        self._basic_blocks = basic_blocks_nonempty
-
-    def _generate_cfg(self):
-        """
-        Generates a global and per-qubit control flow graph of the (IR) program. 
-        Graph is stored in a dictionary, where graph['source_block'] has a list 
-        of destination block names.
-        """
-        self._control_flow_graph = {q: {'start': ['next_block']} for q in self.qubits}
-        qubit_lastblock = {q: 'start' for q in self.qubits}
-        for blockname, block in self._basic_blocks.items():
-            for qubit in self.qubits:
-                if qubit in block.qubit_scope:
-                    if blockname == 'start':
-                        continue
-                    self._control_flow_graph[qubit][qubit_lastblock[qubit]] = \
-                            [blockname if bname == 'next_block' else bname 
-                                for bname in self._control_flow_graph[qubit][qubit_lastblock[qubit]]]
-                    self._control_flow_graph[qubit][blockname] = block.dest_nodes
-                    qubit_lastblock[qubit] = blockname #try this 
-
-        self._global_cfg = {}
-        for qubit in self.qubits:
-            for block, dest in self._control_flow_graph[qubit].items():
-                if 'next_block' in dest:
-                    dest.remove('next_block')
-                if block in self._global_cfg.keys():
-                    self._global_cfg[block].extend(dest.copy())
-                else:
-                    self._global_cfg[block] = dest.copy()
-        
-        for block, dest in self._global_cfg.items():
-            self._global_cfg[block] = list(set(dest))
-                    
-
-    def _get_cfg_predecessors(self):
-        predecessors = {k: [] for k in self._basic_blocks.keys()}
-        for node, dests in self._global_cfg.items():
-            for dest in dests:
-                # check for loops -- todo: break this out
-                if dest.split('_')[-1] == 'loopctrl' and node.split('_')[-1] == 'ctrl':
-                    continue
-                predecessors[dest].append(node)
-
-        return predecessors
+    def run_ir_passes(self, passes):
+        pass
 
     def schedule(self):
         block_end_times = {blockname: None for blockname in self._basic_blocks.keys()}
@@ -338,48 +267,6 @@ class Compiler:
         self.loop_dict = loop_dict
         self.block_end_times = block_end_times
         self.is_scheduled = True
-
-    def _from_list(self, prog_list):
-        self._program = prog_list
-
-    def _scope_program(self):
-        self.channels = {}
-        for statement in self._program:
-            if 'qubit' in statement.keys():
-                self.qubits.extend(statement['qubit'])
-            if 'scope' in statement.keys():
-                self.qubits.extend(statement['scope'])
-            if statement['name'] == 'pulse':
-                self.qubits.append(statement['dest'])
-                self.qubits.append(statement['dest'].split('.')[0])
-        self.qubits = list(np.unique(np.asarray(self.qubits)))
-
-    def _lint_and_scopevars(self):
-        #todo: add in loop stuff here
-        vars = {}
-        for statement in self._program:
-            if 'qubit' in statement.keys():
-                assert isinstance(statement['qubit'], list)
-
-            if statement['name'] == 'pulse':
-                assert sorted(statement.keys()) == sorted(PULSE_VALID_FIELDS)
-
-            if statement['name'] == 'declare':
-                assert statement['var'] not in vars.keys()
-                vars[statement['var']] = {'dtype': statement['dtype'], 'scope': statement['scope']}
-            elif statement['name'] == 'alu':
-                assert vars[statement['in1']]['dtype'] == vars[statement['out']]['dtype']
-                assert set(vars[statement['out']]['scope']).issubset(vars[statement['in1']]['scope'])
-                if isinstance(statement['in0'], str):
-                    assert statement['in0']['dtype'] == vars[statement['out']]['dtype']
-                    assert set(vars[statement['out']]['scope']).issubset(vars[statement['in0']]['scope'])
-                statement['scope'] = vars[statement['out']]['scope']
-
-            #todo: make this local scope?
-            elif statement['name'] == 'barrier' or statement['name'] == 'delay':
-                if 'qubit' not in statement.keys():
-                    statement['qubit'] = self.qubits
-
 
     def compile(self):
         if not self.is_scheduled:
