@@ -8,136 +8,8 @@ from abc import ABC, abstractmethod
 import qubitconfig.qchip as qc
 import logging
 import distproc.hwconfig as hw
+import distproc.ir_instructions as iri
 
-@define
-class Gate:
-    name: str
-    _qubit: list | str
-    modi: dict = None
-    start_time: int = None
-
-    @property
-    def qubit(self):
-        if isinstance(self._qubit, list):
-            return self._qubit
-        elif isinstance(self._qubit, str):
-            return [self._qubit]
-        else:
-            raise TypeError
-
-@define
-class Pulse:
-    name: str = 'pulse'
-    freq: str | float
-    phase: str | float
-    amp: str | float
-    twidth: float
-    env: np.ndarray | dict
-    dest: str
-    start_time: int = None
-
-@define
-class VirtualZ:
-    name: str = 'virtualz'
-    _qubit: str = None
-    _freq: str | float = 'freq'
-    phase: float
-
-    @property
-    def freq(self):
-        if isinstance(self._freq, str):
-            if self.qubit is not None:
-                return ''.join(self.qubit) + f'.{self._freq}'
-            else:
-                return self._freq
-
-        else:
-            return self._freq
-
-    @property
-    def qubit(self):
-        if isinstance(self._qubit, list):
-            return self._qubit
-        elif isinstance(self._qubit, str):
-            return [self._qubit]
-        else:
-            raise TypeError
-
-
-@define
-class DeclareFreq:
-    name: str = 'declare_freq'
-    freqname: str = None
-    freq: float
-    scope: list
-    freq_ind: int = None
-
-@define
-class Barrier:
-    name: str = 'barrier'
-    qubits: list = None
-    scope: list | tuple | set = None
-
-@define
-class Delay:
-    name: str = 'delay'
-    qubits: list = None
-    scope: list | tuple | set = None
-    t: float
-
-@define
-class JumpFproc:
-    name: str = 'jump_fproc'
-    alu_cond: str
-    cond_lhs: int | str
-    func_id: int
-    scope: list
-    jump_label: str
-
-@define
-class ReadFproc:
-    name: str = 'read_fproc'
-    alu_cond: str
-    cond_lhs: int | str
-    func_id: int
-    scope: list | set
-    jump_label: str
-
-@define
-class JumpLabel:
-    name: str = 'jump_label'
-    jump_label: str
-
-@define 
-class JumpCond:
-    name: str = 'jump_cond'
-    cond_lhs: int | str
-    cond_rhs: str
-    scope: list | set
-    jump_label: str
-    jump_type: str = None
-
-@define
-class JumpI:
-    name: str = 'jump_i'
-    scope: list | set
-    jump_label: str
-    jump_type: str = None
-
-@define
-class Declare:
-    name: str = 'declare'
-    scope: list | set
-    var: str
-    dtype: str = 'int' # 'int', 'phase', or 'amp'
-
-@define
-class Alu:
-    name: str = 'alu'
-    op: str
-    lhs: str | int
-    rhs: str
-    out: str
 
 @define
 class _Frequency:
@@ -179,7 +51,7 @@ class IRProgram:
     def _resolve_instr_objects(self, source):
         full_program = []
         for instr in source:
-            instr_class = eval(_get_instr_classname(instr['name']))
+            instr_class = eval('iri.' + _get_instr_classname(instr['name']))
             full_program.append(instr_class(**instr))
 
         return full_program
@@ -208,13 +80,13 @@ class IRProgram:
                 blockname_ind += 1
                 cur_block = []
             elif statement.name == 'jump_label':
-                self.control_flow_graph.add_node(cur_blockname, instructions=[cur_block], ind=block_ind)
+                self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
                 cur_block = [statement]
                 cur_blockname = statement.label
             else:
                 cur_block.append(statement)
 
-        self.control_flow_graph.add_node(cur_blockname, instructions=[cur_block], ind=block_ind)
+        self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
 
         for node in self.control_flow_graph.nodes:
             if self.control_flow_graph.nodes[node]['instructions'] == []:
@@ -238,7 +110,7 @@ class IRProgram:
 
     @property
     def scope(self):
-        return set().union(self.control_flow_graph.nodes[node]['scope'] for node in self.blocks)
+        return set().union(*list(self.control_flow_graph.nodes[node]['scope'] for node in self.blocks))
 
     def register_freq(self, key, freq):
         if key in self._freqs and self._freqs[key] != freq:
@@ -256,7 +128,14 @@ class IRProgram:
 
 
 def _get_instr_classname(name):
-    return ''.join(word.capitalize for word in name.split('_'))
+    classname = ''.join(word.capitalize() for word in name.split('_'))
+    if name == 'virtualz':
+        classname = 'VirtualZ'
+        logging.getLogger(__name__).warning('Name virtualz is deprecated and will be removed \
+                in a future version. Use \'virtual_z\' instead.')
+    elif classname not in dir(iri):
+        classname = 'Gate'
+    return classname
 
 
 
@@ -324,14 +203,14 @@ class ScopeProgram(Pass):
             block = ir_prog.blocks[node]['instructions']
             scope = set()
             for instr in block:
-                if hasattr(instr, 'scope'):
-                    scope.add(self._scoper.get_scope(instr.scope))
-                elif hasattr(instr, 'qubit'):
+                if hasattr(instr, 'scope') and instr.scope is not None:
+                    scope = scope.union(self._scoper.get_scope(instr.scope))
+                elif hasattr(instr, 'qubit') and instr.qubit is not None:
                     instr_scope = self._scoper.get_scope(instr.qubit)
                     instr.scope = instr_scope
-                    scope.add(instr_scope)
+                    scope = scope.union(instr_scope)
                 elif hasattr(instr, 'dest'):
-                    scope.add(self._scoper.get_scope(instr.dest))
+                    scope = scope.union(self._scoper.get_scope(instr.dest))
     
             ir_prog.control_flow_graph.nodes[node]['scope'] = scope
 
@@ -368,7 +247,7 @@ class ResolveGates(Pass):
 
             i = 0
             while i < len(block):
-                if isinstance(block[i], Gate):
+                if isinstance(block[i], iri.Gate):
                     # remove gate instruction from block and decrement index
                     instr = block.pop(i)
 
@@ -379,7 +258,7 @@ class ResolveGates(Pass):
 
                     pulses = gate.get_pulses()
 
-                    block.insert(i, Barrier(scope=self._scoper.get_scope(instr.qubit)))
+                    block.insert(i, iri.Barrier(scope=self._scoper.get_scope(instr.qubit)))
                     i += 1
 
                     for pulse in pulses:
@@ -397,15 +276,15 @@ class ResolveGates(Pass):
                                 freq = pulse.freq
                             if pulse.t0 != 0:
                                 # TODO: figure out how to resolve these t0s...
-                                block.insert(i, Delay(t=pulse.t0, scope={pulse.dest}))
+                                block.insert(i, iri.Delay(t=pulse.t0, scope={pulse.dest}))
                                 i += 1
 
-                            block.insert(i, Pulse(freq=freq, phase=pulse.phase, amp=pulse.amp, env=pulse.env,
+                            block.insert(i, iri.Pulse(freq=freq, phase=pulse.phase, amp=pulse.amp, env=pulse.env,
                                                   twidth=pulse.twidth, dest=pulse.dest))
                             i += 1
 
                         elif isinstance(pulse, qc.VirtualZ):
-                            block.insert(i, VirtualZ(freq=pulse.global_freqname, phase=pulse.phase))
+                            block.insert(i, iri.VirtualZ(freq=pulse.global_freqname, phase=pulse.phase))
                             i += 1
 
                         else:
@@ -486,16 +365,19 @@ class ResolveVirtualZ(Pass):
             i = 0
             while i < len(instructions):
                 instr = instructions[i]
-                if isinstance(instr, Pulse):
+                if isinstance(instr, iri.Pulse):
                     if instr.freq in zphase_acc.keys():
-                        instr.phase += zphase_acc
-                elif isinstance(instr, VirtualZ):
+                        instr.phase += zphase_acc[instr.freq]
+                elif isinstance(instr, iri.VirtualZ):
                     instructions.pop(i)
                     i -= 1
-                    zphase_acc[instr.freq] += instr.phase
-                elif isinstance(instr, Gate):
+                    if instr.freq in zphase_acc.keys():
+                        zphase_acc[instr.freq] += instr.phase
+                    else: 
+                        zphase_acc[instr.freq] = instr.phase
+                elif isinstance(instr, iri.Gate):
                     raise Exception('Must resolve Gates first!')
-                elif isinstance(instr, JumpCond) and instr.jump_type == 'loopctrl':
+                elif isinstance(instr, iri.JumpCond) and instr.jump_type == 'loopctrl':
                     logging.getLogger(__name__).warning('Z-phase resolution inside loops not supported, be careful!')
                 i += 1
 
@@ -523,7 +405,7 @@ class Schedule(Pass):
 
             self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t)
 
-            if isinstance(ir_prog.blocks[nodename]['instructions'][-1], JumpCond) \
+            if isinstance(ir_prog.blocks[nodename]['instructions'][-1], iri.JumpCond) \
                     and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
                     loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
                     ir_prog.blocks[nodename]['block_end_t'] = ir_prog.loops[loopname].start_time
@@ -542,12 +424,12 @@ class Schedule(Pass):
             elif instr.name == 'barrier':
                 max_t = max(cur_t[dest] for dest in instr.scope)
                 for dest in instr.scope:
-                    cur_t = max_t
+                    cur_t[dest] = max_t
                 instructions.pop(i)
                 i -= 1
             elif instr.name == 'delay':
                 for dest in instr.scope:
-                    cur_t += self._get_pulse_nclks(instr.t)
+                    cur_t[dest] += self._get_pulse_nclks(instr.t)
                 instructions.pop(i)
                 i -= 1
 
@@ -568,7 +450,7 @@ class Schedule(Pass):
             elif instr.name == 'loop_end':
                 for dest in instr.scope:
                     cur_t[dest] += self._fpga_config.alu_instr_clks
-            elif isinstance(instr, Gate):
+            elif isinstance(instr, iri.Gate):
                 raise Exception('Must resolve gates first!')
 
             i += 1

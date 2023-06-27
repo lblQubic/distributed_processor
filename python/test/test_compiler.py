@@ -48,17 +48,18 @@ def test_phase_resolve():
     program.append({'name':'X90', 'qubit': ['Q1']})
     program.append({'name':'X90Z90', 'qubit': ['Q0']})
     program.append({'name':'X90', 'qubit': ['Q0']})
-    program.append({'name':'virtualz', 'qubit': ['Q0'], 'phase': np.pi/4})
+    program.append({'name':'virtual_z', 'qubit': ['Q0'], 'phase': np.pi/4})
     program.append({'name':'X90', 'qubit': ['Q0']})
     program.append({'name':'X90', 'qubit': ['Q1']})
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.compile()
-    resolved_prog = compiler._basic_blocks['block_0'].resolved_program
-    assert resolved_prog[0].contents[0].phase == 0
-    assert resolved_prog[1].contents[0].phase == 0
-    assert resolved_prog[3].contents[0].phase == np.pi/2
-    assert resolved_prog[4].contents[0].phase == 3*np.pi/4
-    assert resolved_prog[5].contents[0].phase == 0
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    pulse_list = compiler.ir_prog.blocks['block_0']['instructions']
+    assert pulse_list[0].phase == 0
+    assert pulse_list[1].phase == 0
+    assert pulse_list[3].phase == np.pi/2
+    assert pulse_list[4].phase == 3*np.pi/4
+    assert pulse_list[5].phase == 0
+    return compiler.ir_prog
 
 def test_basic_schedule():
     qchip = qc.QChip('qubitcfg.json')
@@ -75,16 +76,15 @@ def test_basic_schedule():
             {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.schedule()
-    scheduled_prog = compiler._basic_blocks['block_0'].scheduled_program
-    assert scheduled_prog[0]['t'] == 5
-    assert scheduled_prog[1]['t'] == 5
-    assert scheduled_prog[2]['t'] == 21 #scheduled_prog[0]['gate'].contents[0].twidth
-    assert scheduled_prog[3]['t'] == 37 #scheduled_prog[0]['gate'].contents[0].twidth \
-            #+ scheduled_prog[2]['gate'].contents[0].twidth
-    assert scheduled_prog[4]['t'] == 13 #scheduled_prog[1]['gate'].contents[0].twidth
-    assert scheduled_prog[5]['t'] == 53 #scheduled_prog[0]['gate'].contents[0].twidth \
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    pulse_list = compiler.ir_prog.blocks['block_0']['instructions']
+    assert pulse_list[0].start_time == 5
+    assert pulse_list[1].start_time == 5
+    assert pulse_list[2].start_time == 21 #scheduled_prog[0]['gate'].contents[0].twidth
+    assert pulse_list[3].start_time == 37 #scheduled_prog[0]['gate'].contents[0].twidth \
+    assert pulse_list[4].start_time == 13 #scheduled_prog[1]['gate'].contents[0].twidth
+    assert pulse_list[5].start_time == 53 #scheduled_prog[0]['gate'].contents[0].twidth \
               #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
 def test_pulse_compile():
     qchip = qc.QChip('qubitcfg.json')

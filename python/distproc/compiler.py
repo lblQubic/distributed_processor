@@ -160,7 +160,7 @@ class Compiler:
         compiler.schedule() # optional
         prog = compiler.compile()
     """
-    def __init__(self, program, proc_grouping):
+    def __init__(self, program, proc_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')):
         """
         Parameters
         ----------
@@ -180,14 +180,12 @@ class Compiler:
                 qubit calibration configuration; specifies constituent pulses
                 for each native gate
         """
-        self._scope_program()
-        self._lint_and_scopevars()
+        processed_program = self._preprocess(program)
+        self.ir_prog = ir.IRProgram(processed_program)
+        #self.proc_group_type = proc_grouping
+        #self.proc_groups = set(generate_proc_groups(proc_grouping, self.qubits))
 
-        self.proc_group_type = proc_grouping
-        self.proc_groups = set(generate_proc_groups(proc_grouping, self.qubits))
-
-        self.zphase = {} #keys: Q0.freq, Q1.freq, etc; values: zphase
-        self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
+        #self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
 
         # for qubit in self.qubits:
         #     for chantype in ['qdrv', 'rdrv', 'rdlo']:
@@ -200,20 +198,16 @@ class Compiler:
         #     for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
         #         self.zphase[qubit + '.' + freqname] = 0
 
-        self._program_ir = generate_ir_program(self._program)
-        self._make_basic_blocks()
-        self._generate_cfg()
-
-        self.is_scheduled = False
 
     def _preprocess(self, input_program):
         """
         flatten control flow and optionally lint
         """
-
+        return generate_flat_ir(input_program)
 
     def run_ir_passes(self, passes):
-        pass
+        for ir_pass in passes:
+            ir_pass.run_pass(self.ir_prog)
 
     def schedule(self):
         block_end_times = {blockname: None for blockname in self._basic_blocks.keys()}
