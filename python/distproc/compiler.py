@@ -106,6 +106,7 @@ Instruction dict format:
 
 import numpy as np
 import matplotlib.pyplot as plt
+import networkx as nx
 import os
 import sys
 import copy
@@ -182,6 +183,7 @@ class Compiler:
         """
         processed_program = self._preprocess(program)
         self.ir_prog = ir.IRProgram(processed_program)
+        self._core_scoper = _CoreScoper(proc_grouping)
         #self.proc_group_type = proc_grouping
         #self.proc_groups = set(generate_proc_groups(proc_grouping, self.qubits))
 
@@ -209,376 +211,77 @@ class Compiler:
         for ir_pass in passes:
             ir_pass.run_pass(self.ir_prog)
 
-    def schedule(self):
-        block_end_times = {blockname: None for blockname in self._basic_blocks.keys()}
-        block_end_times['start'] = {qubit: INITIAL_TSTART for qubit in self.qubits}
-        cfg_predecessors = self._get_cfg_predecessors()
-        self._basic_blocks['start'].schedule({}, {})
-        node_queue = self._global_cfg['start'].copy()
-        loop_dict = {}
-        block_prev_loops = {blockname: {} for blockname in self._basic_blocks.keys()}
-        block_prev_loops['start'] = {qubit: () for qubit in self.qubits}
-
-        while node_queue:
-            cur_node = node_queue.pop(0)
-            cur_node_predecessors = cfg_predecessors[cur_node]
-            pred_block_end_times = [block_end_times[node] for node in cur_node_predecessors]
-            if None not in pred_block_end_times:
-                block_start_times = {}
-                for qubit in self._basic_blocks[cur_node].qubit_scope:
-                    block_start_times[qubit] = []
-                    block_prev_loops[cur_node][qubit] = ()
-                    for node in cur_node_predecessors:
-                        if qubit in self._basic_blocks[node].qubit_scope:
-                            block_start_times[qubit].append(block_end_times[node][qubit])
-                            #todo: consider breaking prev_loop timing analysis out into IR class
-                            block_prev_loops[cur_node][qubit] += block_prev_loops[node][qubit] 
-                    block_start_times[qubit] = max(block_start_times[qubit])
-                    block_prev_loops[cur_node][qubit] = tuple(np.unique(block_prev_loops[cur_node][qubit]))
-
-                self._basic_blocks[cur_node].schedule(block_start_times, block_prev_loops[cur_node])
-                block_end_times[cur_node] = self._basic_blocks[cur_node].qubit_last_t
-
-                if cur_node.split('_')[-1] == 'loopctrl': #start a loop
-                    loop_dict[cur_node] = {'start_time': max([t for t in block_start_times.values()])}
-                    block_prev_loops[cur_node] = {qubit: block_prev_loops[cur_node][qubit] + (cur_node,) 
-                                                  for qubit in self._basic_blocks[cur_node].qubit_scope}
-
-                elif cur_node[-13:] == 'loopctrl_ctrl':
-                    # end loop
-                    loopname = cur_node[:-5]
-                    loop_dict[loopname]['delta_t'] = max(block_start_times.values()) - loop_dict[loopname]['start_time']
-                    for qubit in self._basic_blocks[cur_node].qubit_scope:
-                        block_end_times[cur_node][qubit] = loop_dict[loopname]['start_time']
-
-                try:
-                    node_queue.extend([node for node in self._global_cfg[cur_node] if not self._basic_blocks[node].is_scheduled])
-                except KeyError:
-                    pass
-            else:
-                node_queue.append(cur_node)
-
-        self.loop_dict = loop_dict
-        self.block_end_times = block_end_times
-        self.is_scheduled = True
-
     def compile(self):
-        if not self.is_scheduled:
-            self.schedule()
-            logging.debug('done scheduling')
-        asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self.proc_groups}
-        for blockname, block in self._basic_blocks.items():
-            compiled_block = block.compile(self.loop_dict) # TODO: fix this so it's only on first block
-            for proc_group in self.proc_groups:
-                if proc_group in compiled_block.keys():
-                    asm_progs[proc_group].extend(compiled_block[proc_group]) 
+        asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self._core_scoper.proc_groupings_flat}
+        for blockname in self.ir_prog.blocknames_by_ind:
+            self._compile_block(asm_progs, self.ir_prog.blocks[blockname]['instructions'])
 
-        for proc_group in self.proc_groups:
+        for proc_group in self._core_scoper.proc_groupings_flat:
             asm_progs[proc_group].append({'op': 'done_stb'})
 
         return CompiledProgram(asm_progs, self._fpga_config)
 
-    def _resolve_duplicate_jumps(self):
-        #todo: write method to deal with multiple jump labels in a row
-        pass
-
-
-class BasicBlock:
-    """
-    Class for representing "basic blocks" in a qubic program. Basic blocks are program segments
-    with linear control flow; i.e. they consist only of gate/barrier sequences. Each basic block
-    is scoped to some subset of qubits used by the circuit. This class has methods for scheduling gates
-    within the basic block and determining the total delta t.
-
-    TODO:
-        maybe add stuff for modifying program?
-            - gate parameters
-            - contents
-
-    methods:
-        schedule
-
-    attributes:
-        program : high-level qubic program
-        scheduled_program: program with added execution time in 't' key
-        delta_t: total execution time of basic block, in fpga clocks
-    """
-
-    def __init__(self, program, proc_grouping, fpga_config, qchip, swphase=True):
-        self._program = program
-        self._fpga_config = fpga_config
-        self._scope()
-        self.proc_group_type = proc_grouping
-        self.zphase = {}
-        for qubit in self.qubit_scope:
-            for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
-                self.zphase[qubit + '.' + freqname] = 0
-        self.is_resolved = False
-        self.is_scheduled = False
-        self.is_zresolved = not swphase
-        self._swphase = swphase
-        self.qchip = qchip
-        if not swphase:
-            raise Exception('HW phases not yet implemented!')
-
-    @property
-    def dest_nodes(self):
-        if len(self._program) == 0:
-            return ['next_block']
-        elif self._program[-1]['name'] in ['jump_fproc', 'jump_cond']:
-            return [self._program[-1]['jump_label'], 'next_block']
-        elif self._program[-1]['name'] in ['jump_i']:
-            return [self._program[-1]['jump_label']]
-        else:
-            return ['next_block']
-
-    @property
-    def is_empty(self):
-        return len(self._program) == 0
-
-    def _scope(self):
-        self.qubit_scope = []
-        for statement in self._program:
-            if 'qubit' in statement.keys():
-                self.qubit_scope.extend(statement['qubit'])
-            elif 'scope' in statement.keys():
-                self.qubit_scope.extend(statement['scope'])
-            elif statement['name'] == 'pulse':
-                self.qubit_scope.append(statement['dest'])
-        self.qubit_scope = list(np.unique(np.asarray(self.qubit_scope)))
-
-    def schedule(self, qubit_last_t, qubit_loop_dict):
-        """
-        Parameters
-        ----------
-            qubit_last_t : dict of ints
-                last scheduled operation for each qubit
-            qubit_loop_dict : dict of tuples
-                loops traversed by this qubit
-        """
-        if not self.is_resolved:
-            self._resolve_gates()
-            logging.debug('done resolving block')
-        if not self.is_zresolved:
-            self._resolve_virtualz_pulses()
-            logging.debug('done z-resolving block')
-        #qubit_last_t = {q: 0 for q in self.qubit_scope}
-
-        qubit_last_t = qubit_last_t.copy()
-
-        self.scheduled_program = []
-        for gate in self.resolved_program:
-            if isinstance(gate, dict):
-                if gate['name'] == 'barrier':
-                    qubit_max_t = max([qubit_last_t[qubit] for qubit in gate['qubit']])
-                    for qubit in gate['qubit']:
-                        qubit_last_t[qubit] = qubit_max_t
-                elif gate['name'] == 'delay':
-                    for qubit in gate['qubit']:
-                        qubit_last_t[qubit] += self._get_pulse_nclks(gate['t'])
-                elif gate['name'] == 'declare':
-                    self.scheduled_program.append(gate)
-                elif gate['name'] == 'alu':
-                    for qubit in self.qubit_scope:
-                        qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
-                    self.scheduled_program.append(gate)
-                elif gate['name'] == 'jump_fproc':
-                    for qubit in self.qubit_scope:
-                        qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks
-                    self.scheduled_program.append(gate)
-                elif gate['name'] == 'jump_i':
-                    for qubit in self.qubit_scope:
-                        qubit_last_t[qubit] += self._fpga_config.jump_fproc_clks #todo: change to jump_i_clks
-                    self.scheduled_program.append(gate)
-                elif gate['name'] == 'jump_cond':
-                    for qubit in self.qubit_scope:
-                        qubit_last_t[qubit] += self._fpga_config.jump_cond_clks
-                    self.scheduled_program.append(gate)
-                elif gate['name'] == 'jump_label':
-                    self.scheduled_program.append(gate)
-                elif gate['name'] == 'loop_end':
-                    for qubit in self.qubit_scope:
-                        qubit_last_t[qubit] += self._fpga_config.alu_instr_clks
-                    self.scheduled_program.append(gate)
-                else:
-                    raise Exception('{} not yet implemented'.format(gate['name']))
-                continue
-            pulses = gate.get_pulses()
-            try:
-                loop_history = qubit_loop_dict[pulses[0].qubit]
-            except AttributeError:
-                loop_history = qubit_loop_dict[pulses[0].dest.split('.')[0]]
-            min_pulse_t = []
-            for pulse in pulses:
-                if hasattr(pulse, 'qubit'):
-                    qubit = pulse.qubit
-                else:
-                    qubit = pulse.dest.split('.')[0]
-                assert qubit in self.qubit_scope
-                assert qubit_loop_dict[qubit] == loop_history
-                qubit_t = qubit_last_t[qubit]
-                min_pulse_t.append(qubit_t - self._get_pulse_nclks(pulse.t0))
-            gate_t = max(min_pulse_t)
-            for pulse in pulses:
-                if hasattr(pulse, 'qubit'):
-                    qubit = pulse.qubit
-                else:
-                    qubit = pulse.dest.split('.')[0]
-                qubit_last_t[qubit] = max(qubit_last_t[qubit], gate_t \
-                        + self._get_pulse_nclks(pulse.t0) + max(self._get_pulse_nclks(pulse.twidth),
-                        self._fpga_config.pulse_regwrite_clks))
-
-            self.scheduled_program.append({'gate': gate, 't': gate_t})
-
-        self.qubit_last_t = qubit_last_t
-        self.is_scheduled = True
-
-    def _resolve_gates(self):
-        """
-        convert gatedict references to objects, then dereference (i.e.
-        all gate.contents elements are GatePulse or VirtualZ objects)
-        """
-        self.resolved_program = []
-        for gatedict in self._program:
-            if gatedict['name'] in RESRV_NAMES:
-                self.resolved_program.append(gatedict)
-
-            elif gatedict['name'] == 'virtualz':
-                assert len(gatedict['qubit']) == 1
-                self.resolved_program.append(qc.VirtualZ(gatedict.pop('freqname', DEFAULT_FREQNAME),
-                                                         gatedict.pop('phase'), gatedict.pop('qubit')[0]))
-
-            elif gatedict['name'] == 'pulse':
-                gatepulse = qc.GatePulse(gatedict['phase'], gatedict['freq'], gatedict['dest'], gatedict['amp'], t0=0,
-                                         twidth=gatedict['twidth'], env=gatedict['env'], gate=None, chip=self.qchip)
-                gatepulse.qubit = gatedict['dest']
-
-                gate = qc.Gate([gatepulse], self.qchip, 'custom_pulse_{}'.format(hash(gatepulse)%1000))
-                self.resolved_program.append(gate)
-
-            else:
-                gatename = ''.join(gatedict['qubit']) + gatedict['name']
-                gate = self.qchip.gates[gatename]
-                if 'modi' in gatedict and gatedict['modi'] is not None:
-                    gate = gate.get_updated_copy(gatedict['modi'])
-                else:
-                    gate = gate.copy()
-                gate.dereference()
-                self.resolved_program.append(gate)
-
-        self.is_resolved = True
-
-    def _get_pulse_nclks(self, length_secs):
-        return int(np.ceil(length_secs/self._fpga_config.fpga_clk_period))
-
-    def _resolve_virtualz_pulses(self):
-        zresolved_program = []
-        for gate in self.resolved_program:
-            if isinstance(gate, qc.Gate):
-                # gate = gate.copy()
-                for pulse in gate.contents:
-                    # TODO: fix config/encoding of these
-                    if isinstance(pulse, qc.VirtualZ):
-                        self.zphase[pulse.global_freqname] += pulse.phase
-                    else:
-                        if pulse.freqname is not None:
-                            # TODO: figure out if this is intended behavior...
-                            pulse.phase += self.zphase[pulse.freqname]
-                gate.remove_virtualz()
-                if len(gate.contents) > 0:
-                    zresolved_program.append(gate)
-
-            elif isinstance(gate, qc.VirtualZ): 
-                self.zphase[gate.global_freqname] += gate.phase
-
-            else:
-                zresolved_program.append(gate)
-
-        self.resolved_program = zresolved_program
-
-    def compile(self, loop_dict):
-        """
-        Converts gates to pulses, and all IR instructions to proc ASM code
-        """
+    def _compile_block(self, asm_progs, instructions):
+        proc_groups_bydest = self._core_scoper.proc_groupings
         # TODO: add twidth attribute to env, not pulse
-        proc_groups_byqubit = generate_proc_groups(self.proc_group_type, self.qubit_scope, perqubit=True)
-        proc_groups_flat = [grp for grouplist in proc_groups_byqubit.values() for grp in grouplist]
-        proc_groups_bydest = {}
-        for grp in proc_groups_flat:
-            proc_groups_bydest.update({dest: grp for dest in grp})
-        compiled_program = {grp: [] for grp in proc_groups_flat} 
-        if not (self.is_resolved and self.is_scheduled):
-            raise Exception('schedule and resolve gates first!')
         for i, instr in enumerate(self.scheduled_program):
-            if 'gate' in instr.keys():
-                for pulse in instr['gate'].get_pulses():
-                    proc_group = proc_groups_bydest[pulse.dest]
+            if instr.name == 'pulse':
+                proc_group = proc_groups_bydest[instr.dest]
+                asm_progs[proc_group].append(
+                        {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
+                         'env': instr.env, 'start_time': instr.start_time, 'dest': instr.dest})
 
-                    if isinstance(pulse.env[0], dict):
-                        env = pulse.env[0]
-                        if 'twidth' not in env['paradict'].keys():
-                            env['paradict']['twidth'] = pulse.twidth
-                    else:
-                        env = pulse.env
+            elif instr.name == 'jump_label':
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
+                        asm_progs[grp].append({'op': 'jump_label', 'dest_label': instr.label})
 
-                    start_time = instr['t'] + self._get_pulse_nclks(pulse.t0)
-                    compiled_program[proc_group].append(
-                            {'op': 'pulse', 'freq': pulse.freq, 'phase': pulse.phase, 'amp': pulse.amp,
-                             'env': env, 'start_time': start_time, 'dest': pulse.dest})
+            elif instr.name == 'declare':
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
+                        asm_progs[grp].append({'op': 'declare_reg', 'name': instr.var, 'dtype': instr.dtype})
 
-            elif instr['name'] == 'jump_label':
-                for q in instr['scope']:
+            elif instr.name == 'alu':
+                for q in instr.scope:
                     for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append({'op': 'jump_label', 'dest_label': instr['label']})
+                        asm_progs[grp].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1': instr.rhs, 
+                                                      'alu_op': instr.alu_op, 'out_reg': instr.out})
 
-            elif instr['name'] == 'done':
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append({'op': 'done_stb'})
+            elif instr.name == 'jump_fproc':
+                statement = {'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
+                             'jump_label': instr.jump_label, 'func_id': instr.func_id}
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
+                        asm_progs[grp].append(statement)
 
-            elif instr['name'] == 'declare':
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append({'op': 'declare_reg', 'name': instr['var'], 'dtype': instr['dtype']})
+            elif instr.name == 'jump_cond':
+                statement = {'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
+                             'jump_label': instr.jump_label, 'in1': instr.cond_rhs}
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
+                        asm_progs[grp].append(statement)
 
-            elif instr['name'] == 'alu':
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append({'op': 'reg_alu', 'in0': instr['lhs'], 'in1': instr['rhs'], 
-                                                      'alu_op': instr['alu_op'], 'out_reg': instr['out']})
+            elif instr.name == 'jump_i':
+                statement = {'op': 'jump_i', 'jump_label': instr.jump_label}
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
+                        asm_progs[grp].append(statement)
 
-            elif instr['name'] == 'jump_fproc':
-                statement = {'op': 'jump_fproc', 'in0': instr['cond_lhs'], 'alu_op': instr['alu_cond'], 
-                             'jump_label': instr['jump_label'], 'func_id': instr['func_id']}
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append(statement)
-
-            elif instr['name'] == 'jump_cond':
-                statement = {'op': 'jump_cond', 'in0': instr['cond_lhs'], 'alu_op': instr['alu_cond'], 
-                             'jump_label': instr['jump_label'], 'in1': instr['cond_rhs']}
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append(statement)
-
-            elif instr['name'] == 'jump_i':
-                statement = {'op': 'jump_i', 'jump_label': instr['jump_label']}
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append(statement)
-
-            elif instr['name'] == 'loop_end':
-                statement = {'op': 'inc_qclk', 'in0': -loop_dict[instr['loop_label']]['delta_t']}
-                for q in instr['scope']:
-                    for grp in proc_groups_byqubit[q]:
-                        compiled_program[grp].append(statement)
+            elif instr.name == 'loop_end':
+                statement = {'op': 'inc_qclk', 'in0': -self.ir_prog.loops[instr.loop_label].delta_t}
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
+                        asm_progs[grp].append(statement)
 
             else:
-                raise Exception('{} not yet implemented'.format(instr['name']))
-        return compiled_program
+                raise Exception(f'{instr.name} not yet implemented')
 
     def __repr__(self):
         return 'BasicBlock(' + str(self._program) + ')'
+
+    def _resolve_duplicate_jumps(self):
+        #todo: write method to deal with multiple jump labels in a row
+        pass
 
 
 def generate_flat_ir(program, label_prefix=''):
@@ -742,6 +445,8 @@ class _CoreScoper:
             self._dest_channels = qchip_or_dest_channels
         self._generate_proc_groups(proc_grouping)
 
+        self.proc_groupings_flat = tuple(np.unique(np.asarray(self.proc_groupings.values())))
+
     def _generate_proc_groups(self, proc_grouping):
         proc_groupings = {}
         for dest in self._dest_channels:
@@ -751,5 +456,5 @@ class _CoreScoper:
                     if sub_dict is not None:
                         proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
 
-        self.proc_groupings = proc_groupings
+        self.proc_groupings = proc_grouping
 

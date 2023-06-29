@@ -391,6 +391,7 @@ class Schedule(Pass):
         self._start_nclks = 5
 
     def run_pass(self, ir_prog: IRProgram):
+        # TODO: add loopdict checking
         for nodename in nx.topological_sort(ir_prog.control_flow_graph):
             cur_t = {dest: self._start_nclks for dest in ir_prog.blocks[nodename]['scope']}
             for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
@@ -407,9 +408,9 @@ class Schedule(Pass):
 
             if isinstance(ir_prog.blocks[nodename]['instructions'][-1], iri.JumpCond) \
                     and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
-                    loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
-                    ir_prog.blocks[nodename]['block_end_t'] = ir_prog.loops[loopname].start_time
-                    ir_prog.loops[loopname].delta_t = max(cur_t.values()) - ir_prog.loops[loopname].start_time
+                loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
+                ir_prog.blocks[nodename]['block_end_t'] = ir_prog.loops[loopname].start_time
+                ir_prog.loops[loopname].delta_t = max(cur_t.values()) - ir_prog.loops[loopname].start_time
 
             ir_prog.blocks[nodename]['block_end_t'] = cur_t
 

@@ -128,6 +128,12 @@ class Declare:
     name: str = 'declare'
 
 @define
+class LoopEnd:
+    scope: list | set | tuple
+    loop_label: str
+    name: str = 'loop_end'
+
+@define
 class Alu:
     op: str
     lhs: str | int
