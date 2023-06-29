@@ -89,9 +89,9 @@ class IRProgram:
 
         self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
 
-        for node in self.control_flow_graph.nodes:
+        for node in tuple(self.control_flow_graph.nodes):
             if self.control_flow_graph.nodes[node]['instructions'] == []:
-                self.control_flow_graph.remove_nodes(node)
+                self.control_flow_graph.remove_node(node)
 
     @property
     def blocks(self):
@@ -205,7 +205,9 @@ class ScopeProgram(Pass):
             scope = set()
             for instr in block:
                 if hasattr(instr, 'scope') and instr.scope is not None:
-                    scope = scope.union(self._scoper.get_scope(instr.scope))
+                    instr_scope = self._scoper.get_scope(instr.scope)
+                    instr.scope = instr_scope
+                    scope = scope.union(instr_scope)
                 elif hasattr(instr, 'qubit') and instr.qubit is not None:
                     instr_scope = self._scoper.get_scope(instr.qubit)
                     instr.scope = instr_scope
@@ -316,7 +318,7 @@ class GenerateCFG(Pass):
                     # we want to keep this a DAG, so exclude loops and treat them separately for scheduling
                     ir_prog.control_flow_graph.add_edge(blockname, block['instructions'][-1].jump_label)
                 for dest in block['scope']:
-                    lastblock[dest] = block
+                    lastblock[dest] = blockname
             elif block['instructions'][-1].name == 'jump_i':
                 ir_prog.control_flow_graph.add_edge(blockname, block['instructions'][-1].jump_label)
                 for dest in block['scope']:
@@ -354,7 +356,7 @@ class ResolveVirtualZ(Pass):
         for nodename in nx.topological_sort(ir_prog.control_flow_graph):
             zphase_acc = {}
             for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
-                for freqname, phase in ir_prog.blocks[pred_node]['ending_zphases']:
+                for freqname, phase in ir_prog.blocks[pred_node]['ending_zphases'].items():
                     if freqname in zphase_acc.keys():
                         if phase != zphase_acc[freqname]:
                             raise ValueError(f'Phase mismatch in {freqname} at {nodename} predecessor {pred_node}\
@@ -419,7 +421,7 @@ class Schedule(Pass):
             for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
                 for dest in cur_t.keys():
                     if dest in ir_prog.blocks[pred_node]['scope']:
-                        cur_t[dest] = max(cur_t, ir_prog.blocks[pred_node]['block_end_t'][dest])
+                        cur_t[dest] = max(cur_t[dest], ir_prog.blocks[pred_node]['block_end_t'][dest])
 
 
             if self._check_nodename_loopstart(nodename):
@@ -431,10 +433,12 @@ class Schedule(Pass):
             if isinstance(ir_prog.blocks[nodename]['instructions'][-1], iri.JumpCond) \
                     and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
                 loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
-                ir_prog.blocks[nodename]['block_end_t'] = ir_prog.loops[loopname].start_time
+                ir_prog.blocks[nodename]['block_end_t'] = {dest: ir_prog.loops[loopname].start_time \
+                        for dest in ir_prog.blocks[nodename]['scope']}
                 ir_prog.loops[loopname].delta_t = max(cur_t.values()) - ir_prog.loops[loopname].start_time
 
-            ir_prog.blocks[nodename]['block_end_t'] = cur_t
+            else:
+                ir_prog.blocks[nodename]['block_end_t'] = cur_t
 
         ir_prog.fpga_config = self._fpga_config
 

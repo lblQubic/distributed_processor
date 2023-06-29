@@ -88,6 +88,7 @@ class JumpFproc:
     func_id: int
     scope: list
     jump_label: str
+    jump_type: str = None
     name: str = 'jump_fproc'
 
 @define
@@ -101,12 +102,14 @@ class ReadFproc:
 
 @define
 class JumpLabel:
-    jump_label: str
+    label: str
+    scope: set | list | tuple
     name: str = 'jump_label'
 
 @define 
 class JumpCond:
     cond_lhs: int | str
+    alu_cond: str
     cond_rhs: str
     scope: list | set
     jump_label: str

@@ -247,46 +247,39 @@ class Compiler:
                          'env': env, 'start_time': instr.start_time, 'dest': instr.dest})
 
             elif instr.name == 'jump_label':
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append({'op': 'jump_label', 'dest_label': instr.label})
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append({'op': 'jump_label', 'dest_label': instr.label})
 
             elif instr.name == 'declare':
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append({'op': 'declare_reg', 'name': instr.var, 'dtype': instr.dtype})
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append({'op': 'declare_reg', 'name': instr.var, 'dtype': instr.dtype})
 
             elif instr.name == 'alu':
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1': instr.rhs, 
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1': instr.rhs, 
                                                       'alu_op': instr.alu_op, 'out_reg': instr.out})
 
             elif instr.name == 'jump_fproc':
                 statement = {'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
                              'jump_label': instr.jump_label, 'func_id': instr.func_id}
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append(statement)
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
 
             elif instr.name == 'jump_cond':
                 statement = {'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
                              'jump_label': instr.jump_label, 'in1': instr.cond_rhs}
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append(statement)
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
 
             elif instr.name == 'jump_i':
                 statement = {'op': 'jump_i', 'jump_label': instr.jump_label}
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append(statement)
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
 
             elif instr.name == 'loop_end':
                 statement = {'op': 'inc_qclk', 'in0': -self.ir_prog.loops[instr.loop_label].delta_t}
-                for dest in instr.scope:
-                    for grp in proc_groups_bydest[dest]:
-                        asm_progs[grp].append(statement)
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
 
             else:
                 raise Exception(f'{instr.name} not yet implemented')
@@ -472,4 +465,11 @@ class _CoreScoper:
                         proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
 
         self.proc_groupings = proc_groupings
+
+    def get_groups_bydest(self, dests):
+        groups = set()
+        for dest in dests:
+            groups.add(self.proc_groupings[dest])
+
+        return groups
 
