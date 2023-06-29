@@ -37,6 +37,7 @@ setuptools.setup(
 	install_requires=[
         #"qubic",
 		"numpy",
-        "parse"
+        "parse",
+        "networkx"
 		],
 )
