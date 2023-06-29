@@ -143,63 +143,35 @@ def get_default_passes(fpga_config, qchip, qubit_grouping=('{qubit}.qdrv', '{qub
 
 class Compiler:
     """
-    Class for compiling a quantum circuit encoded in the above format.
-    Compilation stages:
-        1. Determine the overall program scope (i.e. qubits used) as well
-            as the scope of any declared variables
-        2. Convert program to intermediate representation: at the moment,
-            this is just flattening the control flow heirarchy to jump statements
-        3. Construct basic blocks -- these are sections of code with linear 
-            control flow (no branching/jumping/looping). In general, basic 
-            blocks are scoped to some subset of qubits.
-        4. Determine the control flow graph which outlines
-            the possible control flow paths between the different basic blocks
-            (for that qubit/proc core)
-        5. Schedule all pulses
-        6. Compile everything down to pulse level (CompiledProgram object)
-    General usage:
-        compiler = Compiler(...)
-        compiler.schedule() # optional
-        prog = compiler.compile()
+    Class for compiling a quantum circuit encoded in the above format. Broadly, compilation has 
+    three stages:
+        1. Flatten the control flow heirarchy (see generate_flat_ir) and lower to intermediate
+           representation. (see distproc.ir.IRProgram)
+        2. Run a series of compiler passes on the IR. This is where the bulk of the compilation 
+           happens, including:
+               - gate resolution
+               - virtualz phase resolution
+               - scheduling
+               - resolution of named frequencies
+               - program block scoping
+        3. Compile the program down to distributed processor assembly (CompiledProgram object).
     """
+
     def __init__(self, program, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
         """
         Parameters
         ----------
             program : list of dicts
                 program to compile, in QubiC circuit format
-            proc_grouping : str 
-                if 'by_qubit', groups channels such that there is one core per
-                qubit.
-                if 'by_channel', groups channels such that there is one core per
-                channel per qubit.
-                if 'by_drive_ro', groups channels such that there is one core per
-                drive channel per qubit, and another for both readout channels (per qubit)
-            fpga_config : distproc.hwconfig.FPGAConfig object
-                specifies FPGA clock period and execution time for relevant
-                instructions
-            qchip : qubitconfig.qchip.QChip object
-                qubit calibration configuration; specifies constituent pulses
-                for each native gate
+            proc_grouping : list of tuples
+                list of tuples grouping channels to proc cores. Format keys
+                (e.g. {qubit}) can be used to make general groupings.
+
+        Preprocessing and lowering to IR (step 1 above) are performed in the constructor.
         """
         processed_program = self._preprocess(program)
         self.ir_prog = ir.IRProgram(processed_program)
         self._proc_grouping = proc_grouping
-        #self.proc_groups = set(generate_proc_groups(proc_grouping, self.qubits))
-
-        #self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
-
-        # for qubit in self.qubits:
-        #     for chantype in ['qdrv', 'rdrv', 'rdlo']:
-        #         chan = '{}.{}'.format(qubit, chantype)
-        #         for grp in self.proc_groups:
-        #             if chan in grp:
-        #                 self.chan_to_core[chan] = grp
-        #                 break
-
-        #     for freqname in qchip.qubit_dict[qubit.split('.')[0]].keys():
-        #         self.zphase[qubit + '.' + freqname] = 0
-
 
     def _preprocess(self, input_program):
         """
@@ -207,7 +179,16 @@ class Compiler:
         """
         return generate_flat_ir(input_program)
 
-    def run_ir_passes(self, passes):
+    def run_ir_passes(self, passes: list):
+        """
+        Run a list of IR passes on the program. get_default_passes()
+        can be used to generate this list in most cases.
+
+        Parameters
+        ----------
+            passes : list
+                list of passes. Each element is an ir.Pass object.
+        """
         for ir_pass in passes:
             ir_pass.run_pass(self.ir_prog)
 
@@ -283,9 +264,6 @@ class Compiler:
 
             else:
                 raise Exception(f'{instr.name} not yet implemented')
-
-    def __repr__(self):
-        return 'BasicBlock(' + str(self._program) + ')'
 
     def _resolve_duplicate_jumps(self):
         #todo: write method to deal with multiple jump labels in a row

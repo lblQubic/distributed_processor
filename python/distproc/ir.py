@@ -33,14 +33,37 @@ class _Loop:
 class IRProgram:
     """
     Defines and stores an intermediate representation for qubic programs. All program 
-    instructions are defined by one of the (public) classes above.
+    instructions are defined by one of the (public) classes in ir_instructions.py. 
+
+    The program itself is stored in the control_flow_graph attribute, where each node is 
+    a "basic block", defined to be a chunk of code with only linear control flow (i.e. all
+    jumps, etc happen between blocks, not inside a block). The possible control flow paths
+    through the program are specified as directed edges within this graph, and are determined
+    during the GenerateCFG pass.
+
+    In general, each node has the following attibutes:
+        instructions: list containing the program instructions
+        scope: set of channels involved with this block
+
+        Other attributes can be added during various compiler passes
+
+    Class attributes:
+        freqs: dictionary of named freqs
+        vars: dictionary of _Variable objects (mapped to proc core registers)
+        loops: dictionary of named _Loop objects (stores start time and delta_t for scheduling)
+
+        fpga_config: FPGAConfig object containing timing parameters used for scheduling. This is optional,
+                as it is only used as metadata in the final compiled program.
+
+
     """
 
     def __init__(self, source):
         """
         Parameters
         ----------
-            List of dicts in IR format
+            source: list of dicts
+                
         """
         full_program = self._resolve_instr_objects(source)
         self._make_basic_blocks(full_program)
@@ -184,6 +207,11 @@ class ScopeProgram(Pass):
     Determines the scope of all blocks in the program graph. For instructions
     with a 'qubit' attribute, scope is determined using the 'qubit_grouping' 
     argument
+
+    Modifications to IRProgram:
+        - sets the "scope" attibute for all of the nodes
+        - converts any qubits to lists of channels, store in scope attribute
+          of instructions
     """
 
     def __init__(self, qubit_grouping: tuple):
@@ -239,6 +267,13 @@ class ResolveGates(Pass):
     """
     Resolves all Gate objects into constituent pulses, as determined by the 
     provided qchip object. 
+
+    Modifications to IRProgram:
+        - convert Gate objects to:
+            Barrier(scope of gate)
+            Pulse0
+            Pulse1,
+            etc
     """
     def __init__(self, qchip, qubit_grouping):
         self._qchip = qchip
