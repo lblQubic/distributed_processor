@@ -6,6 +6,7 @@ import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
 import json
+import difflib
 
 class ElementConfigTest(hw.ElementConfig):
     def __init__(self, samples_per_clk, interp_ratio):
@@ -98,17 +99,17 @@ def test_pulse_compile():
                {'name':'X90Z90', 'qubit': ['Q0']},
                {'name':'X90', 'qubit': ['Q0']},
                {'name':'X90', 'qubit': ['Q1']},
-               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+               {'name': 'pulse', 'phase': np.pi/2, 'freq': 'Q0.freq', 'env': np.ones(100), 
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
-    channel_configs = hw.load_channel_configs('../test/channel_config.json')
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
-        assert str(sorted_program) == f.read().rstrip('\n')
-    return prog
+        filein = f.read().rstrip('\n')
+        assert str(sorted_program) == filein
 
 def test_pulse_compile_nogate():
     qchip = qc.QChip('qubitcfg.json')
@@ -494,13 +495,13 @@ def test_nested_loop():
     return prog
 
 def test_scoper_procgroup_gen():
-    scoper = cm._Scoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'))
+    scoper = cm._CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'))
     grouping = {dest: ('Q0.qdrv', 'Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv')}
     grouping.update({dest: ('Q1.qdrv', 'Q1.rdrv', 'Q1.rdlo') for dest in ('Q1.rdrv', 'Q1.rdlo', 'Q1.qdrv')})
     assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)
 
 def test_scoper_procgroup_gen_bychan():
-    scoper = cm._Scoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'), 
+    scoper = cm._CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'), 
                         proc_grouping=[('{qubit}.qdrv',), ('{qubit}.rdrv', '{qubit}.rdlo')])
     grouping = {dest: ('Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo')}
     grouping.update({'Q0.qdrv': ('Q0.qdrv',)})

@@ -47,6 +47,7 @@ class IRProgram:
         self._freqs = {}
         self._vars = {}
         self.loops = {}
+        self.fpga_config = None
     
     def _resolve_instr_objects(self, source):
         full_program = []
@@ -383,6 +384,27 @@ class ResolveVirtualZ(Pass):
 
             ir_prog.blocks[nodename]['ending_zphases'] = zphase_acc
                 
+class ResolveFreqs(Pass):
+
+    def __init__(self, qchip: qc.QChip = None):
+        self._qchip = qchip
+
+    def run_pass(self, ir_prog: IRProgram):
+
+        for nodename in nx.topological_sort(ir_prog.control_flow_graph):
+            instructions = ir_prog.blocks[nodename]['instructions']
+
+            for instr in instructions:
+                if instr.name == 'pulse':
+                    if isinstance(instr.freq, str):
+                        if instr.freq in ir_prog.vars.keys():
+                            #this is a var parameterized freq
+                            assert instr.dest in ir_prog.vars[instr.freq].scope
+                        elif instr.freq in ir_prog.freqs:
+                            instr.freq = ir_prog.freqs[instr.freq]
+                        else:
+                            instr.freq = self._qchip.get_qubit_freq(instr.freq)
+                            
 
 class Schedule(Pass):
 
@@ -413,6 +435,8 @@ class Schedule(Pass):
                 ir_prog.loops[loopname].delta_t = max(cur_t.values()) - ir_prog.loops[loopname].start_time
 
             ir_prog.blocks[nodename]['block_end_t'] = cur_t
+
+        ir_prog.fpga_config = self._fpga_config
 
 
     def _schedule_block(self, instructions, cur_t):

@@ -138,6 +138,7 @@ def get_default_passes(fpga_config, qchip, qubit_grouping=('{qubit}.qdrv', '{qub
             ir.ResolveGates(qchip, qubit_grouping),
             ir.GenerateCFG(),
             ir.ResolveVirtualZ(),
+            ir.ResolveFreqs(qchip),
             ir.Schedule(fpga_config)]
 
 class Compiler:
@@ -161,7 +162,7 @@ class Compiler:
         compiler.schedule() # optional
         prog = compiler.compile()
     """
-    def __init__(self, program, proc_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')):
+    def __init__(self, program, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
         """
         Parameters
         ----------
@@ -183,8 +184,7 @@ class Compiler:
         """
         processed_program = self._preprocess(program)
         self.ir_prog = ir.IRProgram(processed_program)
-        self._core_scoper = _CoreScoper(proc_grouping)
-        #self.proc_group_type = proc_grouping
+        self._proc_grouping = proc_grouping
         #self.proc_groups = set(generate_proc_groups(proc_grouping, self.qubits))
 
         #self.chan_to_core = {} # maps qubit channels (e.g. Q0.qdrv) to core in asm dict
@@ -212,6 +212,7 @@ class Compiler:
             ir_pass.run_pass(self.ir_prog)
 
     def compile(self):
+        self._core_scoper = _CoreScoper(self.ir_prog.scope, self._proc_grouping)
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self._core_scoper.proc_groupings_flat}
         for blockname in self.ir_prog.blocknames_by_ind:
             self._compile_block(asm_progs, self.ir_prog.blocks[blockname]['instructions'])
@@ -219,17 +220,31 @@ class Compiler:
         for proc_group in self._core_scoper.proc_groupings_flat:
             asm_progs[proc_group].append({'op': 'done_stb'})
 
-        return CompiledProgram(asm_progs, self._fpga_config)
+        return CompiledProgram(asm_progs, self.ir_prog.fpga_config)
 
     def _compile_block(self, asm_progs, instructions):
         proc_groups_bydest = self._core_scoper.proc_groupings
         # TODO: add twidth attribute to env, not pulse
-        for i, instr in enumerate(self.scheduled_program):
+        for i, instr in enumerate(instructions):
             if instr.name == 'pulse':
                 proc_group = proc_groups_bydest[instr.dest]
+
+                if isinstance(instr.env, dict):
+                    env = instr.env
+                elif isinstance(instr.env[0], dict):
+                    env = instr.env[0]
+                    if len(instr.env) > 1:
+                        logging.getLogger(__name__).warning(f'Only first env paradict {env} is being used')
+                else:
+                    env = instr.env
+
+                if isinstance(env, dict):
+                    if 'twidth' not in env['paradict'].keys():
+                        env['paradict']['twidth'] = instr.twidth
+
                 asm_progs[proc_group].append(
                         {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
-                         'env': instr.env, 'start_time': instr.start_time, 'dest': instr.dest})
+                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest})
 
             elif instr.name == 'jump_label':
                 for dest in instr.scope:
@@ -242,8 +257,8 @@ class Compiler:
                         asm_progs[grp].append({'op': 'declare_reg', 'name': instr.var, 'dtype': instr.dtype})
 
             elif instr.name == 'alu':
-                for q in instr.scope:
-                    for grp in proc_groups_byqubit[q]:
+                for dest in instr.scope:
+                    for grp in proc_groups_bydest[dest]:
                         asm_progs[grp].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1': instr.rhs, 
                                                       'alu_op': instr.alu_op, 'out_reg': instr.out})
 
@@ -445,7 +460,7 @@ class _CoreScoper:
             self._dest_channels = qchip_or_dest_channels
         self._generate_proc_groups(proc_grouping)
 
-        self.proc_groupings_flat = tuple(np.unique(np.asarray(self.proc_groupings.values())))
+        self.proc_groupings_flat = set(self.proc_groupings.values())
 
     def _generate_proc_groups(self, proc_grouping):
         proc_groupings = {}
@@ -456,5 +471,5 @@ class _CoreScoper:
                     if sub_dict is not None:
                         proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
 
-        self.proc_groupings = proc_grouping
+        self.proc_groupings = proc_groupings
 
