@@ -27,14 +27,14 @@ stages:          # List of stages for jobs, and their order of execution
 
 before_script:
     - pip install -e $PROC_DRIVER_PATH
+    - pip install pytest
+    - pip install parse
 
 test-compiler:
   stage: test
   script:
     - pip install git+https://gitlab.com/LBL-QubiC/experiments/qubitconfig.git
     - cd $DRIVER_TEST_PATH 
-    - pip install pytest
-    - pip install python==3.10
     - pytest
 
 test-proc:   # This job runs in the test stage.
