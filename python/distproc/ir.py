@@ -214,7 +214,7 @@ class ScopeProgram(Pass):
           of instructions
     """
 
-    def __init__(self, qubit_grouping: tuple):
+    def __init__(self, qubit_grouping: tuple, rescope_barriers_and_delays=True):
         """
         Parameters
         ----------
@@ -226,6 +226,7 @@ class ScopeProgram(Pass):
                 'qubit'
         """
         self._scoper = _QubitScoper(qubit_grouping) 
+        self._rescope = rescope_barriers_and_delays
 
     def run_pass(self, ir_prog):
         for node in ir_prog.blocks:
@@ -244,6 +245,17 @@ class ScopeProgram(Pass):
                     scope = scope.union(self._scoper.get_scope(instr.dest))
     
             ir_prog.control_flow_graph.nodes[node]['scope'] = scope
+
+        if self._rescope:
+            self._rescope_barriers_and_delays(ir_prog)
+
+    def _rescope_barriers_and_delays(self, ir_prog: IRProgram):
+        for node in ir_prog.blocks:
+            block = ir_prog.blocks[node]['instructions']
+            for instr in block:
+                if instr.name == 'barrier' or instr.name == 'delay':
+                    if instr.scope is None:
+                        instr.scope = ir_prog.scope
 
 class RegisterVarsAndFreqs(Pass):
     """
