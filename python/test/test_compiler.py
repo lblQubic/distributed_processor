@@ -6,6 +6,7 @@ import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
 import json
+import difflib
 
 class ElementConfigTest(hw.ElementConfig):
     def __init__(self, samples_per_clk, interp_ratio):
@@ -48,17 +49,18 @@ def test_phase_resolve():
     program.append({'name':'X90', 'qubit': ['Q1']})
     program.append({'name':'X90Z90', 'qubit': ['Q0']})
     program.append({'name':'X90', 'qubit': ['Q0']})
-    program.append({'name':'virtualz', 'qubit': ['Q0'], 'phase': np.pi/4})
+    program.append({'name':'virtual_z', 'qubit': ['Q0'], 'phase': np.pi/4})
     program.append({'name':'X90', 'qubit': ['Q0']})
     program.append({'name':'X90', 'qubit': ['Q1']})
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.compile()
-    resolved_prog = compiler._basic_blocks['block_0'].resolved_program
-    assert resolved_prog[0].contents[0].phase == 0
-    assert resolved_prog[1].contents[0].phase == 0
-    assert resolved_prog[3].contents[0].phase == np.pi/2
-    assert resolved_prog[4].contents[0].phase == 3*np.pi/4
-    assert resolved_prog[5].contents[0].phase == 0
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    pulse_list = compiler.ir_prog.blocks['block_0']['instructions']
+    assert pulse_list[0].phase == 0
+    assert pulse_list[1].phase == 0
+    assert pulse_list[3].phase == np.pi/2
+    assert pulse_list[4].phase == 3*np.pi/4
+    assert pulse_list[5].phase == 0
+    return compiler.ir_prog
 
 def test_basic_schedule():
     qchip = qc.QChip('qubitcfg.json')
@@ -75,16 +77,15 @@ def test_basic_schedule():
             {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler.schedule()
-    scheduled_prog = compiler._basic_blocks['block_0'].scheduled_program
-    assert scheduled_prog[0]['t'] == 5
-    assert scheduled_prog[1]['t'] == 5
-    assert scheduled_prog[2]['t'] == 21 #scheduled_prog[0]['gate'].contents[0].twidth
-    assert scheduled_prog[3]['t'] == 37 #scheduled_prog[0]['gate'].contents[0].twidth \
-            #+ scheduled_prog[2]['gate'].contents[0].twidth
-    assert scheduled_prog[4]['t'] == 13 #scheduled_prog[1]['gate'].contents[0].twidth
-    assert scheduled_prog[5]['t'] == 53 #scheduled_prog[0]['gate'].contents[0].twidth \
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    pulse_list = compiler.ir_prog.blocks['block_0']['instructions']
+    assert pulse_list[0].start_time == 5
+    assert pulse_list[1].start_time == 5
+    assert pulse_list[2].start_time == 21 #scheduled_prog[0]['gate'].contents[0].twidth
+    assert pulse_list[3].start_time == 37 #scheduled_prog[0]['gate'].contents[0].twidth \
+    assert pulse_list[4].start_time == 13 #scheduled_prog[1]['gate'].contents[0].twidth
+    assert pulse_list[5].start_time == 53 #scheduled_prog[0]['gate'].contents[0].twidth \
               #+ scheduled_prog[2]['gate'].contents[0].twidth + scheduled_prog[3]['gate'].contents[0].twidth
 def test_pulse_compile():
     qchip = qc.QChip('qubitcfg.json')
@@ -98,17 +99,17 @@ def test_pulse_compile():
                {'name':'X90Z90', 'qubit': ['Q0']},
                {'name':'X90', 'qubit': ['Q0']},
                {'name':'X90', 'qubit': ['Q1']},
-               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+               {'name': 'pulse', 'phase': np.pi/2, 'freq': 'Q0.freq', 'env': np.ones(100), 
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv'},
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
-    channel_configs = hw.load_channel_configs('../test/channel_config.json')
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
-        assert str(sorted_program) == f.read().rstrip('\n')
-    return prog
+        filein = f.read().rstrip('\n')
+        assert str(sorted_program) == filein
 
 def test_pulse_compile_nogate():
     qchip = qc.QChip('qubitcfg.json')
@@ -127,71 +128,54 @@ def test_pulse_compile_nogate():
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q1.qdrv'},
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
-    channel_configs = hw.load_channel_configs('../test/channel_config.json')
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
     print(prog.program)
     return prog
 
-def test_basic_compile():
-    #can we compile without errors
-    pass
-    # wiremap = wm.Wiremap('wiremap_test0.json')
-    # qchip = qc.QChip('qubitcfg.json')
-    # compiler = cm.Compiler(['Q0', 'Q1'], wiremap, qchip, ElementConfigTest())
-    # compiler.add_statement({'name':'X90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q1'})
-    # compiler.add_statement({'name':'X90Z90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q0'})
-    # compiler.add_statement({'name':'X90', 'qubit':'Q1'})
-    # compiler.add_statement({'name':'read', 'qubit':'Q0'})
-    # compiler.compile()
-    # compiler.generate_sim_output()
-    # assert True
+#def test_linear_cfg():
+#    qchip = qc.QChip('qubitcfg.json')
+#    fpga_config = {'alu_instr_clks': 2,
+#                   'fpga_clk_period': 2.e-9,
+#                   'jump_cond_clks': 3,
+#                   'jump_fproc_clks': 4,
+#                   'pulse_regwrite_clks': 1}
+#    program = [{'name': 'X90', 'qubit': ['Q0']},
+#               {'name': 'X90', 'qubit': ['Q1']}]
+#    fpga_config = hw.FPGAConfig(**fpga_config)
+#    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+#    compiler._make_basic_blocks()
+#    print('basic_blocks{}'.format(compiler._basic_blocks))
+#    compiler._generate_cfg()
+#    print('cfg {}'.format(compiler._control_flow_graph))
+#    assert True
 
 
-def test_linear_cfg():
-    qchip = qc.QChip('qubitcfg.json')
-    fpga_config = {'alu_instr_clks': 2,
-                   'fpga_clk_period': 2.e-9,
-                   'jump_cond_clks': 3,
-                   'jump_fproc_clks': 4,
-                   'pulse_regwrite_clks': 1}
-    program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'X90', 'qubit': ['Q1']}]
-    fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler._make_basic_blocks()
-    print('basic_blocks{}'.format(compiler._basic_blocks))
-    compiler._generate_cfg()
-    print('cfg {}'.format(compiler._control_flow_graph))
-    assert True
-
-
-def test_onebranch_cfg():
-    qchip = qc.QChip('qubitcfg.json')
-    fpga_config = {'alu_instr_clks': 2,
-                   'fpga_clk_period': 2.e-9,
-                   'jump_cond_clks': 3,
-                   'jump_fproc_clks': 4,
-                   'pulse_regwrite_clks': 1}
-    program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 0, 
-                'func_id': 0, 'true': [{'name': 'X90', 'qubit': ['Q0']}],
-                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q0', 'Q1']},
-               {'name': 'X90', 'qubit': ['Q1']}]
-    fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler._make_basic_blocks()
-    compiler._generate_cfg()
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-    assert True
+#def test_onebranch_cfg():
+#    qchip = qc.QChip('qubitcfg.json')
+#    fpga_config = {'alu_instr_clks': 2,
+#                   'fpga_clk_period': 2.e-9,
+#                   'jump_cond_clks': 3,
+#                   'jump_fproc_clks': 4,
+#                   'pulse_regwrite_clks': 1}
+#    program = [{'name': 'X90', 'qubit': ['Q0']},
+#               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 0, 
+#                'func_id': 0, 'true': [{'name': 'X90', 'qubit': ['Q0']}],
+#                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q0', 'Q1']},
+#               {'name': 'X90', 'qubit': ['Q1']}]
+#    fpga_config = hw.FPGAConfig(**fpga_config)
+#    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+#    compiler._make_basic_blocks()
+#    compiler._generate_cfg()
+#    for blockname, block in compiler._basic_blocks.items():
+#        print('{}: {}'.format(blockname, block))
+#
+#    for source, dest in compiler._control_flow_graph.items():
+#        print('{}: {}'.format(source, dest))
+#    for source, dest in compiler._global_cfg.items():
+#        print('{}: {}'.format(source, dest))
+#    assert True
 
 
 def test_multrst_cfg():
@@ -210,23 +194,14 @@ def test_multrst_cfg():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    compiler._make_basic_blocks()
-    compiler._generate_cfg()
-    print('basic_blocks:')
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
+    print(prog.program)
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_multirst_cfg.txt', 'r') as f:
-        #f.write(str(prog.program))
-        assert str(sorted_program) == f.read().rstrip('\n')
+        filein = f.read().rstrip('\n')
+        assert str(sorted_program) == filein
 
     assert True
 
@@ -241,15 +216,8 @@ def test_linear_compile():
                {'name': 'X90', 'qubit': ['Q1']},
                {'name': 'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-    compiler.schedule()
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
     print()
     print('lincomp_prog')
@@ -271,7 +239,8 @@ def test_linear_compile_globalasm():
                {'name': 'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     compiled_prog = compiler.compile()
     #compiled_prog = cm.CompiledProgram(compiler.asm_progs, fpga_config)
 
@@ -281,82 +250,6 @@ def test_linear_compile_globalasm():
                       for chan_ind in sorted(asm_prog.keys())}
     with open('test_outputs/test_linear_compile_globalasm.txt', 'r') as f:
         assert str(sorted_prog) == f.read().rstrip('\n')
-
-def test_multrst_schedule():
-    qchip = qc.QChip('qubitcfg.json')
-    fpga_config = {'alu_instr_clks': 2,
-                   'fpga_clk_period': 2.e-9,
-                   'jump_cond_clks': 3,
-                   'jump_fproc_clks': 4,
-                   'pulse_regwrite_clks': 1}
-    program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 0,
-                'true': [],
-                'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
-               {'name': 'read', 'qubit': ['Q1']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 1,
-                'true': [],
-                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
-               {'name': 'X90', 'qubit': ['Q1']}]
-    fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-
-    compiler._make_basic_blocks()
-    print('basic_blocks:')
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    compiler._generate_cfg()
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-
-    compiler.schedule()
-    for source, dest in compiler.block_end_times.items():
-        print('{}: {}'.format(source, dest))
-
-    assert True
-    return compiler.compile()
-
-def test_multrst_schedule2():
-    qchip = qc.QChip('qubitcfg.json')
-    fpga_config = {'alu_instr_clks': 2,
-                   'fpga_clk_period': 2.e-9,
-                   'jump_cond_clks': 3,
-                   'jump_fproc_clks': 4,
-                   'pulse_regwrite_clks': 1}
-    program = [{'name': 'X90', 'qubit': ['Q0']},
-               {'name': 'read', 'qubit': ['Q0']},
-               {'name': 'X90', 'qubit': ['Q1']},
-               {'name': 'read', 'qubit': ['Q1']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 1,
-                'true': [],
-                'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
-               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 0,
-                'true': [],
-                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
-               {'name': 'X90', 'qubit': ['Q1']}]
-    fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
-
-    compiler._make_basic_blocks()
-    print('basic_blocks:')
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    compiler._generate_cfg()
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-
-    compiler.schedule()
-    for source, dest in compiler.block_end_times.items():
-        print('{}: {}'.format(source, dest))
-
-    assert True
-    return compiler.compile()
 
 def test_simple_loop():
     qchip = qc.QChip('qubitcfg.json')
@@ -379,25 +272,11 @@ def test_simple_loop():
                {'name': 'X90', 'qubit': ['Q1']}]
 
     fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
 
-    compiler._make_basic_blocks()
-    print('basic_blocks:')
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    compiler._generate_cfg()
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-
-    compiler.schedule()
-    for source, dest in compiler.block_end_times.items():
-        print('{}: {}'.format(source, dest))
-
-    assert True
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
+
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_simple_loop.txt', 'r') as f:
         #f.write(str(sorted_program))
@@ -422,24 +301,11 @@ def test_compound_loop():
                {'name': 'X90', 'qubit': ['Q1']}]
 
     fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
 
-    compiler._make_basic_blocks()
-    print('basic_blocks:')
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    compiler._generate_cfg()
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-
-    compiler.schedule()
-    for source, dest in compiler.block_end_times.items():
-        print('{}: {}'.format(source, dest))
-
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
+
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_compound_loop.txt', 'r') as f:
         #f.write(str(prog.program))
@@ -470,25 +336,28 @@ def test_nested_loop():
                {'name': 'X90', 'qubit': ['Q1']}]
 
     fpga_config = hw.FPGAConfig(**fpga_config)
-    compiler = cm.Compiler(program, 'by_qubit', fpga_config, qchip)
 
-    compiler._make_basic_blocks()
-    print('basic_blocks:')
-    for blockname, block in compiler._basic_blocks.items():
-        print('{}: {}'.format(blockname, block))
-
-    compiler._generate_cfg()
-    for source, dest in compiler._control_flow_graph.items():
-        print('{}: {}'.format(source, dest))
-    for source, dest in compiler._global_cfg.items():
-        print('{}: {}'.format(source, dest))
-
-    compiler.schedule()
-    for source, dest in compiler.block_end_times.items():
-        print('{}: {}'.format(source, dest))
-
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
     prog = compiler.compile()
+
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_nested_loop.txt', 'r') as f:
         assert str(sorted_program) == f.read().rstrip('\n')
     return prog
+
+def test_scoper_procgroup_gen():
+    scoper = cm._CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'))
+    grouping = {dest: ('Q0.qdrv', 'Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv')}
+    grouping.update({dest: ('Q1.qdrv', 'Q1.rdrv', 'Q1.rdlo') for dest in ('Q1.rdrv', 'Q1.rdlo', 'Q1.qdrv')})
+    assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)
+
+def test_scoper_procgroup_gen_bychan():
+    scoper = cm._CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'), 
+                        proc_grouping=[('{qubit}.qdrv',), ('{qubit}.rdrv', '{qubit}.rdlo')])
+    grouping = {dest: ('Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo')}
+    grouping.update({'Q0.qdrv': ('Q0.qdrv',)})
+    grouping.update({dest: ('Q1.rdrv', 'Q1.rdlo') for dest in ('Q1.rdrv', 'Q1.rdlo')})
+    grouping.update({'Q1.qdrv': ('Q1.qdrv',)})
+    #print(scoper.proc_groupings)
+    assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)
