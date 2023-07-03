@@ -60,7 +60,7 @@ module proc
     wire[1:0] inst_ptr_en_sel;
     wire[1:0] inst_ptr_load_en_sel;
     wire qclk_load_en;
-    reg cstrobe, cstrobe_ctrl;
+    reg cstrobe, cstrobe_d;
 
     wire qclk_resetin;
     wire inst_ptr_resetin;
@@ -120,7 +120,7 @@ module proc
 	always @(posedge clk) begin
 		{dummy_resetsr,reset_sr}<={reset_sr,reset};
         cstrobe <= (qclk_out == pulse_cmd_time) & c_strobe_enable;
-        cstrobe_ctrl <= cstrobe;
+        cstrobe_d <= cstrobe;
 	end
 
     //instantiate modules
@@ -136,12 +136,12 @@ module proc
     ctrl #(.MEM_READ_CYCLES(CMD_MEM_READ_LATENCY)) ctu(.clk(clk), .reset(reset), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
               .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_enable(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
-              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe_ctrl), .instr_load_en(instr_load_en),
+              .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .cstrobe_in(cstrobe_d), .instr_load_en(instr_load_en),
               .sync_out_ready(sync.enable), .fproc_enable(fproc.enable), .write_pulse_en(write_pulse_en), .done_gate(done_gate), .pulse_reset(pulseout.reset));
     alu #(.DATA_WIDTH(DATA_WIDTH)) myalu(.clk(clk), .ctrl(alu_opcode), .in0(alu_in0), .in1(alu_in1), .out(alu_out));
     qclk #(.WIDTH(DATA_WIDTH)) myclk(.clk(clk), .rst(|reset_sr[3:0]), .in_val(qclk_in), .load_enable(qclk_load_en), .out(qclk_out)); //todo: implement sync reset logic
     pulse_reg #(.DATA_WIDTH(DATA_WIDTH)) pulsereg(.clk(clk), .pulse_cmd_in(pulse_cmd_i), .reg_in(reg_file_out0), 
-        .pulse_write_en(write_pulse_en), .cstrobe_in(cstrobe), .pulseout(pulseout));
+        .pulse_write_en(write_pulse_en), .cstrobe_in(cstrobe_d), .pulseout(pulseout));
 
     //`ifdef COCOTB_SIM
     //initial begin
