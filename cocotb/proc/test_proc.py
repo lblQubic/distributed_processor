@@ -87,7 +87,7 @@ async def pulse_freq_trig_test(dut):
     """
     cmd_list = []
     freq_word_list = []
-    pulse_time_list = [3, 6, 11, 15, 18, 22]
+    pulse_time_list = [3, 7, 11, 15, 19, 24]
     n_cmd = len(pulse_time_list)
     pulse_i_opcode = 0b10010000
 
@@ -107,7 +107,7 @@ async def pulse_freq_trig_test(dut):
 
     freq_read_list = []
     freq_read_times = []
-    for i in range(26):
+    for i in range(30):
         if(dut.cstrobe_out.value == 1):
             freq_read_list.append(dut.freq.value)
             freq_read_times.append(dut.dpr.qclk_out.value)
@@ -129,7 +129,7 @@ async def pulse_i_test(dut):
     freq_word_list = []
     phase_word_list = []
     env_word_list = []
-    pulse_time_list = [3, 6, 11, 15, 18, 22]
+    pulse_time_list = [3, 7, 11, 15, 19, 24]
     n_cmd = len(pulse_time_list)
 
     for i in range(n_cmd):
@@ -246,7 +246,7 @@ async def pulse_reg_test(dut):
     amp_word_list = []
     env_word_list = []
     cfg_word_list = []
-    pulse_time_list = [9, 15, 18]
+    pulse_time_list = [9, 15, 19]
 
     reg_word = 0x000000a3
     reg_addr = 2
@@ -386,7 +386,7 @@ async def jump_i_cond_test(dut):
 @cocotb.test()
 async def inc_qclk_i_test(dut):
     cmd_list = []
-    cmd_wait_range = 20
+    cmd_wait_range = 25
     qclk_inc_val = random.randint(-2**31, 2**31-1-cmd_wait_range)
     qclk_wait_t = random.randint(0, cmd_wait_range-1)
 
@@ -542,8 +542,6 @@ async def pulse_reset_test(dut):
     await(RisingEdge(dut.clk))
     rst = dut.pulse_reset.value
     assert rst == 0 
-
-
 
 
 def evaluate_alu_exp(in0, op, in1):
