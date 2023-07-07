@@ -457,75 +457,95 @@ class ResolveFreqs(Pass):
 
 class Schedule(Pass):
 
-    def __init__(self, fpga_config: hw.FPGAConfig):
+    def __init__(self, fpga_config: hw.FPGAConfig, proc_grouping: list):
         self._fpga_config = fpga_config
         self._start_nclks = 5
+        self._proc_grouping = proc_grouping
 
     def run_pass(self, ir_prog: IRProgram):
         # TODO: add loopdict checking
+        self._core_scoper = CoreScoper(ir_prog.scope, self._proc_grouping)
         for nodename in nx.topological_sort(ir_prog.control_flow_graph):
             cur_t = {dest: self._start_nclks for dest in ir_prog.blocks[nodename]['scope']}
+            last_instr_end_t = {grp: self._start_nclks \
+                    for grp in self._core_scoper.get_groups_bydest(ir_prog.blocks[nodename]['scope'])}
+
             for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
                 for dest in cur_t.keys():
                     if dest in ir_prog.blocks[pred_node]['scope']:
                         cur_t[dest] = max(cur_t[dest], ir_prog.blocks[pred_node]['block_end_t'][dest])
+                for grp in last_instr_end_t:
+                    if grp in ir_prog.blocks[pred_node]['last_instr_end_t']:
+                        last_instr_end_t[grp] = max(last_instr_end_t[grp], ir_prog.blocks[pred_node]['last_instr_end_t'][grp])
 
 
             if self._check_nodename_loopstart(nodename):
                 ir_prog.register_loop(nodename, ir_prog.blocks[nodename]['scope'],
                                       max(cur_t.values()))
 
-            self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t)
+            self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t, last_instr_end_t)
 
             if isinstance(ir_prog.blocks[nodename]['instructions'][-1], iri.JumpCond) \
                     and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
                 loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
                 ir_prog.blocks[nodename]['block_end_t'] = {dest: ir_prog.loops[loopname].start_time \
                         for dest in ir_prog.blocks[nodename]['scope']}
-                ir_prog.loops[loopname].delta_t = max(cur_t.values()) - ir_prog.loops[loopname].start_time
+                ir_prog.blocks[nodename]['last_instr_end_t'] = {grp: ir_prog.loops[loopname].start_time \
+                        for grp in self._core_scoper.get_groups_bydest(ir_prog.blocks[nodename]['scope'])}
+                ir_prog.loops[loopname].delta_t = max(max(last_instr_end_t.values()), max(cur_t.values())) \
+                        - ir_prog.loops[loopname].start_time
 
             else:
                 ir_prog.blocks[nodename]['block_end_t'] = cur_t
+                ir_prog.blocks[nodename]['last_instr_end_t'] = last_instr_end_t
 
         ir_prog.fpga_config = self._fpga_config
 
 
-    def _schedule_block(self, instructions, cur_t):
+    def _schedule_block(self, instructions, cur_t, last_instr_end_t):
         i = 0
         while i < len(instructions):
             instr = instructions[i]
             if instr.name == 'pulse':
-                instr.start_time = cur_t[instr.dest]
-                cur_t[instr.dest] += self._get_pulse_nclks(instr.twidth)
+                last_instr_t = last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]]
+                instr.start_time = max(last_instr_t, cur_t[instr.dest])
+
+                last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]] = instr.start_time + self._fpga_config.pulse_load_clks
+                cur_t[instr.dest] = instr.start_time + self._get_pulse_nclks(instr.twidth)
+
             elif instr.name == 'barrier':
                 max_t = max(cur_t[dest] for dest in instr.scope)
                 for dest in instr.scope:
                     cur_t[dest] = max_t
                 instructions.pop(i)
                 i -= 1
+
             elif instr.name == 'delay':
                 for dest in instr.scope:
                     cur_t[dest] += self._get_pulse_nclks(instr.t)
                 instructions.pop(i)
                 i -= 1
 
-            # TODO: this is very conservative scheduling; some of this time can be 
-            #   absorbed by pulse execution
             elif instr.name == 'alu':
-                for dest in instr.scope:
-                    cur_t[dest] += self._fpga_config.alu_instr_clks
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
+
             elif instr.name == 'jump_fproc':
-                for dest in instr.scope:
-                    cur_t[dest] += self._fpga_config.jump_fproc_clks
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.jump_fproc_clks
+
             elif instr.name == 'jump_i':
-                for dest in instr.scope:
-                    cur_t[dest] += self._fpga_config.jump_cond_clks
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.jump_cond_clks
+
             elif instr.name == 'jump_cond':
-                for dest in instr.scope:
-                    cur_t[dest] += self._fpga_config.jump_cond_clks
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.jump_cond_clks
+
             elif instr.name == 'loop_end':
-                for dest in instr.scope:
-                    cur_t[dest] += self._fpga_config.alu_instr_clks
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
+
             elif isinstance(instr, iri.Gate):
                 raise Exception('Must resolve gates first!')
 
@@ -538,3 +558,32 @@ class Schedule(Pass):
     def _check_nodename_loopstart(self, nodename):
         return nodename.split('_')[-1] == 'loopctrl'
 
+
+class CoreScoper:
+
+    def __init__(self, qchip_or_dest_channels=None, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
+        if isinstance(qchip_or_dest_channels, qc.QChip):
+            self._dest_channels = qchip_or_dest_channels.dest_channels
+        else:
+            self._dest_channels = qchip_or_dest_channels
+        self._generate_proc_groups(proc_grouping)
+
+        self.proc_groupings_flat = set(self.proc_groupings.values())
+
+    def _generate_proc_groups(self, proc_grouping):
+        proc_groupings = {}
+        for dest in self._dest_channels:
+            for group in proc_grouping:
+                for dest_pattern in group:
+                    sub_dict = parse.parse(dest_pattern, dest)
+                    if sub_dict is not None:
+                        proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
+
+        self.proc_groupings = proc_groupings
+
+    def get_groups_bydest(self, dests):
+        groups = set()
+        for dest in dests:
+            groups.add(self.proc_groupings[dest])
+
+        return groups

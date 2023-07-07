@@ -132,14 +132,16 @@ INITIAL_TSTART = 5
 DEFAULT_FREQNAME = 'freq'
 PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 
-def get_default_passes(fpga_config, qchip, qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')):
+def get_default_passes(fpga_config, qchip, \
+        qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),\
+        proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
     return [ir.ScopeProgram(qubit_grouping),
             ir.RegisterVarsAndFreqs(),
             ir.ResolveGates(qchip, qubit_grouping),
             ir.GenerateCFG(),
             ir.ResolveVirtualZ(),
             ir.ResolveFreqs(qchip),
-            ir.Schedule(fpga_config)]
+            ir.Schedule(fpga_config, proc_grouping)]
 
 class Compiler:
     """
@@ -193,7 +195,7 @@ class Compiler:
             ir_pass.run_pass(self.ir_prog)
 
     def compile(self):
-        self._core_scoper = _CoreScoper(self.ir_prog.scope, self._proc_grouping)
+        self._core_scoper = ir.CoreScoper(self.ir_prog.scope, self._proc_grouping)
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self._core_scoper.proc_groupings_flat}
         for blockname in self.ir_prog.blocknames_by_ind:
             self._compile_block(asm_progs, self.ir_prog.blocks[blockname]['instructions'])
@@ -419,35 +421,4 @@ def load_compiled_program(filename):
         progdict = json.load(f)
 
     return hw.FPGAConfig(**progdict['fpga_config'])
-
-
-
-class _CoreScoper:
-
-    def __init__(self, qchip_or_dest_channels=None, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
-        if isinstance(qchip_or_dest_channels, qc.QChip):
-            self._dest_channels = qchip_or_dest_channels.dest_channels
-        else:
-            self._dest_channels = qchip_or_dest_channels
-        self._generate_proc_groups(proc_grouping)
-
-        self.proc_groupings_flat = set(self.proc_groupings.values())
-
-    def _generate_proc_groups(self, proc_grouping):
-        proc_groupings = {}
-        for dest in self._dest_channels:
-            for group in proc_grouping:
-                for dest_pattern in group:
-                    sub_dict = parse.parse(dest_pattern, dest)
-                    if sub_dict is not None:
-                        proc_groupings[dest] = tuple(pattern.format(**sub_dict.named) for pattern in group)
-
-        self.proc_groupings = proc_groupings
-
-    def get_groups_bydest(self, dests):
-        groups = set()
-        for dest in dests:
-            groups.add(self.proc_groupings[dest])
-
-        return groups
 

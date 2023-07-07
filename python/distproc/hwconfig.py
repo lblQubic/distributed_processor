@@ -1,6 +1,7 @@
 """
 """
 from abc import ABC, abstractmethod
+from attrs import define, field
 import distproc.command_gen as cg
 import numpy as np
 import json
@@ -65,14 +66,14 @@ class ElementConfig(ABC):
         pass
 
 
+@define
 class FPGAConfig:
-
-    def __init__(self, **kwargs):
-        self.fpga_clk_period = kwargs.pop('fpga_clk_period')
-        self.alu_instr_clks = kwargs.pop('alu_instr_clks')
-        self.jump_cond_clks = kwargs.pop('jump_cond_clks')
-        self.jump_fproc_clks = kwargs.pop('jump_fproc_clks')
-        self.pulse_regwrite_clks = kwargs.pop('pulse_regwrite_clks')
+    fpga_clk_period: float
+    alu_instr_clks: int
+    jump_cond_clks: int
+    jump_fproc_clks: int
+    pulse_regwrite_clks: int
+    pulse_load_clks: int = 4
 
     @property
     def fpga_clk_freq(self):

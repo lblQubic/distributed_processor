@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 import ipdb
 import distproc.compiler as cm
+import distproc.ir as ir
 import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
@@ -201,9 +202,15 @@ def test_multrst_cfg():
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_multirst_cfg.txt', 'r') as f:
         filein = f.read().rstrip('\n')
+
+    try:
         assert str(sorted_program) == filein
 
-    assert True
+    except AssertionError as err:
+        with open('test_outputs/test_multirst_cfg_err.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err
 
 def test_linear_compile():
     qchip = qc.QChip('qubitcfg.json')
@@ -280,7 +287,16 @@ def test_simple_loop():
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_simple_loop.txt', 'r') as f:
         #f.write(str(sorted_program))
-        assert str(sorted_program) == f.read().rstrip('\n')
+        filein = f.read().rstrip('\n')
+
+    try:
+        assert str(sorted_program) == filein
+
+    except AssertionError as err:
+        with open('test_outputs/test_simple_loop_err.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err
 
 def test_compound_loop():
     qchip = qc.QChip('qubitcfg.json')
@@ -309,7 +325,17 @@ def test_compound_loop():
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_compound_loop.txt', 'r') as f:
         #f.write(str(prog.program))
-        assert str(sorted_program) == f.read().rstrip('\n')
+        filein = f.read().rstrip('\n')
+
+    try:
+        assert str(sorted_program) == filein
+
+    except AssertionError as err:
+        with open('test_outputs/test_compound_loop_err.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err
+
     return prog
 
 def test_nested_loop():
@@ -343,17 +369,27 @@ def test_nested_loop():
 
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_nested_loop.txt', 'r') as f:
-        assert str(sorted_program) == f.read().rstrip('\n')
+        filein = f.read().rstrip('\n')
+
+    try:
+        assert str(sorted_program) == filein
+
+    except AssertionError as err:
+        with open('test_outputs/test_nested_loop_err.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err
+
     return prog
 
 def test_scoper_procgroup_gen():
-    scoper = cm._CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'))
+    scoper = ir.CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'))
     grouping = {dest: ('Q0.qdrv', 'Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv')}
     grouping.update({dest: ('Q1.qdrv', 'Q1.rdrv', 'Q1.rdlo') for dest in ('Q1.rdrv', 'Q1.rdlo', 'Q1.qdrv')})
     assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)
 
 def test_scoper_procgroup_gen_bychan():
-    scoper = cm._CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'), 
+    scoper = ir.CoreScoper(('Q0.rdrv', 'Q0.rdlo', 'Q0.qdrv', 'Q1.rdrv', 'Q1.qdrv', 'Q1.rdlo'), 
                         proc_grouping=[('{qubit}.qdrv',), ('{qubit}.rdrv', '{qubit}.rdlo')])
     grouping = {dest: ('Q0.rdrv', 'Q0.rdlo') for dest in ('Q0.rdrv', 'Q0.rdlo')}
     grouping.update({'Q0.qdrv': ('Q0.qdrv',)})
