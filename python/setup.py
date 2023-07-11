@@ -38,6 +38,8 @@ setuptools.setup(
         #"qubic",
 		"numpy",
         "parse",
-        "networkx"
+        "networkx",
+        "attrs",
+        "pytest"
 		],
 )
