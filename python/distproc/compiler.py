@@ -113,6 +113,8 @@ import copy
 import logging 
 import parse
 import re
+from attrs import define
+
 try:
     import ipdb
 except ImportError:
@@ -374,6 +376,7 @@ def generate_flat_ir(program, label_prefix=''):
 
     return flattened_program
 
+@define
 class CompiledProgram:
     """
     Simple class for reading/writing compiler output.
@@ -396,9 +399,8 @@ class CompiledProgram:
         git revision?
     """
 
-    def __init__(self, program, fpga_config=None):
-        self.fpga_config = fpga_config
-        self.program = program
+    program: dict
+    fpga_config: hw.FPGAConfig = None
 
     @property
     def proc_groups(self):
@@ -411,9 +413,6 @@ class CompiledProgram:
 
         with open(filename) as f:
             json.dumps(progdict, f, indent=4)
-
-    def load(self, filename):
-        raise NotImplementedError()
 
 
 def load_compiled_program(filename):
