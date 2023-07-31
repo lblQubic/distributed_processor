@@ -19,12 +19,15 @@ Instruction dict format:
         params is a dict of pulse parameters, formatted the same way as pulses in qubitcfg.json files 
         (or alternatively GatePulse object cfg_dicts)
 
-    virtualz gates:
-        {'name': 'virtualz', 'qubit': [qubitid], 'phase': phase_in_rad, 'freqname': freq_name}
+    virtual-z gates:
+        {'name': 'virtual_z', 'qubit': [qubitid], 'phase': phase_in_rad, 'freq': freq_name}
 
-        'freqname' is optional; default is 'freq', which gets resolved into '<qubitid>.<freqname>' from qchip.
-        This generally corresponds to the qubit drive frequency in the qchip file. Other frequencies include 
-        readfreq and freq_ef.
+        'qubit', and 'freq' are both optional, but at least one must be specified. These fields are 
+        used to resolve the name of the frequency that the phase increment gets applied to:
+            - if both are specified, the freq name gets resolved to '<qubitid>.<freq_name>'
+            - if only 'qubit' is specified, the freq name gets resolved to '<qubitid>.freq'. 
+              (i.e. the default freq_name is 'freq')
+            - if only 'freq' is specified, the freq name gets resolved to '<freq_name>'.
 
         'phase' is phase in radians
 

@@ -286,6 +286,10 @@ class ResolveGates(Pass):
             Pulse0
             Pulse1,
             etc
+        - named frequencies (e.g. freq: 'Q2.freq') are registered into ir_prog.freqs
+          according to the qchip object (e.g. ir_prog.freqs['Q2.freq'] = 4.322352e9), 
+          and the 'freq' attribute of the resulting pulse preserves the name.
+        - numerical freqs are registered in the same way
     """
     def __init__(self, qchip, qubit_grouping):
         self._qchip = qchip
