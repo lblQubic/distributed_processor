@@ -259,12 +259,17 @@ class ScopeProgram(Pass):
 
 class RegisterVarsAndFreqs(Pass):
     """
-    Register the (explicitly declared) frequencies and variables into the 
-    ir program
+    Register frequencies and variables into the ir program. Both explicitly 
+    declared frequencies and Pulse instruction frequencies are registered. If
+    a qchip is provided, Pulse instruction frequencies can be referenced to any
+    qchip freq.
+
+    Note that frequencies used/defined in Gate instructions are NOT registered here
+    but are registered in the ResolveGates pass.
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, qchip: qc.QChip = None):
+        self._qchip = qchip
 
     def run_pass(self, ir_prog: IRProgram):
         for node in ir_prog.blocks:
@@ -274,6 +279,15 @@ class RegisterVarsAndFreqs(Pass):
                     ir_prog.register_freq(freqname, instr.freq)
                 elif instr.name == 'declare':
                     ir_prog.register_var(instr.var, instr.scope, instr.dtype)
+                elif instr.name == 'pulse':
+                    if instr.freq not in ir_prog.freqs.keys():
+                        if isinstance(instr.freq, str):
+                            if self._qchip is None:
+                                raise Exception(f'Undefined reference to freq {instr.freq}; no QChip\
+                                        object provided')
+                            ir_prog.register_freq(instr.freq, self._qchip.get_qubit_freq(instr.freq))
+                        else:
+                            ir_prog.register_freq(instr.freq, instr.freq)
 
 class ResolveGates(Pass):
     """
@@ -423,6 +437,7 @@ class ResolveVirtualZ(Pass):
                     if instr.freq in zphase_acc.keys():
                         instr.phase += zphase_acc[instr.freq]
                 elif isinstance(instr, iri.VirtualZ):
+                    assert instr.freq in ir_prog.freqs.keys()
                     instructions.pop(i)
                     i -= 1
                     if instr.freq in zphase_acc.keys():
@@ -438,9 +453,14 @@ class ResolveVirtualZ(Pass):
             ir_prog.blocks[nodename]['ending_zphases'] = zphase_acc
                 
 class ResolveFreqs(Pass):
+    """
+    Resolve references to named frequencies. i.e. if pulse.freq is a string,
+    assign it to the frequency registered in the IR program during the gate resolution
+    and/or freq/var registration passes.
+    """
 
-    def __init__(self, qchip: qc.QChip = None):
-        self._qchip = qchip
+    def __init__(self):
+        pass
 
     def run_pass(self, ir_prog: IRProgram):
 
@@ -453,12 +473,9 @@ class ResolveFreqs(Pass):
                         if instr.freq in ir_prog.vars.keys():
                             #this is a var parameterized freq
                             assert instr.dest in ir_prog.vars[instr.freq].scope
-                        elif instr.freq in ir_prog.freqs:
-                            instr.freq = ir_prog.freqs[instr.freq]
                         else:
-                            instr.freq = self._qchip.get_qubit_freq(instr.freq)
+                            instr.freq = ir_prog.freqs[instr.freq]
                             
-
 class Schedule(Pass):
 
     def __init__(self, fpga_config: hw.FPGAConfig, proc_grouping: list):

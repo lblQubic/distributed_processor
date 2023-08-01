@@ -141,11 +141,11 @@ def get_default_passes(fpga_config, qchip, \
         qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),\
         proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
     return [ir.ScopeProgram(qubit_grouping),
-            ir.RegisterVarsAndFreqs(),
+            ir.RegisterVarsAndFreqs(qchip),
             ir.ResolveGates(qchip, qubit_grouping),
             ir.GenerateCFG(),
             ir.ResolveVirtualZ(),
-            ir.ResolveFreqs(qchip),
+            ir.ResolveFreqs(),
             ir.Schedule(fpga_config, proc_grouping)]
 
 class Compiler:
