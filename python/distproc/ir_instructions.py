@@ -13,6 +13,8 @@ class Gate:
     def qubit(self):
         if isinstance(self._qubit, list):
             return self._qubit
+        elif isinstance(self._qubit, tuple):
+            return list(self._qubit)
         elif isinstance(self._qubit, str):
             return [self._qubit]
         else:
