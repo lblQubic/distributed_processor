@@ -435,7 +435,8 @@ class ResolveVirtualZ(Pass):
                     if instr.freq in zphase_acc.keys():
                         instr.phase += zphase_acc[instr.freq]
                 elif isinstance(instr, iri.VirtualZ):
-                    assert instr.freq in ir_prog.freqs.keys()
+                    if instr.freq not in ir_prog.freqs.keys():
+                        logging.getLogger(__name__).warning(f'performing virtualz on unused frequency: {instr.freq}')
                     instructions.pop(i)
                     i -= 1
                     if instr.freq in zphase_acc.keys():
