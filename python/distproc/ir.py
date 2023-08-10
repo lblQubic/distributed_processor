@@ -155,8 +155,6 @@ def _get_instr_classname(name):
     classname = ''.join(word.capitalize() for word in name.split('_'))
     if name == 'virtualz':
         classname = 'VirtualZ'
-        logging.getLogger(__name__).warning('Name virtualz is deprecated and will be removed \
-                in a future version. Use \'virtual_z\' instead.')
     elif classname not in dir(iri):
         classname = 'Gate'
     return classname
