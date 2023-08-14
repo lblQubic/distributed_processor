@@ -79,16 +79,26 @@ class FPGAConfig:
     def fpga_clk_freq(self):
         return 1/self.fpga_clk_period
 
-
+@define
 class ChannelConfig:
+    core_ind : int
+    elem_ind : int
+    elem_params : dict
+    _env_mem_name : str
+    _freq_mem_name : str
+    _acc_mem_name : str
+
+    @property
+    def env_mem_name(self):
+        return self._env_mem_name.format(core_ind=self.core_ind)
+
+    @property
+    def freq_mem_name(self):
+        return self._freq_mem_name.format(core_ind=self.core_ind)
     
-    def __init__(self, core_ind, elem_ind, elem_params, env_mem_name, freq_mem_name, acc_mem_name):
-        self.core_ind = core_ind
-        self.elem_ind = elem_ind
-        self.elem_params = elem_params
-        self.env_mem_name = env_mem_name.format(core_ind=self.core_ind)
-        self.freq_mem_name = freq_mem_name.format(core_ind=self.core_ind)
-        self.acc_mem_name = acc_mem_name.format(core_ind=self.core_ind)
+    @property
+    def acc_mem_name(self):
+        return self._acc_mem_name.format(core_ind=self.core_ind)
 
 
 def load_channel_configs(config_dict):
