@@ -298,6 +298,15 @@ class RegisterVarsAndFreqs(Pass):
                         instr.scope = ir_prog.vars[instr.rhs].scope
                     assert ir_prog.vars[instr.out].scope.issubset(instr.scope)
 
+                elif instr.name == 'set_var' or instr.name == 'read_fproc':
+                    instr.scope = ir_prog.vars[instr.var].scope
+
+                elif instr.name == 'alu_fproc':
+                    if isinstance(instr.lhs, str):
+                        instr.scope = ir_prog.vars[instr.rhs].scope
+
+
+
 class ResolveGates(Pass):
     """
     Resolves all Gate objects into constituent pulses, as determined by the 

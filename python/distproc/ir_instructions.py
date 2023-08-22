@@ -125,12 +125,19 @@ class JumpFproc:
 
 @define
 class ReadFproc:
-    alu_cond: str
-    cond_lhs: int | str
     func_id: int
-    scope: list | set
-    jump_label: str
+    var: str
+    scope: list | set = None
     name: str = 'read_fproc'
+
+@define
+class AluFproc:
+    func_id: int
+    lhs: int | str
+    op: str
+    out: str
+    scope: list | set = None
+    name: str = 'alu_fproc'
 
 @define
 class JumpLabel:
@@ -176,3 +183,10 @@ class Alu:
     out: str
     scope: list | set = None
     name: str = 'alu'
+
+@define
+class SetVar:
+    value: int | float
+    var: str
+    scope: list | set = None
+    name: str = 'set_var'

@@ -32,6 +32,8 @@
             {'op': 'jump_cond', 'in0': <int, regname>, 'alu_op': alu_opcode_str, 'in1_reg': regname, 'jump_label': <string>, 'label':<string>}
         jump_fproc:
             {'op': 'jump_fproc', 'in0': <int, regname>, 'alu_op': alu_op, 'jump_label': jump_label, 'func_id': func_id}
+        alu_fproc:
+            {'op': 'alu_fproc', 'in0': <int, regname>, 'alu_op': alu_op, 'out_reg': out_regname, 'func_id': func_id, 'label':<string>}
         reg_write:
             {'op': 'reg_write', 'value': <int>, 'name': out_regname, 'dtype': <('int',), ('phase', elemind), ('amp', elemind)>, 'label':<string>} 
             note: this is just a helper/wrapper for a reg_alu instruction
