@@ -76,6 +76,8 @@ class IRProgram:
         full_program = []
         for instr in source:
             instr_class = eval('iri.' + _get_instr_classname(instr['name']))
+            if instr['name'] == 'virtualz':
+                instr['name'] == 'virtual_z'
             full_program.append(instr_class(**instr))
 
         return full_program
@@ -264,6 +266,8 @@ class RegisterVarsAndFreqs(Pass):
 
     Note that frequencies used/defined in Gate instructions are NOT registered here
     but are registered in the ResolveGates pass.
+
+    Also scopes ALU instructions that use vars (todo: consider breaking this out)
     """
 
     def __init__(self, qchip: qc.QChip = None):
@@ -286,6 +290,13 @@ class RegisterVarsAndFreqs(Pass):
                             ir_prog.register_freq(instr.freq, self._qchip.get_qubit_freq(instr.freq))
                         else:
                             ir_prog.register_freq(instr.freq, instr.freq)
+
+                elif instr.name == 'alu':
+                    if isinstance(instr.lhs, str):
+                        instr.scope = ir_prog.vars[instr.rhs].scope.union(ir_prog.vars[instr.lhs].scope)
+                    else:
+                        instr.scope = ir_prog.vars[instr.rhs].scope
+                    assert ir_prog.vars[instr.out].scope.issubset(instr.scope)
 
 class ResolveGates(Pass):
     """
@@ -398,7 +409,39 @@ class ResolveHWVirtualZ(Pass):
           to that register
     Run this BEFORE ResolveVirtualZ
     """
-    pass
+    def __init__(self):
+        pass
+
+    def run_pass(self, ir_prog: IRProgram):
+        hw_zphase_bindings = {} #keyed by freqname, value is varname
+        for nodename in nx.topological_sort(ir_prog.control_flow_graph):
+            instructions = ir_prog.blocks[nodename]['instructions']
+            i = 0
+            while i < len(instructions):
+                instr = instructions[i]
+                if instr.name == 'bind_phase':
+                    assert instr.var in ir_prog.vars.keys()
+                    hw_zphase_bindings[instr.freq] = instr.var
+                    instructions.pop(i)
+                    i -= 1
+
+                elif isinstance(instr, iri.VirtualZ):
+                    if instr.freq in hw_zphase_bindings.keys():
+                        assert set(instr.scope).issubset(ir_prog.vars[hw_zphase_bindings[instr.freq]].scope)
+                        alu_zgate = iri.Alu(op='add', lhs=instr.phase, rhs=hw_zphase_bindings[instr.freq],
+                                            out=hw_zphase_bindings[instr.freq], scope=ir_prog.vars[hw_zphase_bindings[instr.freq]].scope)
+                        instructions.pop(i)
+                        instructions.insert(i, alu_zgate)
+                
+                elif instr.name == 'pulse':
+                    if instr.freq in hw_zphase_bindings.keys():
+                        instr.phase = hw_zphase_bindings[instr.freq]
+
+                elif isinstance(instr, iri.Gate):
+                    raise Exception(f'{iri.Gate.name} Gate found. All Gate instructions must be resolved before running this pass!')
+
+                i += 1
+
 
 class ResolveVirtualZ(Pass):
     """

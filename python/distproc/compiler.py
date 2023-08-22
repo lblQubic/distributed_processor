@@ -55,7 +55,7 @@ Instruction dict format:
         (this seems more like a compiler directive?)
         
     read fproc instruction:
-        {'name': 'read_fproc', 'func_id': function_id, 'dest': var_name, 'scope': qubits}
+        {'name': 'read_fproc', 'func_id': function_id, 'out': var_name, 'scope': qubits}
 
         stores fproc result (next available from func_id) in variable var_name for use 
         later in the program.
@@ -144,6 +144,7 @@ def get_default_passes(fpga_config, qchip, \
             ir.RegisterVarsAndFreqs(qchip),
             ir.ResolveGates(qchip, qubit_grouping),
             ir.GenerateCFG(),
+            ir.ResolveHWVirtualZ(),
             ir.ResolveVirtualZ(),
             ir.ResolveFreqs(),
             ir.Schedule(fpga_config, proc_grouping)]
@@ -162,6 +163,12 @@ class Compiler:
                - resolution of named frequencies
                - program block scoping
         3. Compile the program down to distributed processor assembly (CompiledProgram object).
+
+    TODO:
+        some linting checks:
+            - bind_phase and declare statements before any pulses, etc 
+            - sort out alu/read fproc instruction
+            - change out to dest
     """
 
     def __init__(self, program, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
@@ -240,12 +247,14 @@ class Compiler:
 
             elif instr.name == 'declare':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    if instr.dtype == 'phase' or instr.dtype == 'amp':
+                        instr.dtype = (instr.dtype, 0)
                     asm_progs[core].append({'op': 'declare_reg', 'name': instr.var, 'dtype': instr.dtype})
 
             elif instr.name == 'alu':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1': instr.rhs, 
-                                                      'alu_op': instr.alu_op, 'out_reg': instr.out})
+                    asm_progs[core].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1_reg': instr.rhs, 
+                                                      'alu_op': instr.op, 'out_reg': instr.out})
 
             elif instr.name == 'jump_fproc':
                 statement = {'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
