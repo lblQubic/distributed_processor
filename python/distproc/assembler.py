@@ -284,6 +284,11 @@ class SingleCoreAssembler:
                 self._env_dicts[elem_ind][envkey] = env
         elif isinstance(env, str):
             envkey = env
+            if envkey not in self._env_dicts[elem_ind]:
+                if envkey == 'cw':
+                    self._env_dicts[elem_ind][envkey] = 'cw'
+                else:
+                    raise Exception(f'Envelope not found: {envkey}')
         else:
             raise Exception('env must be string, dict, or np array')
 
@@ -357,10 +362,7 @@ class SingleCoreAssembler:
                         pulseargs['amp_word'] = self._elem_cfgs[cmd['elem']].get_amp_word(cmd['amp'])
 
                 if 'env' in cmd.keys():
-                    if cmd['env'] == 'cw':
-                        pulseargs['env_word'] = 0
-                    else:
-                        pulseargs['env_word'] = env_word_map[cmd['elem']][cmd['env']] 
+                    pulseargs['env_word'] = env_word_map[cmd['elem']][cmd['env']] 
 
                 if 'start_time' in cmd.keys():
                     pulseargs['cmd_time'] = cmd['start_time']
@@ -468,7 +470,10 @@ class SingleCoreAssembler:
 
         for envkey, env in self._env_dicts[elem_ind].items():
             env = self._elem_cfgs[elem_ind].get_env_buffer(env)
-            env_word_map[envkey] = self._elem_cfgs[elem_ind].get_env_word(cur_env_ind, len(env))
+            if envkey == 'cw':
+                env_word_map[envkey] = self._elem_cfgs[elem_ind].get_cw_env_word(cur_env_ind)
+            else:
+                env_word_map[envkey] = self._elem_cfgs[elem_ind].get_env_word(cur_env_ind, len(env))
             cur_env_ind += len(env)
             env_raw = np.append(env_raw, env)
 
@@ -547,6 +552,8 @@ class GlobalAssembler:
                 chan_cfg = channel_configs[chan]
                 assert chan_cfg.core_ind == int(core_ind)
                 elem_cfgs[chan_cfg.elem_ind] = elementconfig_class(**chan_cfg.elem_params)
+            assert np.all(np.array(sorted(elem_cfgs.keys()), dtype=np.int32) 
+                    == np.arange(len(elem_cfgs.keys()), dtype=np.int32)) # check that elem_inds in ch_cfgs start at 0 and increment by 1
             elem_cfgs = [elem_cfgs[elem_ind] for elem_ind in sorted(elem_cfgs.keys())]
 
             self.assemblers[core_ind] = SingleCoreAssembler(elem_cfgs)
