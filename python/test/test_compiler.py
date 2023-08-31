@@ -19,6 +19,9 @@ class ElementConfigTest(hw.ElementConfig):
     def get_env_word(self, env_start_ind, env_length):
         return 0
 
+    def get_cw_env_word(self, env_start_ind, env_length):
+        return 0
+
     def get_env_buffer(self, env_samples):
         return np.zeros(10)
 

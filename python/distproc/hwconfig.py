@@ -46,6 +46,10 @@ class ElementConfig(ABC):
         pass
 
     @abstractmethod
+    def get_cw_env_word(self, env_start_ind):
+        pass
+
+    @abstractmethod
     def get_env_buffer(self, env):
         pass
 
