@@ -288,7 +288,7 @@ class Compiler:
 
             elif instr.name == 'jump_cond':
                 statement = {'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
-                             'jump_label': instr.jump_label, 'in1': instr.cond_rhs}
+                             'jump_label': instr.jump_label, 'in1_reg': instr.cond_rhs}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
                     asm_progs[core].append(statement)
 

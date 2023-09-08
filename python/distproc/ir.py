@@ -598,7 +598,7 @@ class Schedule(Pass):
                 instructions.pop(i)
                 i -= 1
 
-            elif instr.name == 'alu':
+            elif instr.name == 'alu' or instr.name == 'set_var':
                 for grp in self._core_scoper.get_groups_bydest(instr.scope):
                     last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
 
