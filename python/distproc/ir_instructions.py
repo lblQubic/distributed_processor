@@ -34,7 +34,7 @@ class Pulse:
 @define
 class VirtualZ:
     phase: float
-    name: str = 'virtualz'
+    name: str = 'virtual_z'
     _qubit: str = None
     _freq: str | float = 'freq'
     scope: list | tuple | set = None
@@ -71,6 +71,36 @@ class DeclareFreq:
     freq_ind: int = None
 
 @define
+class BindPhase:
+    var: str
+    _qubit: str = None
+    _freq: str | float = 'freq'
+    name: str = 'bind_phase'
+    scope: list | tuple | set = None
+
+    @property
+    def freq(self):
+        if isinstance(self._freq, str):
+            if self.qubit is not None:
+                return ''.join(self.qubit) + f'.{self._freq}'
+            else:
+                return self._freq
+
+        else:
+            return self._freq
+
+    @property
+    def qubit(self):
+        if self._qubit is None:
+            return None
+        elif isinstance(self._qubit, list):
+            return self._qubit
+        elif isinstance(self._qubit, str):
+            return [self._qubit]
+        else:
+            raise TypeError
+
+@define
 class Barrier:
     name: str = 'barrier'
     qubit: list = None
@@ -95,12 +125,19 @@ class JumpFproc:
 
 @define
 class ReadFproc:
-    alu_cond: str
-    cond_lhs: int | str
     func_id: int
-    scope: list | set
-    jump_label: str
+    var: str
+    scope: list | set = None
     name: str = 'read_fproc'
+
+@define
+class AluFproc:
+    func_id: int
+    lhs: int | str
+    op: str
+    out: str
+    scope: list | set = None
+    name: str = 'alu_fproc'
 
 @define
 class JumpLabel:
@@ -141,7 +178,15 @@ class LoopEnd:
 @define
 class Alu:
     op: str
-    lhs: str | int
+    lhs: str | int | float
     rhs: str
     out: str
+    scope: list | set = None
     name: str = 'alu'
+
+@define
+class SetVar:
+    value: int | float
+    var: str
+    scope: list | set = None
+    name: str = 'set_var'

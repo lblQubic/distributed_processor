@@ -20,6 +20,9 @@ class ElementConfig(hw.ElementConfig):
     def get_env_word(self, env_start_ind, env_length):
         return 0xdc
 
+    def get_cw_env_word(self, env_start_ind, env_length):
+        return 0xdd
+
     def get_env_buffer(self, env_samples):
         return env_samples
 

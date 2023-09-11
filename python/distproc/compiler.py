@@ -55,10 +55,16 @@ Instruction dict format:
         (this seems more like a compiler directive?)
         
     read fproc instruction:
-        {'name': 'read_fproc', 'func_id': function_id, 'dest': var_name, 'scope': qubits}
+        {'name': 'read_fproc', 'func_id': function_id, 'var': var_name, 'scope': qubits}
 
         stores fproc result (next available from func_id) in variable var_name for use 
         later in the program.
+
+    alu fproc instruction:
+        {'name': 'alu_fproc', 'func_id': function_id, 'lhs': immediate_or_varname, 'op': alu_op, 'out': destination_varname}
+
+        performs an ALU operation on the fproc result (next available from func_id) and stores the result in
+        destination_varname. That is, destination_varname = immmediate_or_varname [alu_op] fproc_result
 
     barrier: 
         {'name': 'barrier', 't': <delaytime in seconds> 'qubits': qubitid_list}
@@ -90,6 +96,8 @@ Instruction dict format:
 
     ALU instructions:
         {'name': 'alu', 'op': 'add' or 'sub' or 'le' or 'ge' or 'eq', 'lhs': var_name or value, 'rhs': var_name, 'out': output reg}
+
+        {'name': 'set_var', 'value': immediate_value, 'var': varname}
 
     variable declaration:
         {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}
@@ -144,6 +152,7 @@ def get_default_passes(fpga_config, qchip, \
             ir.RegisterVarsAndFreqs(qchip),
             ir.ResolveGates(qchip, qubit_grouping),
             ir.GenerateCFG(),
+            ir.ResolveHWVirtualZ(),
             ir.ResolveVirtualZ(),
             ir.ResolveFreqs(),
             ir.Schedule(fpga_config, proc_grouping)]
@@ -162,6 +171,12 @@ class Compiler:
                - resolution of named frequencies
                - program block scoping
         3. Compile the program down to distributed processor assembly (CompiledProgram object).
+
+    TODO:
+        some linting checks:
+            - bind_phase and declare statements before any pulses, etc 
+            - sort out alu/read fproc instruction
+            - change out to dest
     """
 
     def __init__(self, program, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
@@ -240,12 +255,30 @@ class Compiler:
 
             elif instr.name == 'declare':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    if instr.dtype == 'phase' or instr.dtype == 'amp':
+                        instr.dtype = (instr.dtype, 0)
                     asm_progs[core].append({'op': 'declare_reg', 'name': instr.var, 'dtype': instr.dtype})
 
             elif instr.name == 'alu':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1': instr.rhs, 
-                                                      'alu_op': instr.alu_op, 'out_reg': instr.out})
+                    asm_progs[core].append({'op': 'reg_alu', 'in0': instr.lhs, 'in1_reg': instr.rhs, 
+                                                      'alu_op': instr.op, 'out_reg': instr.out})
+
+            elif instr.name == 'set_var':
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append({'op': 'reg_alu', 'in0': instr.value, 'in1_reg': instr.var,
+                                            'alu_op': 'id0', 'out_reg': instr.var})
+            elif instr.name == 'read_fproc':
+                statement = {'op': 'alu_fproc', 'in0': 0, 'alu_op': 'id1', 
+                             'func_id': instr.func_id, 'out_reg': instr.var}
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
+
+            elif instr.name == 'alu_fproc':
+                statement = {'op': 'alu_fproc', 'in0': instr.lhs, 'alu_op': instr.op, 
+                             'func_id': instr.func_id, 'out_reg': instr.out}
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
 
             elif instr.name == 'jump_fproc':
                 statement = {'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
@@ -255,7 +288,7 @@ class Compiler:
 
             elif instr.name == 'jump_cond':
                 statement = {'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
-                             'jump_label': instr.jump_label, 'in1': instr.cond_rhs}
+                             'jump_label': instr.jump_label, 'in1_reg': instr.cond_rhs}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
                     asm_progs[core].append(statement)
 

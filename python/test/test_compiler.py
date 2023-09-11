@@ -19,6 +19,9 @@ class ElementConfigTest(hw.ElementConfig):
     def get_env_word(self, env_start_ind, env_length):
         return 0
 
+    def get_cw_env_word(self, env_start_ind, env_length):
+        return 0
+
     def get_env_buffer(self, env_samples):
         return np.zeros(10)
 
@@ -397,3 +400,37 @@ def test_scoper_procgroup_gen_bychan():
     grouping.update({'Q1.qdrv': ('Q1.qdrv',)})
     #print(scoper.proc_groupings)
     assert json.dumps(scoper.proc_groupings, sort_keys=True) == json.dumps(grouping, sort_keys=True)
+
+def test_hw_virtualz():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'declare', 'var': 'q0_phase', 'scope': ['Q0'], 'dtype': 'phase'},
+               {'name': 'bind_phase', 'var': 'q0_phase', 'freq': 'Q0.freq'},#'qubit': 'Q0'},
+               {'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q1']},
+               {'name': 'virtual_z', 'qubit': 'Q0', 'phase': np.pi/2},
+               {'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'read', 'qubit': ['Q0']}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    for statement in compiler.ir_prog.blocks['block_0']['instructions']:
+        print(statement)
+    prog = compiler.compile()
+
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    globalasm = am.GlobalAssembler(prog, channel_configs, ElementConfigTest)
+    asm_prog = globalasm.get_assembled_program()
+
+    print()
+    for coreprog in prog.program.values():
+        for statement in coreprog:
+            print(statement)
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+    with open('test_outputs/test_hw_virtualz_out.txt', 'r') as f:
+        #f.write(str(sorted_program))
+        assert str(sorted_program) == f.read().rstrip('\n')
