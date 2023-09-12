@@ -117,7 +117,7 @@ class Delay:
 class JumpFproc:
     alu_cond: str
     cond_lhs: int | str
-    func_id: int
+    func_id: int | str
     scope: list
     jump_label: str
     jump_type: str = None
@@ -125,14 +125,14 @@ class JumpFproc:
 
 @define
 class ReadFproc:
-    func_id: int
+    func_id: int | str
     var: str
     scope: list | set = None
     name: str = 'read_fproc'
 
 @define
 class AluFproc:
-    func_id: int
+    func_id: int | str
     lhs: int | str
     op: str
     out: str

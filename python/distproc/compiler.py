@@ -155,6 +155,7 @@ def get_default_passes(fpga_config, qchip, \
             ir.ResolveHWVirtualZ(),
             ir.ResolveVirtualZ(),
             ir.ResolveFreqs(),
+            ir.ResolveFPROCChannels(fpga_config),
             ir.Schedule(fpga_config, proc_grouping)]
 
 class Compiler:

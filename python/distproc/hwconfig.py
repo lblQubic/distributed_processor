@@ -6,6 +6,9 @@ import distproc.command_gen as cg
 import numpy as np
 import json
 
+FPROC_MEAS_DELAY = 150.e-9
+N_CORES = 8
+
 class ElementConfig(ABC):
     """
     TODO: standardize constructor args for GlobalAssembler usage
@@ -14,12 +17,6 @@ class ElementConfig(ABC):
     def __init__(self, fpga_clk_period, samples_per_clk):
         self.fpga_clk_period = fpga_clk_period
         self.samples_per_clk = samples_per_clk
-
-        #TODO: move these out of this class:
-        self.nclks_alu = 2
-        self.nclks_br_fproc = 2
-        self.nclks_read_fproc = 2
-        self.elems_per_core = 3
 
     @property
     def sample_period(self):
@@ -69,15 +66,44 @@ class ElementConfig(ABC):
     def get_amp_word(self, amplitude):
         pass
 
+@define
+class FPROCChannel:
+    """
+    Description of an FPROC channel. Meant to be part of 
+    FPGAConfig.fproc_channels, which is a dict with (key, value)
+    pairs consisting of (name of the channel, FPROCChannel object)
+
+    Attributes
+    ----------
+        func_id: int or tuple
+
+            if int, the ID used to query the FPROC
+
+            if tuple, the actual resolution of the ID is done in 
+            the assemble stage using the channel_config object. The
+            first element of the tuple is the key of the object, and
+            the second element is the attribute to access
+
+        delay: float
+            delay (in seconds) to apply to pulses played after a 
+            read_fproc or branch_fproc instruction on this channel
+    """
+    id: int | tuple
+    delay: float
 
 @define
 class FPGAConfig:
-    fpga_clk_period: float
-    alu_instr_clks: int
-    jump_cond_clks: int
-    jump_fproc_clks: int
-    pulse_regwrite_clks: int
+    fpga_clk_period: float = 2.e-9
+    alu_instr_clks: int = 5
+    jump_cond_clks: int = 5
+    jump_fproc_clks: int = 5
+    pulse_regwrite_clks: int = 3
     pulse_load_clks: int = 4
+
+    # sensible defaults for fproc_meas channels: each qubit gets a 'Qn.meas' channel,
+    #  which is indexed according to the proc core for that qubit.
+    fproc_channels = {f'Q{i}.meas': FPROCChannel(id=(f'Q{i}.rdlo', 'core_ind'), 
+                                                 delay=FPROC_MEAS_DELAY) for i in range(N_CORES)}
 
     @property
     def fpga_clk_freq(self):

@@ -526,6 +526,39 @@ class ResolveFreqs(Pass):
                             assert instr.dest in ir_prog.vars[instr.freq].scope
                         else:
                             instr.freq = ir_prog.freqs[instr.freq]
+
+class ResolveFPROCChannels(Pass):
+    """
+    Resolve references to named FPROC channels, and add corresponding scheduling delays.
+    Both channel resolution and delay information come from the fproc_channels attribute
+    of the FPGAConfig object
+    """
+    
+    def __init__(self, fpga_config: hw.FPGAConfig):
+        self._fpga_config = fpga_config
+
+    def run_pass(self, ir_prog: IRProgram):
+        for nodename in nx.topological_sort(ir_prog.control_flow_graph):
+            instructions = ir_prog.blocks[nodename]['instructions']
+
+            i = 0
+            while i < len(instructions):
+                instr = instructions[i]
+                if isinstance(instr, iri.ReadFproc) or isinstance(instr, iri.JumpFproc) \
+                        or isinstance(instr, iri.AluFproc):
+                    instructions.insert(i, iri.Barrier(scope=instr.scope))
+                    i += 1
+                    if instr.func_id in self._fpga_config.fproc_channels.keys():
+                        fproc_chan = self._fpga_config.fproc_channels[instr.func_id]
+                        instructions.insert(i, iri.Delay(t=fproc_chan.delay, scope=instr.scope))
+                        i += 1
+                        instr.func_id = fproc_chan.id
+                    else:
+                        assert isinstance(instr.func_id, int)
+
+                i += 1
+
+
                             
 class Schedule(Pass):
 
