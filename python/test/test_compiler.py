@@ -233,6 +233,10 @@ def test_multrst_fproc_res_cfg():
     print(prog.program)
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
 
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    globalasm = am.GlobalAssembler(prog, channel_configs, ElementConfigTest)
+    asm_prog = globalasm.get_assembled_program()
+
     with open('test_outputs/test_multirst_fproc_res_cfg.txt', 'r') as f:
         filein = f.read().rstrip('\n')
 

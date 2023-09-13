@@ -54,6 +54,7 @@ import distproc.hwconfig as hw
 from collections import OrderedDict
 import warnings
 import json
+import ipdb
 
 ENV_BITS = 16
 N_MAX_REGS = 16
@@ -124,7 +125,8 @@ class SingleCoreAssembler:
             cmd['label'] = label
         self._program.append(cmd)
 
-    def add_alu_cmd(self, op, in0, alu_op, in1_reg=None, out_reg=None, jump_label=None, func_id=None, label=None):
+    def add_alu_cmd(self, op: str, in0: int | str, alu_op: str, in1_reg: str = None, 
+                    out_reg: str = None, jump_label: str = None, func_id: int | tuple | str = None, label: str = None):
         assert op in ['reg_alu', 'jump_cond', 'alu_fproc', 'jump_fproc', 'inc_qclk']
         if in1_reg is not None:
             assert in1_reg in self._regs.keys()
@@ -557,17 +559,32 @@ class GlobalAssembler:
             elem_cfgs = [elem_cfgs[elem_ind] for elem_ind in sorted(elem_cfgs.keys())]
 
             self.assemblers[core_ind] = SingleCoreAssembler(elem_cfgs)
-            self._resolve_element_inds(compiled_program.program[proc_group])
+            self._resolve_dest_fproc_chans(compiled_program.program[proc_group])
             self.assemblers[core_ind].from_list(compiled_program.program[proc_group])
 
-    def _resolve_element_inds(self, single_core_program):
+    def _resolve_dest_fproc_chans(self, single_core_program):
         """
-        Replace the 'dest' key in pulse commands with 'elem_ind' according to self.channel_configs
+        1) Replace the 'dest' key in pulse commands with 'elem_ind' according to self.channel_configs
+        2) Resolve FPROC func_ids according to the following:
+            if int, do nothing
+            if tuple, resolve using hw.ChannelConfig object; first index is the key of the object 
+            in the channel_configs dict, second element is the attribute:
+                e.g. ('Q0.rdlo', 'core_ind') resolves to channel_configs['Q0.rdlo'].core_ind
+            if string, resolve directly using the channel_configs dict
         """
         for statement in single_core_program:
             if statement['op'] == 'pulse':
                 statement['elem_ind'] = self.channel_configs[statement['dest']].elem_ind
                 del statement['dest']
+            elif statement['op'] == 'alu_fproc' or statement['op'] == 'jump_fproc':
+                if isinstance(statement['func_id'], tuple):
+                    ipdb.set_trace()
+                    config_obj = self.channel_configs[statement['func_id'][0]]
+                    statement['func_id'] = getattr(config_obj, statement['func_id'][1]) 
+                elif isinstance(statement['func_id'], str):
+                    statement['func_id'] = self.channel_configs[statement['func_id']]
+                else:
+                    assert isinstance(statement['func_id'], int)
 
     def get_assembled_program(self):
         """
