@@ -54,7 +54,6 @@ import distproc.hwconfig as hw
 from collections import OrderedDict
 import warnings
 import json
-import ipdb
 
 ENV_BITS = 16
 N_MAX_REGS = 16
@@ -578,7 +577,6 @@ class GlobalAssembler:
                 del statement['dest']
             elif statement['op'] == 'alu_fproc' or statement['op'] == 'jump_fproc':
                 if isinstance(statement['func_id'], tuple):
-                    ipdb.set_trace()
                     config_obj = self.channel_configs[statement['func_id'][0]]
                     statement['func_id'] = getattr(config_obj, statement['func_id'][1]) 
                 elif isinstance(statement['func_id'], str):
