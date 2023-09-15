@@ -1,8 +1,29 @@
+"""
+Preliminary specification:
+    qubits and gates:
+        - quantum gates supported according to gate_map.GateMap
+        - mapping between declared qubits (e.g. qubit q[n]) given by qubit_map.QubitMap
+    classical variables:
+        - all sized integers are cast to 32 bit native int types
+        - all bit types are cast to an array of integers
+        - all floats are cast to native amp types
+        - all angles are cast to native phase types
+    classical flow:
+        - if/else are converted to branch_var statements
+        - for and while loops are supported
+            - break, continue not supported
+
+
+"""
+
+NATIVE_INT_SIZE = 32
+
 from openqasm3.visitor import QASMVisitor, QASMNode
 import openqasm3.ast as ast
 from distproc.openqasm.qubit_map import QubitMap, DefaultQubitMap
 from distproc.openqasm.gate_map import GateMap, DefaultGateMap
 import ipdb
+import warnings
 
 class QASMQubiCVisitor(QASMVisitor):
 
@@ -12,6 +33,7 @@ class QASMQubiCVisitor(QASMVisitor):
         self.program = []
 
         self.qubits = {}
+        self.vars = {}
         super().__init__()
 
     def visit_QubitDeclaration(self, node: QASMNode):
@@ -22,9 +44,9 @@ class QASMQubiCVisitor(QASMVisitor):
             self.qubits[node.qubit.name] = None
 
 
-    def visit_QuantumGate(self, node: QASMNode):
+    def visit_QuantumGate(self, node: QASMNode, context=None):
         gatename = node.name.name
-        print(f"hello i am a {gatename}")
+        print(f"hello i am a {gatename} in {context}")
         qubits = []
         for qubit_identifier in node.qubits:
             if isinstance(qubit_identifier, ast.Identifier):
@@ -54,3 +76,23 @@ class QASMQubiCVisitor(QASMVisitor):
                         {'name': 'X90', 'qubit': qubit}],
                     'false': []}])
 
+    def visit_ClassicalDeclaration(self, node: QASMNode):
+        if isinstance(node.type, ast.BitType):
+            if node.type.size is None:
+                self.program.append({'name': 'declare', 'var': node.identifier.name})
+                self.vars[node.identifier.name] = [node.identifier.name]
+            else:
+                self.vars[node.identifier.name] = []
+                for i in range(node.type.size.value):
+                    warnings.warn(f'casting bit into array of {node.type.size} integers')
+                    indexed_varname = f'{node.identifier.name}_{i}'
+                    self.vars[node.identifier.name].append(indexed_varname)
+                    self.program.append({'name': 'declare', 'var': indexed_varname})
+        if isinstance(node.type, ast.IntType):
+            if node.type.size is not None and node.type.size != NATIVE_INT_SIZE:
+                warnings.warn(f'casting integer of size {node.type.size} to {NATIVE_INT_SIZE}')
+            self.vars[node.identifier.name] = [node.identifier.name]
+            self.program.append({'name': 'declare', 'var': indexed_varname})
+
+    def visit_BranchingStatement(self, node: QASMNode):
+        pass
