@@ -310,12 +310,12 @@ class SingleCoreAssembler:
 
         if isinstance(freq, str) and isinstance(phase, str) and isinstance(amp, str):
             #can only do one pulse_reg write at a time so use two instructions
-            self._program.append({'op': 'pulse', 'freq': freq})
-            self._program.append({'op': 'pulse', 'amp': amp})
+            self._program.append({'op': 'pulse', 'freq': freq, 'elem': elem_ind})
+            self._program.append({'op': 'pulse', 'amp': amp, 'elem': elem_ind})
             cmd = {'op': 'pulse', 'phase': phase, 'start_time': start_time,
                    'env': envkey, 'elem': elem_ind}
-        elif (isinstance(freq, str) and (isinstance(phase, str)) or isinstance(amp, str)):
-            self._program.append({'op': 'pulse', 'freq': freq})
+        elif (isinstance(freq, str) and ((isinstance(phase, str)) or isinstance(amp, str))):
+            self._program.append({'op': 'pulse', 'freq': freq, 'elem': elem_ind})
             cmd = {'op': 'pulse', 'phase': phase, 'amp': amp, 'start_time': start_time,
                    'env': envkey, 'elem': elem_ind}
         elif isinstance(phase, str) and isinstance(amp, str):
