@@ -559,6 +559,7 @@ class GlobalAssembler:
 
             self.assemblers[core_ind] = SingleCoreAssembler(elem_cfgs)
             self._resolve_dest_fproc_chans(compiled_program.program[proc_group])
+            self._resolve_duplicate_jump_labels(compiled_program.program[proc_group])
             self.assemblers[core_ind].from_list(compiled_program.program[proc_group])
 
     def _resolve_dest_fproc_chans(self, single_core_program):
@@ -583,6 +584,30 @@ class GlobalAssembler:
                     statement['func_id'] = self.channel_configs[statement['func_id']]
                 else:
                     assert isinstance(statement['func_id'], int)
+
+    def _resolve_duplicate_jump_labels(self, single_core_program):
+        combined_jumps = {}
+        cur_jumplabel = None
+        for i in range(len(single_core_program) - 1):
+            #if single_core_program[i]['op'] == 'jump_label' and single_core_program[i + 1]['op'] == 'jump_label':
+            #    combined_jumps[single_core_program[i]['dest_label']] = single_core_program[i + 1]['dest_label']
+            #    single_core_program.pop(i)
+            #    i -= 1
+            if single_core_program[i]['op'] == 'jump_label':
+                if cur_jumplabel is None:
+                    cur_jumplabel = single_core_program[i]['dest_label']
+                else:
+                    combined_jumps[single_core_program[i]['dest_label']] = cur_jumplabel
+                    single_core_program.pop(i)
+                    i -= 1
+
+            else:
+                cur_jumplabel = None
+
+        if combined_jumps != {}:
+            for statement in single_core_program:
+                if 'jump_label' in statement.keys() and statement['jump_label'] in combined_jumps.keys():
+                    statement['jump_label'] = combined_jumps[statement['jump_label']]
 
     def get_assembled_program(self):
         """

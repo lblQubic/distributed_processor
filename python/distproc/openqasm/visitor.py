@@ -36,7 +36,7 @@ class QASMQubiCVisitor(QASMVisitor):
         self.vars = {}
         super().__init__()
 
-    def visit_QubitDeclaration(self, node: QASMNode):
+    def visit_QubitDeclaration(self, node: QASMNode, context=None):
         print(f"hello i am a qubit: {node.qubit.name}")
         if node.size is not None:
             self.qubits[node.qubit.name] = node.size.value
@@ -45,6 +45,10 @@ class QASMQubiCVisitor(QASMVisitor):
 
 
     def visit_QuantumGate(self, node: QASMNode, context=None):
+        if context is None:
+            prog = self.program
+        else:
+            prog = context
         gatename = node.name.name
         print(f"hello i am a {gatename} in {context}")
         qubits = []
@@ -58,9 +62,13 @@ class QASMQubiCVisitor(QASMVisitor):
             else:
                 raise Exception()
         
-        self.program.extend(self.gate_map.get_qubic_gateinstr(gatename, qubits))
+        prog.extend(self.gate_map.get_qubic_gateinstr(gatename, qubits))
 
-    def visit_QuantumReset(self, node: QASMNode):
+    def visit_QuantumReset(self, node: QASMNode, context=None):
+        if context is None:
+            prog = self.program
+        else:
+            prog = context
         qubit_reg = node.qubits.name
         if self.qubits[qubit_reg] is None:
             hardware_qubits = [self.qubit_map.get_hardware_qubit(qubit_reg, None)]
@@ -68,7 +76,7 @@ class QASMQubiCVisitor(QASMVisitor):
             hardware_qubits = [self.qubit_map.get_hardware_qubit(qubit_reg, i) for i in range(self.qubits[qubit_reg])]
 
         for qubit in hardware_qubits:
-            self.program.extend([
+            prog.extend([
                 {'name': 'read', 'qubit': qubit},
                 {'name': 'branch_fproc', 'cond_lhs': 1, 'alu_cond': 'eq', 'func_id': f'{qubit}.meas', 'scope': qubit, 
                     'true': [
@@ -76,10 +84,14 @@ class QASMQubiCVisitor(QASMVisitor):
                         {'name': 'X90', 'qubit': qubit}],
                     'false': []}])
 
-    def visit_ClassicalDeclaration(self, node: QASMNode):
+    def visit_ClassicalDeclaration(self, node: QASMNode, context=None):
+        if context is None:
+            prog = self.program
+        else:
+            prog = context
         if isinstance(node.type, ast.BitType):
-            if node.type.size is None:
-                self.program.append({'name': 'declare', 'var': node.identifier.name})
+            if node.type.size.value is None:
+                prog.append({'name': 'declare', 'var': node.identifier.name})
                 self.vars[node.identifier.name] = [node.identifier.name]
             else:
                 self.vars[node.identifier.name] = []
@@ -87,12 +99,21 @@ class QASMQubiCVisitor(QASMVisitor):
                     warnings.warn(f'casting bit into array of {node.type.size} integers')
                     indexed_varname = f'{node.identifier.name}_{i}'
                     self.vars[node.identifier.name].append(indexed_varname)
-                    self.program.append({'name': 'declare', 'var': indexed_varname})
-        if isinstance(node.type, ast.IntType):
+                    prog.append({'name': 'declare', 'var': indexed_varname})
+
+        elif isinstance(node.type, ast.IntType):
             if node.type.size is not None and node.type.size != NATIVE_INT_SIZE:
                 warnings.warn(f'casting integer of size {node.type.size} to {NATIVE_INT_SIZE}')
             self.vars[node.identifier.name] = [node.identifier.name]
-            self.program.append({'name': 'declare', 'var': indexed_varname})
+            prog.append({'name': 'declare', 'var': indexed_varname})
 
-    def visit_BranchingStatement(self, node: QASMNode):
-        pass
+    def visit_BranchingStatement(self, node: QASMNode, context=None):
+        if context is None:
+            prog = self.program
+        else:
+            prog = context
+        print(f'hello i am a branch in {context}')
+
+        cond_lhs = self.vars[node.condition.lhs.argument.name]
+
+        prog.append({'name': 'branch_var', 'cond_lhs': 
