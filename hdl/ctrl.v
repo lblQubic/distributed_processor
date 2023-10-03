@@ -226,6 +226,7 @@ module ctrl#(
 
                 PULSE_RESET : begin
                     next_state = MEM_WAIT_STATE;
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
@@ -356,6 +357,7 @@ module ctrl#(
 
                 default : begin
                     next_state = DECODE_STATE;
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     mem_wait_rst = 0; 
                     write_pulse_en = 0;
@@ -424,6 +426,14 @@ module ctrl#(
                     qclk_load_en = 1;
                     mem_wait_rst = 0; 
                 end
+
+                default : begin
+                    reg_write_en = 0;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    qclk_load_en = 0;
+                    mem_wait_rst = 0; 
+                end
+
 
             endcase
 
@@ -497,6 +507,7 @@ module ctrl#(
         else if(state == DONE_STATE) begin
             next_state = DONE_STATE;
             mem_wait_rst = 0; 
+            alu_in1_sel = ALU_IN1_REG_SEL;
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             reg_write_en = 0;
             instr_ptr_en = 0;
@@ -508,13 +519,13 @@ module ctrl#(
             fproc_enable = 0;
             write_pulse_en = 0;
             done_gate = 1;
-            mem_wait_rst = 0; 
             pulse_reset = 0;
         end
 
         else begin
             next_state = MEM_WAIT_STATE;
             mem_wait_rst = 0; 
+            alu_in1_sel = ALU_IN1_REG_SEL;
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             reg_write_en = 0;
             instr_ptr_en = 0;
