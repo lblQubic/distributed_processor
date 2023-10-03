@@ -115,11 +115,16 @@ module proc
     //    else
     //        alu_in1 = fproc_data;
     //end
+    //
+
+    reg reset_reg; // global reset buffer:
+
     assign inst_ptr_load_en = inst_ptr_load_en_sel[1] ? alu_out[0] : inst_ptr_load_en_sel[0]; //MSB selects ALU output
     reg [4:0] reset_sr=0;
     reg dummy_resetsr=0;
     always @(posedge clk) begin
-	{dummy_resetsr,reset_sr}<={reset_sr,reset};
+        reset_reg <= reset;
+	    {dummy_resetsr,reset_sr}<={reset_sr,reset_reg};
         cstrobe <= (qclk_out == pulse_cmd_time) & c_strobe_enable;
     end
 
@@ -130,13 +135,13 @@ module proc
     //cmd_mem #(.CMD_WIDTH(CMD_WIDTH), .ADDR_WIDTH(CMD_ADDR_WIDTH)) cmd_buffer(
     //          .clk(clk), .write_enable(write_prog_enable), .read_address(cmd_buf_read_addr),
     //          .write_address(cmd_addr), .cmd_in(cmd_data), .cmd_out(local_cmd));
-    instr_ptr #(.WIDTH(CMD_ADDR_WIDTH)) instr(.clk(clk), .enable(inst_ptr_enable), .reset(reset),
+    instr_ptr #(.WIDTH(CMD_ADDR_WIDTH)) instr(.clk(clk), .enable(inst_ptr_enable), .reset(reset_reg),
               .load_val(instr_ptr_load_val), .load_enable(inst_ptr_load_en), .ptr_out(cmd_iface.instr_ptr));
     reg_file #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(REG_ADDR_WIDTH)) regs(
               .clk(clk), .read_addr_0(reg_addr_in0), .read_addr_1(reg_addr_in1),
               .write_addr(reg_write_addr), .write_data(alu_out), .write_enable(reg_write_en),
               .reg_0_out(reg_file_out0), .reg_1_out(reg_file_out1));
-    ctrl #(.MEM_READ_CYCLES(CMD_MEM_READ_LATENCY)) ctu(.clk(clk), .reset(reset), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
+    ctrl #(.MEM_READ_CYCLES(CMD_MEM_READ_LATENCY)) ctu(.clk(clk), .reset(reset_reg), .opcode(local_cmd[CMD_WIDTH-1:CMD_WIDTH-OPCODE_WIDTH]), .alu_opcode(alu_opcode),
               .c_strobe_enable(c_strobe_enable), .fproc_ready(fproc.ready), .sync_ready(sync.ready), 
               .alu_in0_sel(alu_in0_sel), .alu_in1_sel(alu_in1_sel), .reg_write_en(reg_write_en), .instr_ptr_en(inst_ptr_enable), 
               .instr_ptr_load_en(inst_ptr_load_en_sel), .qclk_load_en(qclk_load_en), .qclk_reset(qclk_reset_ctrl), .cstrobe_in(cstrobe), .instr_load_en(instr_load_en),
