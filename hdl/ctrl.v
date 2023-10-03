@@ -511,6 +511,24 @@ module ctrl#(
             mem_wait_rst = 0; 
             pulse_reset = 0;
         end
+
+        else begin
+            next_state = MEM_WAIT_STATE;
+            mem_wait_rst = 0; 
+            instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+            reg_write_en = 0;
+            instr_ptr_en = 0;
+            instr_load_en = 0;
+            c_strobe_enable = 0;
+            qclk_load_en = 0;
+            sync_enable = 0;
+            qclk_reset = 0;
+            fproc_enable = 0;
+            write_pulse_en = 0;
+            done_gate = 0;
+            mem_wait_rst = 0; 
+            pulse_reset = 0;
+        end
         
     end
 
