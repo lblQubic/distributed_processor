@@ -18,9 +18,9 @@ module fproc_meas #(
         for(i = 0; i < N_CORES; i = i + 1) begin
             always @(posedge clk) begin
                 if(reset)
-                    core_state[i] = IDLE;
+                    core_state[i] <= IDLE;
                 else
-                    core_state[i] = core_next_state[i];
+                    core_state[i] <= core_next_state[i];
             end
 
             always @(*) begin
@@ -32,11 +32,14 @@ module fproc_meas #(
                             core_next_state[i] = WAIT_MEAS;
                             meas_addr[i] = core[i].id[$clog2(N_MEAS)-1:0];
                         end
-                        else
+                        else begin
                             core_next_state[i] = IDLE;
+                            meas_addr[i] = meas_addr[i];
+                        end
                     end
                     
                     WAIT_MEAS : begin
+                        meas_addr[i] = meas_addr[i];
                         if(meas_valid[meas_addr[i]] == 1) begin
                             core[i].ready = 1;
                             core[i].data[0] = meas[meas_addr[i]];
@@ -51,6 +54,9 @@ module fproc_meas #(
 
                     default : begin
                         core_next_state[i] = IDLE;
+                        core[i].ready = 0;
+                        core[i].data = 0;
+                        meas_addr[i] = meas_addr[i];
                     end
                 endcase
             end
