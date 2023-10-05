@@ -18,9 +18,9 @@ module fproc_meas #(
         for(i = 0; i < N_CORES; i = i + 1) begin
             always @(posedge clk) begin
                 if(reset)
-                    core_state[i] = IDLE;
+                    core_state[i] <= IDLE;
                 else
-                    core_state[i] = core_next_state[i];
+                    core_state[i] <= core_next_state[i];
             end
 
             always @(*) begin

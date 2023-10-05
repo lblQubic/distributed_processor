@@ -184,6 +184,7 @@ module ctrl#(
             write_pulse_en = 0;
             done_gate = 0;
             pulse_reset = 0;
+            alu_in1_sel = ALU_IN1_REG_SEL;
         
         end
 
