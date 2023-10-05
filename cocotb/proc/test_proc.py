@@ -432,7 +432,7 @@ async def read_fproc_test(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    for i in range(MEM_READ_LATENCY):
+    for i in range(MEM_READ_LATENCY + RESET_LATENCY):
         await RisingEdge(dut.clk)
 
     for i in range(fproc_ready_t):
