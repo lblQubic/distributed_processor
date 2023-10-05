@@ -196,6 +196,7 @@ module ctrl#(
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     instr_ptr_en = 0;
                     sync_enable = 0;
                     qclk_reset = 0;
@@ -212,6 +213,7 @@ module ctrl#(
                     else
                         next_state = DECODE_STATE;
                     c_strobe_enable = 1;
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     mem_wait_rst = 0; 
@@ -280,6 +282,7 @@ module ctrl#(
                     next_state = MEM_WAIT_STATE;
                     mem_wait_rst = 1;
                     //defaults:
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     reg_write_en = 0;
                     c_strobe_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_TRUE;
@@ -297,6 +300,7 @@ module ctrl#(
                     next_state = FPROC_WAIT_STATE;
                     fproc_enable = 1;
                     //defaults:
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
@@ -313,6 +317,7 @@ module ctrl#(
                     next_state = SYNC_WAIT_STATE;
                     sync_enable = 1;
                     //defaults:
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     fproc_enable = 0;
                     qclk_reset = 0;
                     mem_wait_rst = 0; 
@@ -329,6 +334,7 @@ module ctrl#(
                     next_state = DONE_STATE;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     mem_wait_rst = 1; 
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     write_pulse_en = 0;
                     instr_ptr_en = 0;
                     sync_enable = 0;
@@ -343,6 +349,7 @@ module ctrl#(
                 4'b0000 : begin //all zero opcode
                     next_state = DONE_STATE;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    alu_in1_sel = ALU_IN1_REG_SEL;
                     mem_wait_rst = 1; 
                     write_pulse_en = 0;
                     instr_ptr_en = 0;
