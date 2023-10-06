@@ -24,6 +24,7 @@ parameter JUMP_FPROC = 4'b0101;
 parameter INC_QCLK = 4'b0110;
 parameter SYNC = 4'b0111;
 parameter DONE = 4'b1010;
-parameter IDLE = 4'b1011;
+parameter PULSE_RESET = 4'b1011;
+parameter IDLE = 4'b1100;
 
 //`endif

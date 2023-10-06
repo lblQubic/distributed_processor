@@ -248,7 +248,7 @@ module ctrl#(
                     fproc_enable = 0;
                     reg_write_en = 0;
                     qclk_load_en = 0;
-                    write_pulse_en = 1;
+                    write_pulse_en = 0;
                     pulse_reset = 0;
                 end
 

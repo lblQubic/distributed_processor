@@ -28,7 +28,8 @@ opcodes = {'pulse_write' : 0b10000,
            'inc_qclk' : 0b01101,
            'sync' : 0b01110,
            'done' : 0b10100,
-           'pulse_reset' : 0b10110}
+           'pulse_reset' : 0b10110,
+           'idle' : 0b11000}
 
 #pulse parameters
 pulse_field_widths = {
@@ -321,6 +322,12 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=0, write_reg_addr=N
     opcode = (opcodes[opkey] << 3) + alu_opcodes[alu_op]
     cmd += opcode << 120
 
+    return cmd
+
+def idle(cmd_time):
+    cmd = cmd_time << pulse_field_pos['cmd_time']
+    assert cmd_time < 2**pulse_field_widths['cmd_time']
+    cmd += opcodes['idle'] << 123
     return cmd
 
 def done_cmd():
