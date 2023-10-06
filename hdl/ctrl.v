@@ -38,7 +38,7 @@
 *
 *   instruction paths:
 *       pulse_write: MEM_WAIT_STATE --> DECODE_STATE --> MEM_WAIT_STATE
-*       pulse_write_trig: MEM_WAIT_STATE --> DECODE_STATE --cstrobe_in--> MEM_WAIT_STATE
+*       pulse_write_trig: MEM_WAIT_STATE --> DECODE_STATE --qclk_trig_in--> MEM_WAIT_STATE
 *       jump_i: MEM_WAIT_STATE --> DECODE_STATE --> MEM_WAIT_STATE
 *       ALU type (reg_alu(r/i), jump_cond(r,i), inc_qclk(r,i): 
 *           MEM_WAIT_STATE --> DECODE_STATE --> ALU_PROC_STATE_0 --> ALU_PROC_STATE_1 --> MEM_WAIT_STATE
@@ -59,9 +59,10 @@ module ctrl#(
     input[7:0] opcode,
     input fproc_ready,
     input sync_ready,
-    input cstrobe_in,
+    input qclk_trig_in,
     output [2:0] alu_opcode,
     output reg c_strobe_enable,
+    output reg qclk_trig_enable,
     output reg done_gate,
     output alu_in0_sel,
     output reg[1:0] alu_in1_sel,
@@ -119,8 +120,6 @@ module ctrl#(
     //in general: first 5 bits are opcode, followed by 3 bit ALU opcode
     
     //5-bit opcode: 4-bit operation followed by LSB select for ALU_IN1 (0 for cmd, 1 for reg)
-    parameter PULSE_WRITE = 4'b1000;
-    parameter PULSE_WRITE_TRIG = 4'b1001;
     parameter REG_ALU = 4'b0001; //|opcode[8]|cmd_value[32]|reg1_addr[4]|reg_write_addr[4]
     parameter JUMP_I = 4'b0010; //|opcode[8]|cmd_value[32]|reg_addr[4]
     parameter JUMP_COND = 4'b0011; //jump address is always immediate
@@ -128,8 +127,11 @@ module ctrl#(
     parameter JUMP_FPROC = 4'b0101;
     parameter INC_QCLK = 4'b0110;
     parameter SYNC = 4'b0111;
+    parameter PULSE_WRITE = 4'b1000;
+    parameter PULSE_WRITE_TRIG = 4'b1001;
     parameter DONE = 4'b1010;
     parameter PULSE_RESET = 4'b1011;
+    parameter IDLE = 4'b1100;
 
 
 
@@ -181,6 +183,7 @@ module ctrl#(
             qclk_reset = 0;
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             write_pulse_en = 0;
             done_gate = 0;
             pulse_reset = 0;
@@ -196,6 +199,7 @@ module ctrl#(
                     next_state = MEM_WAIT_STATE;
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     alu_in1_sel = ALU_IN1_REG_SEL;
                     instr_ptr_en = 0;
@@ -209,11 +213,32 @@ module ctrl#(
                 end
 
                 PULSE_WRITE_TRIG : begin
-                    if(cstrobe_in)
+                    if(qclk_trig_in)
                         next_state = MEM_WAIT_STATE;
                     else
                         next_state = DECODE_STATE;
                     c_strobe_enable = 1;
+                    qclk_trig_enable = 1;
+                    alu_in1_sel = ALU_IN1_REG_SEL;
+                    instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
+                    instr_ptr_en = 0;
+                    mem_wait_rst = 0; 
+                    sync_enable = 0;
+                    qclk_reset = 0;
+                    fproc_enable = 0;
+                    reg_write_en = 0;
+                    qclk_load_en = 0;
+                    write_pulse_en = 1;
+                    pulse_reset = 0;
+                end
+
+                IDLE : begin
+                    if(qclk_trig_in)
+                        next_state = MEM_WAIT_STATE;
+                    else
+                        next_state = DECODE_STATE;
+                    c_strobe_enable = 0;
+                    qclk_trig_enable = 1;
                     alu_in1_sel = ALU_IN1_REG_SEL;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
@@ -232,6 +257,7 @@ module ctrl#(
                     alu_in1_sel = ALU_IN1_REG_SEL;
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     sync_enable = 0;
@@ -251,6 +277,7 @@ module ctrl#(
                     mem_wait_rst = 0; 
                     reg_write_en = 0;
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     qclk_load_en = 0;
@@ -269,6 +296,7 @@ module ctrl#(
                     mem_wait_rst = 0; 
                     reg_write_en = 0;
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     qclk_load_en = 0;
@@ -286,6 +314,7 @@ module ctrl#(
                     alu_in1_sel = ALU_IN1_REG_SEL;
                     reg_write_en = 0;
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_TRUE;
                     instr_ptr_en = 0;
                     qclk_load_en = 0;
@@ -304,6 +333,7 @@ module ctrl#(
                     alu_in1_sel = ALU_IN1_REG_SEL;
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     sync_enable = 0;
@@ -323,6 +353,7 @@ module ctrl#(
                     qclk_reset = 0;
                     mem_wait_rst = 0; 
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
                     instr_ptr_en = 0;
                     reg_write_en = 0;
@@ -343,6 +374,7 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     fproc_enable = 0;
                     pulse_reset = 0;
                 end
@@ -359,6 +391,7 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     fproc_enable = 0;
                     pulse_reset = 0;
                 end
@@ -375,6 +408,7 @@ module ctrl#(
                     reg_write_en = 0;
                     qclk_load_en = 0;
                     c_strobe_enable = 0;
+                    qclk_trig_enable = 0;
                     fproc_enable = 0;
                     pulse_reset = 0;
                 end
@@ -389,6 +423,7 @@ module ctrl#(
             reg_write_en = 0;
             mem_wait_rst = 0; 
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             instr_ptr_load_en = INSTR_PTR_LOAD_EN_FALSE;
             instr_ptr_en = 0;
             instr_load_en = 0;
@@ -405,6 +440,7 @@ module ctrl#(
             alu_in1_sel = ALU_IN1_REG_SEL;
             next_state = MEM_WAIT_STATE;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             instr_ptr_en = 0;
             instr_load_en = 0;
             sync_enable = 0;
@@ -461,6 +497,7 @@ module ctrl#(
             instr_ptr_en = 0;
             instr_load_en = 0;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             qclk_load_en = 0;
             sync_enable = 0;
             qclk_reset = 0;
@@ -484,6 +521,7 @@ module ctrl#(
             instr_ptr_en = 0;
             instr_load_en = 0;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             qclk_load_en = 0;
             sync_enable = 0;
             qclk_reset = 0;
@@ -503,6 +541,7 @@ module ctrl#(
             instr_ptr_en = 0;
             instr_load_en = 0;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             qclk_load_en = 0;
             sync_enable = 0;
             qclk_reset = 1;
@@ -521,6 +560,7 @@ module ctrl#(
             instr_ptr_en = 0;
             instr_load_en = 0;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             qclk_load_en = 0;
             sync_enable = 0;
             qclk_reset = 0;
@@ -539,6 +579,7 @@ module ctrl#(
             instr_ptr_en = 0;
             instr_load_en = 0;
             c_strobe_enable = 0;
+            qclk_trig_enable = 0;
             qclk_load_en = 0;
             sync_enable = 0;
             qclk_reset = 0;
