@@ -95,19 +95,19 @@ class QASMQubiCVisitor(QASMVisitor):
         if isinstance(node.type, ast.BitType):
             if node.type.size.value is None:
                 self._cur_block.append({'name': 'declare', 'var': node.identifier.name})
-                self.vars[node.identifier.name] = [node.identifier.name]
+                self.vars[node.identifier.name] = _VariableContainer([node.identifier.name], 'int')
             else:
-                self.vars[node.identifier.name] = []
+                self.vars[node.identifier.name] = _VariableContainer([], 'int')
                 for i in range(node.type.size.value):
                     warnings.warn(f'casting bit into array of {node.type.size} integers')
                     indexed_varname = f'{node.identifier.name}_{i}'
-                    self.vars[node.identifier.name].append(indexed_varname)
+                    self.vars[node.identifier.name].var_list.append(indexed_varname)
                     self._cur_block.append({'name': 'declare', 'var': indexed_varname})
 
         elif isinstance(node.type, ast.IntType):
             if node.type.size is not None and node.type.size != NATIVE_INT_SIZE:
                 warnings.warn(f'casting integer of size {node.type.size} to {NATIVE_INT_SIZE}')
-            self.vars[node.identifier.name] = [node.identifier.name]
+            self.vars[node.identifier.name] = _VariableContainer([node.identifier.name], 'int')
             self._cur_block.append({'name': 'declare', 'var': indexed_varname})
 
     def visit_BranchingStatement(self, node: QASMNode, context=None):
@@ -141,9 +141,18 @@ class QASMQubiCVisitor(QASMVisitor):
             else:
                 temp_out = f'_temp_var_{self._tempvar_ind}'
                 self._cur_block.append({'name': 'declare', 'var': temp_out})
+                self.vars[temp_out] = _VariableContainer([temp_out], self.vars[lhs_primitive.type])
                 self._tempvar_ind += 1
                 self._cur_block.append({'name': 'alu', 'op': supported_op_dict[op], 'lhs': lhs_primitive, 
                                         'rhs': rhs_primitive, 'out': temp_out})
                 return temp_out
+
+    def visit_Identifier(self, node: QASMNode, context=None):
+        return self.vars[node.name].var_list[0]
+
+    def visit_IndexExpression(self, node: QASMNode, context=None):
+        assert isinstance(node.index[0], ast.IntegerLiteral)
+        assert isinstance(len(node.index)) == 1
+        return self.vars[node.collection.name].var_list[node.index[0]]
 
 
