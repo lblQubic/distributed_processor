@@ -23,8 +23,8 @@ class Gate:
 @define
 class Pulse:
     freq: str | float
-    phase: str | float
-    amp: str | float
+    phase: str | float = 0
+    amp: str | float = 1
     twidth: float
     env: np.ndarray | dict = field(eq=cmp_using(np.array_equal)) # Otherwise equality checks between pulses fail
     dest: str
