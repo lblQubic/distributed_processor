@@ -1,4 +1,4 @@
-from attrs import define, field
+from attrs import define, field, cmp_using
 import numpy as np
 
 @define
@@ -26,7 +26,7 @@ class Pulse:
     phase: str | float
     amp: str | float
     twidth: float
-    env: np.ndarray | dict
+    env: np.ndarray | dict = field(eq=cmp_using(np.array_equal)) # Otherwise equality checks between pulses fail
     dest: str
     start_time: int = None
     name: str = 'pulse'
