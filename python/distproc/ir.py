@@ -58,66 +58,27 @@ class IRProgram:
 
     """
 
-    def __init__(self, source):
+    def __init__(self, source: list):
         """
         Parameters
         ----------
-            source: list of dicts
+            source: list of dicts or IR instructions
+                If list of dicts, statements are immediately converted into IR instruction 
+                objects, as defined in distproc.ir_instructions
+
+        Control flow graph is initialized as a single node containing all statements. Flattening the control flow 
+        heirarchy, generating basic blocks, and forming the CFG edges are done as separate passes
                 
         """
-        full_program = self._resolve_instr_objects(source)
-        self._make_basic_blocks(full_program)
+        if isinstance(source[0], dict):
+            source = _resolve_instr_objects(source)
+        self.control_flow_graph = nx.DiGraph()
+        self.control_flow_graph.add_node('block_0', instructions=source, ind=0)
         self._freqs = {}
         self._vars = {}
         self.loops = {}
         self.fpga_config = None
     
-    def _resolve_instr_objects(self, source):
-        full_program = []
-        for instr in source:
-            instr_class = eval('iri.' + _get_instr_classname(instr['name']))
-            if instr['name'] == 'virtualz':
-                instr['name'] == 'virtual_z'
-            full_program.append(instr_class(**instr))
-
-        return full_program
-    
-    def _make_basic_blocks(self, full_program):
-        """
-        Splits the source into basic blocks; source order is preserved using the ind
-        attribute in each node
-        """
-        self.control_flow_graph = nx.DiGraph()
-        cur_blockname = 'block_0'
-        blockname_ind = 1
-        block_ind = 0
-        cur_block = []
-        for statement in full_program:
-            if statement.name in ['jump_fproc', 'jump_cond', 'jump_i']:
-                self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
-                block_ind += 1
-                if statement.jump_label.split('_')[-1] == 'loopctrl': #todo: break this out
-                    ctrl_blockname = '{}_ctrl'.format(statement.jump_label)
-                else:
-                    ctrl_blockname = '{}_ctrl'.format(cur_blockname)
-                self.control_flow_graph.add_node(ctrl_blockname, instructions=[statement], ind=block_ind)
-                block_ind += 1
-                cur_blockname = 'block_{}'.format(blockname_ind)
-                blockname_ind += 1
-                cur_block = []
-            elif statement.name == 'jump_label':
-                self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
-                cur_block = [statement]
-                cur_blockname = statement.label
-            else:
-                cur_block.append(statement)
-
-        self.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
-
-        for node in tuple(self.control_flow_graph.nodes):
-            if self.control_flow_graph.nodes[node]['instructions'] == []:
-                self.control_flow_graph.remove_node(node)
-
     @property
     def blocks(self):
         return self.control_flow_graph.nodes
@@ -151,6 +112,23 @@ class IRProgram:
 
     def register_loop(self, name, scope, start_time, delta_t=None):
         self.loops[name] = _Loop(name, scope, start_time, delta_t)
+
+def _resolve_instr_objects(source: list[dict]):
+    full_program = []
+    for instr in source:
+        instr_class = eval('iri.' + _get_instr_classname(instr['name']))
+        if instr['name'] == 'virtualz':
+            instr['name'] = 'virtual_z'
+
+        if 'true' in instr.keys():
+            instr['true'] = _resolve_instr_objects(instr['true'])
+        if 'false' in instr.keys():
+            instr['false'] = _resolve_instr_objects(instr['false'])
+        if 'body' in instr.keys():
+            instr['body'] = _resolve_instr_objects(instr['body'])
+        full_program.append(instr_class(**instr))
+
+    return full_program
 
 
 def _get_instr_classname(name):
@@ -201,6 +179,169 @@ class Pass(ABC):
     @abstractmethod
     def run_pass(self, ir_prog: IRProgram):
         pass
+
+class FlattenProgram(Pass):
+    """
+    Generates an intermediate representation with control flow resolved into simple 
+    conditional jump statements. This function is recursive to allow for nested control 
+    flow structures.
+
+    instruction format is the same as compiler input, with the following modifications:
+
+    branch instruction:
+        {'name': 'branch_fproc', alu_cond: <'le' or 'ge' or 'eq'>, 'cond_lhs': <var or ival>, 
+            'func_id': function_id, 'scope': <list_of_qubits> 'true': [instruction_list_true], 'false': [instruction_list_false]}
+    becomes:
+        {'name': 'jump_fproc', alu_cond: <'le' or 'ge' or 'eq'>, 'cond_lhs': <var or ival>, 
+            'func_id': function_id, 'scope': <list_of_qubits> 'jump_label': <jump_label_true>}
+        [instruction_list_false]
+        {'name': 'jump_i', 'jump_label': <jump_label_end>}
+        {'name': 'jump_label',  'label': <jump_label_true>}
+        [instruction_list_true]
+        {'name': 'jump_label',  'label': <jump_label_end>}
+
+    for 'branch_var', 'jump_fproc' becomes 'jump_cond', and 'func_id' is replaced with 'cond_rhs'
+
+    .....
+
+    loop:
+        {'name': 'loop', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>, 
+            'alu_cond': <'le' or 'ge' or 'eq'>, 'body': [instruction_list]}
+
+    becomes:
+        {'name': 'jump_label', 'label': <loop_label>}
+        {'name': 'barrier', 'scope': <list_of_qubits>}
+        [instruction_list]
+        {'name': 'loop_end', 'scope': <list_of_qubits>, 'loop_label': <loop_label>}
+        {'name': 'jump_cond', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>,
+         'jump_label': <loop_label>, 'jump_type': 'loopctrl'}
+    """
+
+    def __init__(self):
+        pass
+
+    def run_pass(self, ir_prog: IRProgram):
+        assert len(ir_prog.control_flow_graph.nodes) == 1
+        blockname = list(ir_prog.control_flow_graph.nodes)[0]
+        instructions = ir_prog.control_flow_graph.nodes[blockname]['instructions']
+
+        ir_prog.control_flow_graph.nodes[blockname]['instructions'] = self._flatten_control_flow(instructions)
+
+    def _flatten_control_flow(self, program, label_prefix=''):
+        flattened_program = []
+        branchind = 0
+        for i, statement in enumerate(program):
+            statement = copy.deepcopy(statement)
+            if statement.name in ['branch_fproc', 'branch_var']:
+                falseblock = statement.false
+                trueblock = statement.true
+    
+                flattened_trueblock = self._flatten_control_flow(trueblock, label_prefix='true_'+label_prefix)
+                flattened_falseblock = self._flatten_control_flow(falseblock, label_prefix='false_'+label_prefix)
+    
+                jump_label_false = '{}false_{}'.format(label_prefix, branchind)
+                jump_label_end = '{}end_{}'.format(label_prefix, branchind)
+    
+                if statement.name == 'branch_fproc':
+                    jump_statement = iri.JumpFproc(alu_cond=statement.alu_cond, cond_lhs=statement.cond_lhs, 
+                                                   func_id=statement.func_id, scope=statement.scope, jump_label=None)
+                else:
+                    jump_statement = iri.JumpCond(alu_cond=statement.alu_cond, cond_lhs=statement.cond_lhs, 
+                                                   cond_rhs=statement.cond_rhs, scope=statement.scope, jump_label=None)
+
+    
+                if len(flattened_trueblock) > 0:
+                    jump_label_true = '{}true_{}'.format(label_prefix, branchind)
+                    jump_statement.jump_label = jump_label_true
+                else:
+                    jump_statement.jump_label = jump_label_end
+    
+                flattened_program.append(jump_statement)
+    
+                flattened_falseblock.insert(0, iri.JumpLabel(label=jump_label_false, scope=statement.scope))
+                flattened_falseblock.append(iri.JumpI(jump_label=jump_label_end, scope=statement.scope))
+                flattened_program.extend(flattened_falseblock)
+    
+                if len(flattened_trueblock) > 0:
+                    flattened_trueblock.insert(0, iri.JumpLabel(label=jump_label_true, scope=statement.scope))
+                flattened_program.extend(flattened_trueblock)
+                flattened_program.append(iri.JumpLabel(label=jump_label_end, scope=statement.scope))
+    
+                branchind += 1
+    
+            elif statement.name == 'loop':
+                body = statement.body
+                flattened_body = self._flatten_control_flow(body, label_prefix='loop_body_'+label_prefix)
+                loop_label = '{}loop_{}_loopctrl'.format(label_prefix, branchind)
+    
+                flattened_program.append(iri.JumpLabel(label=loop_label, scope=statement.scope))
+                flattened_program.append(iri.Barrier(qubit=statement.scope))
+                flattened_program.extend(flattened_body)
+                flattened_program.append(iri.LoopEnd(loop_label=loop_label, scope=statement.scope))
+                flattened_program.append(iri.JumpCond(cond_lhs=statement.cond_lhs, cond_rhs=statement.cond_rhs, 
+                                          alu_cond=statement.alu_cond, jump_label=loop_label, scope=statement.scope,
+                                          jump_type='loopctrl'))
+                branchind += 1
+    
+            elif statement.name == 'alu_op':
+                statement = statement.copy()
+    
+            else:
+                flattened_program.append(statement)
+    
+        return flattened_program
+
+
+class MakeBasicBlocks(Pass):
+    """
+    Makes basic blocks out of a flattened IR program. FlattenProgram pass MUST be run first 
+    (i.e. no branch_x statements allowed, only jumps)
+    """
+    def __init__(self):
+        pass
+
+    def run_pass(self, ir_prog: IRProgram):
+        """
+        Splits the source into basic blocks; source order is preserved using the ind
+        attribute in each node
+        """
+        assert len(ir_prog.control_flow_graph.nodes) == 1
+
+        # assume whole program is in first (and only) node, break it out
+        cur_blockname = list(ir_prog.control_flow_graph.nodes)[0]
+        full_program = ir_prog.control_flow_graph.nodes[cur_blockname]['instructions']
+        ir_prog.control_flow_graph.nodes[cur_blockname]['instructions'] = []
+
+        blockname_ind = 1
+        block_ind = 0
+        cur_block = []
+
+        for statement in full_program:
+            if statement.name in ['jump_fproc', 'jump_cond', 'jump_i']:
+                ir_prog.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
+                block_ind += 1
+                if statement.jump_label.split('_')[-1] == 'loopctrl': #todo: break this out
+                    ctrl_blockname = '{}_ctrl'.format(statement.jump_label)
+                else:
+                    ctrl_blockname = '{}_ctrl'.format(cur_blockname)
+                ir_prog.control_flow_graph.add_node(ctrl_blockname, instructions=[statement], ind=block_ind)
+                block_ind += 1
+                cur_blockname = 'block_{}'.format(blockname_ind)
+                blockname_ind += 1
+                cur_block = []
+            elif statement.name == 'jump_label':
+                ir_prog.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
+                cur_block = [statement]
+                cur_blockname = statement.label
+            else:
+                cur_block.append(statement)
+
+        ir_prog.control_flow_graph.add_node(cur_blockname, instructions=cur_block, ind=block_ind)
+
+        for node in tuple(ir_prog.control_flow_graph.nodes):
+            if ir_prog.control_flow_graph.nodes[node]['instructions'] == []:
+                ir_prog.control_flow_graph.remove_node(node)
+
 
 class ScopeProgram(Pass):
     """
