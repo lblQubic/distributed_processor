@@ -1,4 +1,4 @@
-from attrs import define, field
+from attrs import define, field, cmp_using
 import numpy as np
 
 @define
@@ -23,11 +23,11 @@ class Gate:
 @define
 class Pulse:
     freq: str | float
-    phase: str | float
-    amp: str | float
     twidth: float
-    env: np.ndarray | dict
+    env: np.ndarray | dict = field(eq=cmp_using(np.array_equal)) # Otherwise equality checks between pulses fail
     dest: str
+    phase: str | float = 0
+    amp: str | float = 1
     start_time: int = None
     name: str = 'pulse'
 
@@ -114,6 +114,15 @@ class Delay:
     scope: list | tuple | set = None
 
 @define
+class Loop:
+    cond_lhs: int | str
+    alu_cond: str
+    cond_rhs: str
+    scope: str
+    body: list
+    name: str = 'loop'
+
+@define
 class JumpFproc:
     alu_cond: str
     cond_lhs: int | str
@@ -122,6 +131,16 @@ class JumpFproc:
     jump_label: str
     jump_type: str = None
     name: str = 'jump_fproc'
+
+@define
+class BranchFproc:
+    alu_cond: str
+    cond_lhs: int | str
+    func_id: int | str
+    scope: list
+    true: list
+    false: list
+    name: str = 'branch_fproc'
 
 @define
 class ReadFproc:
@@ -154,6 +173,16 @@ class JumpCond:
     jump_label: str
     jump_type: str = None
     name: str = 'jump_cond'
+
+@define 
+class BranchVar:
+    cond_lhs: int | str
+    alu_cond: str
+    cond_rhs: str
+    scope: list | set
+    true: list
+    false: list
+    name: str = 'branch_var'
 
 @define
 class JumpI:
