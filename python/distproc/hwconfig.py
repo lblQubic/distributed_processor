@@ -84,12 +84,18 @@ class FPROCChannel:
             first element of the tuple is the key of the object, and
             the second element is the attribute to access
 
+        delay_after_chans:
+            list of pulse destination channels to server as reference 
+            points for delay and idle. i.e. delay/idle are applied relative
+            to the (end of) the last pulse played on any of these channels.
+
         delay: float
             delay (in seconds) to apply to pulses played after a 
             read_fproc or branch_fproc instruction on this channel
     """
     id: int | tuple
-    delay: float
+    hold_after_chans: list = []
+    hold_nclks: int = 0
 
 @define
 class FPGAConfig:
@@ -98,7 +104,7 @@ class FPGAConfig:
     jump_cond_clks: int = 5
     jump_fproc_clks: int = 5
     pulse_regwrite_clks: int = 3
-    pulse_load_clks: int = 4
+    pulse_load_clks: int = 3
 
     # sensible defaults for fproc_meas channels: each qubit gets a 'Qn.meas' channel,
     #  which is indexed according to the proc core for that qubit.

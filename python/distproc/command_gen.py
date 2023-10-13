@@ -58,11 +58,14 @@ def pulse_i(freq_word, phase_word, amp_word, env_word, cfg_word, cmd_time):
         freq_word : int
             word encoding the pulse carrier frequency 
             (usually (f/sample_rate)*2**NBITS)
-        phase : float
+        phase_word: int
             word encoding initial carrier phase 
         env_word : int
             word describing env address and duration
             (initial version is 12 bit MSB ...)
+        amp_word: int
+        cfg_word: int
+        cmd_time: int
 
     """
     #freq_int = int((freq/1.e9) * 2**24)

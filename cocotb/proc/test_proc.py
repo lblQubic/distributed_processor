@@ -619,7 +619,21 @@ async def idle_test(dut):
     dut._log.debug(f'qclk_done_time: {done_qclk_time}')
     assert done_qclk_time > 100
 
+@cocotb.test()
+async def idle_pulse_test(dut):
+    cmd_list = []
+    cmd_list.append(cg.idle(100))
+    cmd_list.append(cg.pulse_i(10, 3, 1, 0, 0, 103))
+    cmd_list.append(cg.done_cmd())
 
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    for i in range(105 + MEM_READ_LATENCY + RESET_LATENCY + 3*ALU_INSTR_TIME + 2 + 100):
+        await(RisingEdge(dut.clk))
 
 
 def evaluate_alu_exp(in0, op, in1):

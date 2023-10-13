@@ -253,7 +253,7 @@ class ScopeProgram(Pass):
         for node in ir_prog.blocks:
             block = ir_prog.blocks[node]['instructions']
             for instr in block:
-                if instr.name == 'barrier' or instr.name == 'delay':
+                if instr.name == 'barrier' or instr.name == 'delay' or instr.name == 'idle':
                     if instr.scope is None:
                         instr.scope = ir_prog.scope
 
@@ -529,9 +529,7 @@ class ResolveFreqs(Pass):
 
 class ResolveFPROCChannels(Pass):
     """
-    Resolve references to named FPROC channels, and add corresponding scheduling delays.
-    Both channel resolution and delay information come from the fproc_channels attribute
-    of the FPGAConfig object
+    Resolve references to named FPROC channels    
     """
     
     def __init__(self, fpga_config: hw.FPGAConfig):
@@ -635,7 +633,7 @@ class Schedule(Pass):
                 for grp in self._core_scoper.get_groups_bydest(instr.scope):
                     last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
 
-            elif instr.name == 'jump_fproc':
+            elif instr.name in ['jump_fproc', 'read_fproc', 'alu_fproc']:
                 for grp in self._core_scoper.get_groups_bydest(instr.scope):
                     last_instr_end_t[grp] += self._fpga_config.jump_fproc_clks
 
