@@ -248,9 +248,13 @@ class Compiler:
                     if 'twidth' not in env['paradict'].keys():
                         env['paradict']['twidth'] = instr.twidth
 
-                asm_progs[proc_group].append(
-                        {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
-                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest})
+                asm_instr = {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
+                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest}
+
+                if instr.tag is not None:
+                    asm_instr['tag'] = instr.tag
+
+                asm_progs[proc_group].append(asm_instr)
 
             elif instr.name == 'jump_label':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):

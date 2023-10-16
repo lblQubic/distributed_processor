@@ -29,6 +29,7 @@ class Pulse:
     phase: str | float = 0
     amp: str | float = 1
     start_time: int = None
+    tag: str = None
     name: str = 'pulse'
 
 @define

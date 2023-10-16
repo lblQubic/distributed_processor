@@ -251,7 +251,7 @@ class SingleCoreAssembler:
     def add_jump_fproc(self, in0, alu_op, jump_label, func_id=None, label=None):
         self.add_alu_cmd('jump_fproc', in0, alu_op, jump_label=jump_label, func_id=func_id, label=label)
 
-    def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, label=None):
+    def add_pulse(self, freq, phase, amp, start_time, env, elem_ind, label=None, tag=None):
         """
         Add a pulse command to the program. 'freq' and 'phase' can be specified by 
         named registers or immediate values.
