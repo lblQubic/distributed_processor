@@ -75,7 +75,7 @@ class FPROCChannel:
 
     Attributes
     ----------
-        func_id: int or tuple
+        id: int or tuple
 
             if int, the ID used to query the FPROC
 
@@ -84,17 +84,17 @@ class FPROCChannel:
             first element of the tuple is the key of the object, and
             the second element is the attribute to access
 
-        delay_after_chans:
+        hold_after_chans:
             list of pulse destination channels to server as reference 
             points for delay and idle. i.e. delay/idle are applied relative
             to the (end of) the last pulse played on any of these channels.
 
-        delay: float
+        hold_nclks: float
             delay (in seconds) to apply to pulses played after a 
             read_fproc or branch_fproc instruction on this channel
     """
     id: int | tuple
-    hold_after_chans: list = []
+    hold_after_chans: list = field(factory=list)
     hold_nclks: int = 0
 
 @define
@@ -105,11 +105,14 @@ class FPGAConfig:
     jump_fproc_clks: int = 5
     pulse_regwrite_clks: int = 3
     pulse_load_clks: int = 3
+    fproc_channels: dict = field(init=False)
 
     # sensible defaults for fproc_meas channels: each qubit gets a 'Qn.meas' channel,
     #  which is indexed according to the proc core for that qubit.
-    fproc_channels = {f'Q{i}.meas': FPROCChannel(id=(f'Q{i}.rdlo', 'core_ind'), 
-                                                 delay=FPROC_MEAS_DELAY) for i in range(N_CORES)}
+    def __attrs_post_init__(self):
+        self.fproc_channels = {f'Q{i}.meas': FPROCChannel(id=(f'Q{i}.rdlo', 'core_ind'), 
+                                                 hold_after_chans=[f'Q{i}.rdlo'], 
+                                                 hold_nclks=int(FPROC_MEAS_DELAY/self.fpga_clk_period)) for i in range(N_CORES)}
 
     @property
     def fpga_clk_freq(self):

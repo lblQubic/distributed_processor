@@ -341,6 +341,7 @@ def test_compound_loop():
                    'fpga_clk_period': 2.e-9,
                    'jump_cond_clks': 3,
                    'jump_fproc_clks': 4,
+                   'pulse_load_clks': 4,
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'X90', 'qubit': ['Q0']},
                {'name': 'read', 'qubit': ['Q0']},
@@ -381,6 +382,7 @@ def test_nested_loop():
                    'fpga_clk_period': 2.e-9,
                    'jump_cond_clks': 3,
                    'jump_fproc_clks': 4,
+                   'pulse_load_clks': 4,
                    'pulse_regwrite_clks': 1}
     program = [{'name': 'X90', 'qubit': ['Q0']},
                {'name': 'read', 'qubit': ['Q0']},

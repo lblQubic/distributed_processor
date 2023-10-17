@@ -303,6 +303,11 @@ class Compiler:
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
                     asm_progs[core].append(statement)
 
+            elif instr.name == 'idle':
+                statement = {'op': 'idle', 'end_time': instr.end_time}
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append(statement)
+
             else:
                 raise Exception(f'{instr.name} not yet implemented')
 

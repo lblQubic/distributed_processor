@@ -544,11 +544,12 @@ class ResolveFPROCChannels(Pass):
                 instr = instructions[i]
                 if isinstance(instr, iri.ReadFproc) or isinstance(instr, iri.JumpFproc) \
                         or isinstance(instr, iri.AluFproc):
-                    instructions.insert(i, iri.Barrier(scope=instr.scope))
-                    i += 1
+                    #instructions.insert(i, iri.Barrier(scope=instr.scope))
+                    #i += 1
                     if instr.func_id in self._fpga_config.fproc_channels.keys():
                         fproc_chan = self._fpga_config.fproc_channels[instr.func_id]
-                        instructions.insert(i, iri.Delay(t=fproc_chan.delay, scope=instr.scope))
+                        instructions.insert(i, iri.Hold(fproc_chan.hold_nclks, ref_chans=fproc_chan.hold_after_chans, 
+                                                        scope=instr.scope))
                         i += 1
                         instr.func_id = fproc_chan.id
                     else:
@@ -648,6 +649,23 @@ class Schedule(Pass):
             elif instr.name == 'loop_end':
                 for grp in self._core_scoper.get_groups_bydest(instr.scope):
                     last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
+
+            elif instr.name == 'hold':
+                max_t = max(cur_t[dest] for dest in instr.ref_chans)
+                idle_end_t = max_t + instr.nclks
+                idle_instr_scope = set()
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    if last_instr_end_t[grp] >= idle_end_t:
+                        logging.getLogger(__name__).info(f'skipping hold on core {grp}, idle timestamp exceeded')
+                    else:
+                        idle_instr_scope = idle_instr_scope.union(grp)
+                        last_instr_end_t[grp] = idle_end_t + self._fpga_config.pulse_load_clks
+
+                if len(idle_instr_scope) > 0:
+                    instructions[i] = iri.Idle(idle_end_t, scope=idle_instr_scope)
+                else:
+                    instructions.pop(i)
+                    i -= 1
 
             elif isinstance(instr, iri.Gate):
                 raise Exception('Must resolve gates first!')

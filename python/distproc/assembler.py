@@ -111,6 +111,8 @@ class SingleCoreAssembler:
                 self.declare_reg(**cmdargs)
             elif cmd['op'] == 'inc_qclk':
                 self.add_inc_qclk(**cmdargs)
+            elif cmd['op'] == 'idle':
+                self.add_idle(**cmdargs)
             elif cmd['op'] == 'jump_label':
                 cmd_list[i + 1]['label'] = cmdargs['dest_label']
             elif cmd['op'] == 'jump_i':
@@ -120,6 +122,12 @@ class SingleCoreAssembler:
 
     def add_jump_i(self, jump_label, label=None):
         cmd = {'op': 'jump_i', 'jump_label': jump_label}
+        if label is not None:
+            cmd['label'] = label
+        self._program.append(cmd)
+
+    def add_idle(self, end_time, label=None):
+        cmd = {'op': 'idle', 'end_time': end_time}
         if label is not None:
             cmd['label'] = label
         self._program.append(cmd)
@@ -408,6 +416,9 @@ class SingleCoreAssembler:
 
             elif cmd['op'] == 'pulse_reset':
                 cmd_buf += cg.pulse_reset().to_bytes(16, 'little')
+
+            elif cmd['op'] == 'idle':
+                cmd_buf += cg.idle(cmd['end_time']).to_bytes(16, 'little')
 
             elif cmd['op'] == 'done_stb':
                 cmd_buf += cg.done_cmd().to_bytes(16, 'little')
