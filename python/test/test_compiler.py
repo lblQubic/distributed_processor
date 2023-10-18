@@ -249,6 +249,43 @@ def test_multrst_fproc_res_cfg():
 
         raise err
 
+def test_fproc_hold():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = hw.FPGAConfig()
+
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'read', 'qubit': ['Q0']},
+               {'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'read', 'qubit': ['Q1']},
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 'Q0.meas',
+                'true': [],
+                'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 'Q1.meas',
+                'true': [],
+                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
+               {'name': 'X90', 'qubit': ['Q1']}]
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    prog = compiler.compile()
+    print(prog.program)
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    globalasm = am.GlobalAssembler(prog, channel_configs, ElementConfigTest)
+    asm_prog = globalasm.get_assembled_program()
+
+    with open('test_outputs/test_fproc_hold.txt', 'r') as f:
+        filein = f.read().rstrip('\n')
+
+    try:
+        assert str(sorted_program) == filein
+
+    except AssertionError as err:
+        with open('test_outputs/test_fproc_hold.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err
+
 def test_linear_compile():
     qchip = qc.QChip('qubitcfg.json')
     fpga_config = {'alu_instr_clks': 2,
