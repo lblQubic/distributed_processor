@@ -102,9 +102,9 @@ class FPGAConfig:
     fpga_clk_period: float = 2.e-9
     alu_instr_clks: int = 5
     jump_cond_clks: int = 5
-    jump_fproc_clks: int = 5
+    jump_fproc_clks: int = 8 #this is conservative to accomodate fproc_meas (can be 7 in some cases)
     pulse_regwrite_clks: int = 3
-    pulse_load_clks: int = 3
+    pulse_load_clks: int = 3 #need at least 3 clocks between pulses (on the same core)
     fproc_channels: dict = field(init=False)
 
     # sensible defaults for fproc_meas channels: each qubit gets a 'Qn.meas' channel,

@@ -281,7 +281,7 @@ def test_fproc_hold():
         assert str(sorted_program) == filein
 
     except AssertionError as err:
-        with open('test_outputs/test_fproc_hold.txt', 'w') as ferr:
+        with open('test_outputs/test_fproc_hold_err.txt', 'w') as ferr:
             ferr.write(str(sorted_program))
 
         raise err

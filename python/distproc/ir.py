@@ -614,11 +614,14 @@ class Schedule(Pass):
                 last_instr_t = last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]]
                 instr.start_time = max(last_instr_t, cur_t[instr.dest])
 
-                last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]] = instr.start_time + self._fpga_config.pulse_load_clks
+                last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]] = instr.start_time \
+                        + self._fpga_config.pulse_load_clks
                 cur_t[instr.dest] = instr.start_time + self._get_pulse_nclks(instr.twidth)
 
             elif instr.name == 'barrier':
-                max_t = max(cur_t[dest] for dest in instr.scope)
+                max_cur_t = max(cur_t[dest] for dest in instr.scope)
+                max_last_instr_t = max(last_instr_end_t[self._core_scoper.proc_groupings[dest]] for dest in instr.scope)
+                max_t = max(max_cur_t, max_last_instr_t)
                 for dest in instr.scope:
                     cur_t[dest] = max_t
                 instructions.pop(i)
