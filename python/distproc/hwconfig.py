@@ -6,7 +6,7 @@ import distproc.command_gen as cg
 import numpy as np
 import json
 
-FPROC_MEAS_DELAY = 150.e-9
+FPROC_MEAS_CLKS = 64
 N_CORES = 8
 
 class ElementConfig(ABC):
@@ -112,7 +112,7 @@ class FPGAConfig:
     def __attrs_post_init__(self):
         self.fproc_channels = {f'Q{i}.meas': FPROCChannel(id=(f'Q{i}.rdlo', 'core_ind'), 
                                                  hold_after_chans=[f'Q{i}.rdlo'], 
-                                                 hold_nclks=int(FPROC_MEAS_DELAY/self.fpga_clk_period)) for i in range(N_CORES)}
+                                                 hold_nclks=FPROC_MEAS_CLKS) for i in range(N_CORES)}
 
     @property
     def fpga_clk_freq(self):
