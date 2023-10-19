@@ -570,24 +570,26 @@ class Schedule(Pass):
         # TODO: add loopdict checking
         self._core_scoper = CoreScoper(ir_prog.scope, self._proc_grouping)
         for nodename in nx.topological_sort(ir_prog.control_flow_graph):
-            cur_t = {dest: self._start_nclks for dest in ir_prog.blocks[nodename]['scope']}
+            cur_t_global = {dest: self._start_nclks for dest in ir_prog.scope}
             last_instr_end_t = {grp: self._start_nclks \
                     for grp in self._core_scoper.get_groups_bydest(ir_prog.blocks[nodename]['scope'])}
 
             for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
-                for dest in cur_t.keys():
+                for dest in cur_t_global.keys():
                     if dest in ir_prog.blocks[pred_node]['scope']:
-                        cur_t[dest] = max(cur_t[dest], ir_prog.blocks[pred_node]['block_end_t'][dest])
+                        cur_t_global[dest] = max(cur_t_global[dest], ir_prog.blocks[pred_node]['block_end_t'][dest])
                 for grp in last_instr_end_t:
                     if grp in ir_prog.blocks[pred_node]['last_instr_end_t']:
                         last_instr_end_t[grp] = max(last_instr_end_t[grp], ir_prog.blocks[pred_node]['last_instr_end_t'][grp])
 
 
+            cur_t_local = {dest: cur_t_global[dest] for dest in cur_t_global.keys()}
             if self._check_nodename_loopstart(nodename):
                 ir_prog.register_loop(nodename, ir_prog.blocks[nodename]['scope'],
-                                      max(cur_t.values()))
+                                      max(cur_t_local.values()))
 
-            self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t, last_instr_end_t)
+            self._schedule_block(ir_prog.blocks[nodename]['instructions'], cur_t_global, last_instr_end_t)
+            cur_t_local = {dest: cur_t_global[dest] for dest in cur_t_global.keys()}
 
             if isinstance(ir_prog.blocks[nodename]['instructions'][-1], iri.JumpCond) \
                     and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
@@ -596,11 +598,11 @@ class Schedule(Pass):
                         for dest in ir_prog.blocks[nodename]['scope']}
                 ir_prog.blocks[nodename]['last_instr_end_t'] = {grp: ir_prog.loops[loopname].start_time \
                         for grp in self._core_scoper.get_groups_bydest(ir_prog.blocks[nodename]['scope'])}
-                ir_prog.loops[loopname].delta_t = max(max(last_instr_end_t.values()), max(cur_t.values())) \
+                ir_prog.loops[loopname].delta_t = max(max(last_instr_end_t.values()), max(cur_t_local.values())) \
                         - ir_prog.loops[loopname].start_time
 
             else:
-                ir_prog.blocks[nodename]['block_end_t'] = cur_t
+                ir_prog.blocks[nodename]['block_end_t'] = cur_t_local
                 ir_prog.blocks[nodename]['last_instr_end_t'] = last_instr_end_t
 
         ir_prog.fpga_config = self._fpga_config
