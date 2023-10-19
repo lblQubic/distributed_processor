@@ -148,7 +148,9 @@ PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 def get_default_passes(fpga_config, qchip, \
         qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),\
         proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
-    return [ir.ScopeProgram(qubit_grouping),
+    return [ir.FlattenProgram(),
+            ir.MakeBasicBlocks(),
+            ir.ScopeProgram(qubit_grouping),
             ir.RegisterVarsAndFreqs(qchip),
             ir.ResolveGates(qchip, qubit_grouping),
             ir.GenerateCFG(),
@@ -200,7 +202,7 @@ class Compiler:
         """
         flatten control flow and optionally lint
         """
-        return generate_flat_ir(input_program)
+        return input_program
 
     def run_ir_passes(self, passes: list):
         """
@@ -246,9 +248,13 @@ class Compiler:
                     if 'twidth' not in env['paradict'].keys():
                         env['paradict']['twidth'] = instr.twidth
 
-                asm_progs[proc_group].append(
-                        {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
-                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest})
+                asm_instr = {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
+                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest}
+
+                if instr.tag is not None:
+                    asm_instr['tag'] = instr.tag
+
+                asm_progs[proc_group].append(asm_instr)
 
             elif instr.name == 'jump_label':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
@@ -308,108 +314,6 @@ class Compiler:
         #todo: write method to deal with multiple jump labels in a row
         pass
 
-
-def generate_flat_ir(program, label_prefix=''):
-    """
-    Generates an intermediate representation with control flow resolved into simple 
-    conditional jump statements. This function is recursive to allow for nested control 
-    flow structures.
-
-    instruction format is the same as compiler input, with the following modifications:
-
-    branch instruction:
-        {'name': 'branch_fproc', alu_cond: <'le' or 'ge' or 'eq'>, 'cond_lhs': <var or ival>, 
-            'func_id': function_id, 'scope': <list_of_qubits> 'true': [instruction_list_true], 'false': [instruction_list_false]}
-    becomes:
-        {'name': 'jump_fproc', alu_cond: <'le' or 'ge' or 'eq'>, 'cond_lhs': <var or ival>, 
-            'func_id': function_id, 'scope': <list_of_qubits> 'jump_label': <jump_label_true>}
-        [instruction_list_false]
-        {'name': 'jump_i', 'jump_label': <jump_label_end>}
-        {'name': 'jump_label',  'label': <jump_label_true>}
-        [instruction_list_true]
-        {'name': 'jump_label',  'label': <jump_label_end>}
-
-    for 'branch_var', 'jump_fproc' becomes 'jump_cond', and 'func_id' is replaced with 'cond_rhs'
-
-    .....
-
-    loop:
-        {'name': 'loop', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>, 
-            'alu_cond': <'le' or 'ge' or 'eq'>, 'body': [instruction_list]}
-
-    becomes:
-        {'name': 'jump_label', 'label': <loop_label>}
-        {'name': 'barrier', 'scope': <list_of_qubits>}
-        [instruction_list]
-        {'name': 'loop_end', 'scope': <list_of_qubits>, 'loop_label': <loop_label>}
-        {'name': 'jump_cond', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>,
-         'jump_label': <loop_label>, 'jump_type': 'loopctrl'}
-        
-
-    TODO: consider sticking this in a class
-    """
-    flattened_program = []
-    branchind = 0
-    for i, statement in enumerate(program):
-        statement = copy.deepcopy(statement)
-        if statement['name'] in ['branch_fproc', 'branch_var']:
-            falseblock = statement['false']
-            trueblock = statement['true']
-
-            flattened_trueblock = generate_flat_ir(trueblock, label_prefix='true_'+label_prefix)
-            flattened_falseblock = generate_flat_ir(falseblock, label_prefix='false_'+label_prefix)
-
-            jump_label_false = '{}false_{}'.format(label_prefix, branchind)
-            jump_label_end = '{}end_{}'.format(label_prefix, branchind)
-
-            if statement['name'] == 'branch_fproc':
-                jump_statement = {'name': 'jump_fproc', 'alu_cond': statement['alu_cond'], 'cond_lhs': statement['cond_lhs'],
-                                  'func_id': statement['func_id'], 'scope': statement['scope']}
-            else:
-                jump_statement = {'name': 'jump_cond', 'alu_cond': statement['alu_cond'], 'cond_lhs': statement['cond_lhs'],
-                                  'cond_rhs': statement['cond_rhs'], 'scope': statement['scope']}
-
-            if len(flattened_trueblock) > 0:
-                jump_label_true = '{}true_{}'.format(label_prefix, branchind)
-                jump_statement['jump_label'] = jump_label_true
-            else:
-                jump_statement['jump_label'] = jump_label_end
-
-            flattened_program.append(jump_statement)
-
-            flattened_falseblock.insert(0, {'name': 'jump_label', 'label': jump_label_false, 'scope': statement['scope']})
-            flattened_falseblock.append({'name': 'jump_i', 'jump_label': jump_label_end,
-                                         'scope': statement['scope']})
-            flattened_program.extend(flattened_falseblock)
-
-            if len(flattened_trueblock) > 0:
-                flattened_trueblock.insert(0, {'name': 'jump_label', 'label': jump_label_true, 'scope': statement['scope']})
-            flattened_program.extend(flattened_trueblock)
-            flattened_program.append({'name': 'jump_label', 'label': jump_label_end, 'scope': statement['scope']})
-
-            branchind += 1
-
-        elif statement['name'] == 'loop':
-            body = statement['body']
-            flattened_body = generate_flat_ir(body, label_prefix='loop_body_'+label_prefix)
-            loop_label = '{}loop_{}_loopctrl'.format(label_prefix, branchind)
-
-            flattened_program.append({'name': 'jump_label', 'label': loop_label, 'scope': statement['scope']})
-            flattened_program.append({'name': 'barrier', 'qubit': statement['scope']})
-            flattened_program.extend(flattened_body)
-            flattened_program.append({'name': 'loop_end', 'loop_label': loop_label, 'scope': statement['scope']})
-            flattened_program.append({'name': 'jump_cond', 'cond_lhs': statement['cond_lhs'], 'cond_rhs': statement['cond_rhs'], 
-                                      'alu_cond': statement['alu_cond'], 'jump_label': loop_label, 'scope': statement['scope'],
-                                      'jump_type': 'loopctrl'})
-            branchind += 1
-
-        elif statement['name'] == 'alu_op':
-            statement = statement.copy()
-
-        else:
-            flattened_program.append(statement)
-
-    return flattened_program
 
 @define
 class CompiledProgram:

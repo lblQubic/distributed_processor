@@ -3,6 +3,7 @@ import numpy as np
 import ipdb
 import distproc.compiler as cm
 import distproc.ir as ir
+import distproc.ir_instructions as iri
 import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
@@ -114,6 +115,36 @@ def test_pulse_compile():
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
         filein = f.read().rstrip('\n')
         assert str(sorted_program) == filein
+
+def test_pulse_compile_ir():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [iri.Gate('X90', 'Q0'),
+                iri.Gate('X90', 'Q1'),
+                iri.Gate('X90Z90', 'Q0'),
+                iri.Gate('X90', 'Q0'),
+                iri.Gate('X90', 'Q1'),
+                iri.Pulse(phase=np.pi/2, freq='Q0.freq', env=np.ones(100), twidth=24.e-9,
+                          amp=0.5, dest='Q0.qdrv'),
+                iri.Gate('read', 'Q0')]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program)
+    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    prog = compiler.compile()
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+    with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
+        filein = f.read().rstrip('\n')
+        try:
+            assert str(sorted_program) == filein
+        except AssertionError as err:
+            with open('test_outputs/test_pulse_compile_ir_err.txt', 'w') as ferr:
+                ferr.write(str(sorted_program))
+
+            raise err
 
 def test_pulse_compile_nogate():
     qchip = qc.QChip('qubitcfg.json')
