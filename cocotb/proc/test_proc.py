@@ -8,7 +8,7 @@ import distproc.command_gen as cg
 CLK_CYCLE = 5
 N_CLKS = 500
 
-MEM_READ_LATENCY = 2
+MEM_READ_LATENCY = 3
 RESET_LATENCY = 1
 QCLK_RST_DELAY = 4
 PULSE_INSTR_TIME = max(MEM_READ_LATENCY, 1)
@@ -93,7 +93,7 @@ async def pulse_freq_trig_test(dut):
     pulse_i_opcode = 0b10010000
 
     for i in range(n_cmd):
-        freq_word = random.randint(0, 2**9)
+        freq_word = random.randint(0, 2**9 - 1)
         freq_word_list.append(freq_word)
         cmd_list.append((pulse_i_opcode << 120) + ((freq_word + 2**10) << 60) + (pulse_time_list[i] << (5)))
     
@@ -598,7 +598,42 @@ async def pulse_sync_test(dut):
         assert env_word_list[i] == env_read_list[i]
         assert pulse_time_list[i] == pulse_read_times[i] - CSTROBE_DELAY
 
+@cocotb.test()
+async def idle_test(dut):
+    cmd_list = []
+    cmd_list.append(cg.idle(100))
+    cmd_list.append(cg.done_cmd())
 
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    for i in range(105 + MEM_READ_LATENCY + RESET_LATENCY + 3*ALU_INSTR_TIME + 2):
+        await(RisingEdge(dut.clk))
+        if dut.done_gate.value == 1:
+            done_qclk_time = int(dut.dpr.qclk_out.value)
+            break
+
+    dut._log.debug(f'qclk_done_time: {done_qclk_time}')
+    assert done_qclk_time > 100
+
+@cocotb.test()
+async def idle_pulse_test(dut):
+    cmd_list = []
+    cmd_list.append(cg.idle(100))
+    cmd_list.append(cg.pulse_i(10, 3, 1, 0, 0, 103))
+    cmd_list.append(cg.done_cmd())
+
+    await cocotb.start(generate_clock(dut))
+    await load_commands(dut, cmd_list)
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    for i in range(105 + MEM_READ_LATENCY + RESET_LATENCY + 3*ALU_INSTR_TIME + 2 + 100):
+        await(RisingEdge(dut.clk))
 
 
 def evaluate_alu_exp(in0, op, in1):

@@ -28,7 +28,8 @@ opcodes = {'pulse_write' : 0b10000,
            'inc_qclk' : 0b01101,
            'sync' : 0b01110,
            'done' : 0b10100,
-           'pulse_reset' : 0b10110}
+           'pulse_reset' : 0b10110,
+           'idle' : 0b11000}
 
 #pulse parameters
 pulse_field_widths = {
@@ -57,11 +58,14 @@ def pulse_i(freq_word, phase_word, amp_word, env_word, cfg_word, cmd_time):
         freq_word : int
             word encoding the pulse carrier frequency 
             (usually (f/sample_rate)*2**NBITS)
-        phase : float
+        phase_word: int
             word encoding initial carrier phase 
         env_word : int
             word describing env address and duration
             (initial version is 12 bit MSB ...)
+        amp_word: int
+        cfg_word: int
+        cmd_time: int
 
     """
     #freq_int = int((freq/1.e9) * 2**24)
@@ -321,6 +325,12 @@ def alu_cmd(optype, im_or_reg, alu_in0, alu_op=None, alu_in1=0, write_reg_addr=N
     opcode = (opcodes[opkey] << 3) + alu_opcodes[alu_op]
     cmd += opcode << 120
 
+    return cmd
+
+def idle(cmd_time):
+    cmd = cmd_time << pulse_field_pos['cmd_time']
+    assert cmd_time < 2**pulse_field_widths['cmd_time']
+    cmd += opcodes['idle'] << 123
     return cmd
 
 def done_cmd():

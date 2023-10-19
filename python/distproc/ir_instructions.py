@@ -115,6 +115,26 @@ class Delay:
     scope: list | tuple | set = None
 
 @define
+class Idle:
+    end_time: int
+    name: str = 'idle'
+    qubit: list = None
+    scope: list | tuple | set = None
+
+@define
+class Hold:
+    """
+    HOLD execution at this point until it has been 
+    nclks since the end of the last pulse on channels
+    ref_chans. Gets resolved into Idle. 
+    """
+    nclks: int
+    ref_chans: list | tuple | set = None
+    qubit: list = None
+    scope: list | tuple | set = None
+    name: str = 'hold'
+
+@define
 class Loop:
     cond_lhs: int | str
     alu_cond: str

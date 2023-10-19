@@ -6,7 +6,7 @@ import distproc.command_gen as cg
 import numpy as np
 import json
 
-FPROC_MEAS_DELAY = 150.e-9
+FPROC_MEAS_CLKS = 64
 N_CORES = 8
 
 class ElementConfig(ABC):
@@ -75,7 +75,7 @@ class FPROCChannel:
 
     Attributes
     ----------
-        func_id: int or tuple
+        id: int or tuple
 
             if int, the ID used to query the FPROC
 
@@ -84,26 +84,35 @@ class FPROCChannel:
             first element of the tuple is the key of the object, and
             the second element is the attribute to access
 
-        delay: float
+        hold_after_chans:
+            list of pulse destination channels to server as reference 
+            points for delay and idle. i.e. delay/idle are applied relative
+            to the (end of) the last pulse played on any of these channels.
+
+        hold_nclks: float
             delay (in seconds) to apply to pulses played after a 
             read_fproc or branch_fproc instruction on this channel
     """
     id: int | tuple
-    delay: float
+    hold_after_chans: list = field(factory=list)
+    hold_nclks: int = 0
 
 @define
 class FPGAConfig:
     fpga_clk_period: float = 2.e-9
     alu_instr_clks: int = 5
     jump_cond_clks: int = 5
-    jump_fproc_clks: int = 5
+    jump_fproc_clks: int = 8 #this is conservative to accomodate fproc_meas (can be 7 in some cases)
     pulse_regwrite_clks: int = 3
-    pulse_load_clks: int = 4
+    pulse_load_clks: int = 3 #need at least 3 clocks between pulses (on the same core)
+    fproc_channels: dict = field(init=False)
 
     # sensible defaults for fproc_meas channels: each qubit gets a 'Qn.meas' channel,
     #  which is indexed according to the proc core for that qubit.
-    fproc_channels = {f'Q{i}.meas': FPROCChannel(id=(f'Q{i}.rdlo', 'core_ind'), 
-                                                 delay=FPROC_MEAS_DELAY) for i in range(N_CORES)}
+    def __attrs_post_init__(self):
+        self.fproc_channels = {f'Q{i}.meas': FPROCChannel(id=(f'Q{i}.rdlo', 'core_ind'), 
+                                                 hold_after_chans=[f'Q{i}.rdlo'], 
+                                                 hold_nclks=FPROC_MEAS_CLKS) for i in range(N_CORES)}
 
     @property
     def fpga_clk_freq(self):
