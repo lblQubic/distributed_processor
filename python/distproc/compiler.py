@@ -270,43 +270,36 @@ class Compiler:
                     asm_progs[core].append({'op': 'reg_alu', 'in0': instr.value, 'in1_reg': instr.var,
                                             'alu_op': 'id0', 'out_reg': instr.var})
             elif instr.name == 'read_fproc':
-                statement = {'op': 'alu_fproc', 'in0': 0, 'alu_op': 'id1', 
-                             'func_id': instr.func_id, 'out_reg': instr.var}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'alu_fproc', 'in0': 0, 'alu_op': 'id1', 
+                             'func_id': instr.func_id, 'out_reg': instr.var})
 
             elif instr.name == 'alu_fproc':
-                statement = {'op': 'alu_fproc', 'in0': instr.lhs, 'alu_op': instr.op, 
-                             'func_id': instr.func_id, 'out_reg': instr.out}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'alu_fproc', 'in0': instr.lhs, 'alu_op': instr.op, 
+                             'func_id': instr.func_id, 'out_reg': instr.out})
 
             elif instr.name == 'jump_fproc':
-                statement = {'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
-                             'jump_label': instr.jump_label, 'func_id': instr.func_id}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
+                             'jump_label': instr.jump_label, 'func_id': instr.func_id})
 
             elif instr.name == 'jump_cond':
-                statement = {'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
-                             'jump_label': instr.jump_label, 'in1_reg': instr.cond_rhs}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
+                             'jump_label': instr.jump_label, 'in1_reg': instr.cond_rhs})
 
             elif instr.name == 'jump_i':
-                statement = {'op': 'jump_i', 'jump_label': instr.jump_label}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'jump_i', 'jump_label': instr.jump_label})
 
             elif instr.name == 'loop_end':
-                statement = {'op': 'inc_qclk', 'in0': -self.ir_prog.loops[instr.loop_label].delta_t}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'inc_qclk', 'in0': -self.ir_prog.loops[instr.loop_label].delta_t})
 
             elif instr.name == 'idle':
-                statement = {'op': 'idle', 'end_time': instr.end_time}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'idle', 'end_time': instr.end_time})
 
             else:
                 raise Exception(f'{instr.name} not yet implemented')
