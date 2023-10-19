@@ -78,7 +78,7 @@ module ctrl#(
     output reg pulse_reset);
 
     reg[4:0] state, next_state;
-    reg[3:0] mem_wait_cycles;
+    reg[31:0] mem_wait_cycles;
     reg mem_wait_rst;
 
     localparam MEM_WAIT_STATE = 0;
