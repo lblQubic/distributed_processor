@@ -246,7 +246,10 @@ class Compiler:
 
                 if isinstance(env, dict):
                     if 'twidth' not in env['paradict'].keys():
+                        env = copy.deepcopy(env)
                         env['paradict']['twidth'] = instr.twidth
+                    elif env['paradict']['twidth'] != pulse.twidth:
+                        raise Exception('Pulse twidth differs from envelope!')
 
                 asm_instr = {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
                          'env': env, 'start_time': instr.start_time, 'dest': instr.dest}
