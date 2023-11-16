@@ -120,13 +120,16 @@ def _resolve_instr_objects(source: list[dict]):
         if instr['name'] == 'virtualz':
             instr['name'] = 'virtual_z'
 
+        instr_obj = instr_class(**instr)
+
         if 'true' in instr.keys():
-            instr['true'] = _resolve_instr_objects(instr['true'])
+            instr_obj.true = _resolve_instr_objects(instr['true'])
         if 'false' in instr.keys():
-            instr['false'] = _resolve_instr_objects(instr['false'])
+            instr_obj.false = _resolve_instr_objects(instr['false'])
         if 'body' in instr.keys():
-            instr['body'] = _resolve_instr_objects(instr['body'])
-        full_program.append(instr_class(**instr))
+            instr_obj.body = _resolve_instr_objects(instr['body'])
+
+        full_program.append(instr_obj)
 
     return full_program
 
