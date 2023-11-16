@@ -108,48 +108,48 @@ def pulse_cmd(freq_word=None, freq_regaddr=None, phase_word=None, phase_regaddr=
     """
     cmd = 0
     if cfg_word is not None:
-        assert cfg_word < 2**pulse_field_widths['cfg']
-        cmd += (cfg_word + 2**4) << pulse_field_pos['cfg']
+        assert 0 <= cfg_word < 2**pulse_field_widths['cfg']
+        cmd += (int(cfg_word) + 2**4) << pulse_field_pos['cfg']
     if amp_word is not None:
         assert amp_regaddr is None
-        assert amp_word < 2**pulse_field_widths['amp']
-        cmd += (amp_word + 2**17) << pulse_field_pos['amp']
+        assert 0 <= amp_word < 2**pulse_field_widths['amp']
+        cmd += (int(amp_word) + 2**17) << pulse_field_pos['amp']
     if freq_word is not None:
         assert freq_regaddr is None
-        assert freq_word < 2**pulse_field_widths['freq']
-        cmd += (freq_word + 2**10) << pulse_field_pos['freq']
+        assert 0 <= freq_word < 2**pulse_field_widths['freq']
+        cmd += (int(freq_word) + 2**10) << pulse_field_pos['freq']
     if phase_word is not None:
         assert phase_regaddr is None
-        assert phase_word < 2**pulse_field_widths['phase']
-        cmd += (phase_word + 2**18) << pulse_field_pos['phase']
+        assert 0 <= phase_word < 2**pulse_field_widths['phase']
+        cmd += (int(phase_word) + 2**18) << pulse_field_pos['phase']
     if env_word is not None:
         assert env_regaddr is None
-        assert env_word < 2**pulse_field_widths['env_word']
-        cmd += (env_word + 2**25) << pulse_field_pos['env_word']
+        assert 0 <= env_word < 2**pulse_field_widths['env_word']
+        cmd += (int(env_word) + 2**25) << pulse_field_pos['env_word']
     if freq_regaddr is not None:
         assert phase_regaddr is None and env_regaddr is None and amp_regaddr is None
-        assert freq_regaddr < 16
-        cmd += freq_regaddr << 116
+        assert 0 <= freq_regaddr < 16
+        cmd += int(freq_regaddr) << 116
         cmd += 0b11 << pulse_field_pos['freq'] + pulse_field_widths['freq'] #(37 + 5 + 18 + 9) #enable write + reg_mux
     if phase_regaddr is not None:
         assert freq_regaddr is None and env_regaddr is None and amp_regaddr is None
-        assert phase_regaddr < 16
-        cmd += phase_regaddr << 116
+        assert 0 <= phase_regaddr < 16
+        cmd += int(phase_regaddr) << 116
         cmd += 0b11 << pulse_field_pos['phase'] + pulse_field_widths['phase'] #(37 + 5 + 18 + 9) #enable write + reg_mux
     if amp_regaddr is not None:
         assert freq_regaddr is None and env_regaddr is None and phase_regaddr is None
-        assert amp_regaddr < 16
-        cmd += amp_regaddr << 116
+        assert 0 <= amp_regaddr < 16
+        cmd += int(amp_regaddr) << 116
         cmd += 0b11 << pulse_field_pos['amp'] + pulse_field_widths['amp'] #(37 + 5 + 18 + 9) #enable write + reg_mux
     if env_regaddr is not None:
         assert freq_regaddr is None and phase_regaddr is None and amp_regaddr is None
-        assert env_regaddr < 16
-        cmd += env_regaddr << 116
+        assert 0 <= env_regaddr < 16
+        cmd += int(env_regaddr) << 116
         cmd += 0b11 << pulse_field_pos['env_word'] + pulse_field_widths['env_word'] #(37 + 5 + 18 + 9) #enable write + reg_mux
 
     if cmd_time is not None:
-        cmd += cmd_time << pulse_field_pos['cmd_time']
-        assert cmd_time < 2**pulse_field_widths['cmd_time']
+        cmd += int(cmd_time) << pulse_field_pos['cmd_time']
+        assert 0 <= cmd_time < 2**pulse_field_widths['cmd_time']
         opcode = opcodes['pulse_write_trig']
     else:
         opcode = opcodes['pulse_write']
