@@ -577,7 +577,8 @@ class ResolveHWVirtualZ(Pass):
 
                 elif isinstance(instr, iri.VirtualZ):
                     if instr.freq in hw_zphase_bindings.keys():
-                        assert set(instr.scope).issubset(ir_prog.vars[hw_zphase_bindings[instr.freq]].scope)
+                        if instr.scope is not None:
+                            assert set(instr.scope).issubset(ir_prog.vars[hw_zphase_bindings[instr.freq]].scope)
                         alu_zgate = iri.Alu(op='add', lhs=instr.phase, rhs=hw_zphase_bindings[instr.freq],
                                             out=hw_zphase_bindings[instr.freq], scope=ir_prog.vars[hw_zphase_bindings[instr.freq]].scope)
                         instructions.pop(i)
