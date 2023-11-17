@@ -590,6 +590,7 @@ class ResolveHWVirtualZ(Pass):
                 elif instr.name == 'pulse':
                     if instr.freq in hw_zphase_bindings.keys():
                         instr.phase = hw_zphase_bindings[instr.freq]
+                        assert instr.dest in ir_prog.vars[hw_zphase_bindings[instr.freq]].scope
 
                 elif isinstance(instr, iri.Gate):
                     raise Exception(f'{iri.Gate.name} Gate found. All Gate instructions must be resolved before running this pass!')
