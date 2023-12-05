@@ -576,7 +576,7 @@ class ResolveHWVirtualZ(Pass):
                     assert instr.var in ir_prog.vars.keys()
                     hw_zphase_bindings[instr.freq] = instr.var
                     instructions.pop(i)
-                    i -= 1
+                    instructions.insert(i, iri.SetVar(value=0, var=instr.var, scope=ir_prog.vars[instr.var].scope))
 
                 elif isinstance(instr, iri.VirtualZ):
                     if instr.freq in hw_zphase_bindings.keys():

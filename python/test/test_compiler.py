@@ -535,6 +535,15 @@ def test_hw_virtualz():
         for statement in coreprog:
             print(statement)
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+
     with open('test_outputs/test_hw_virtualz_out.txt', 'r') as f:
-        #f.write(str(sorted_program))
-        assert str(sorted_program) == f.read().rstrip('\n')
+        filein = f.read().rstrip('\n')
+
+    try:
+        assert str(sorted_program) == filein
+
+    except AssertionError as err:
+        with open('test_outputs/test_hw_virtualz_err.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err 
