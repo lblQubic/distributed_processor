@@ -103,16 +103,6 @@ Instruction dict format:
         {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}
 
 
-    Note about instructions using function processor (FPROC): these instructions are scheduled
-    immediately and use the next available function proc output. Which measurements are actually
-    used for this depend on the configuration of the function processor. For flexibility, we don't 
-    impose a particular configuration in this layer. It is the responsibilty of the programmer 
-    to understand the configuration and schedule these instructions using appropriate delays, 
-    etc as necessary.
-
-    The measure/store instruction assumes an func_id mapping between qubits and raw measurements;
-    this is not guaranteed to work across all FPROC implementations (TODO: maybe add software checks
-    for this...)
 """
 
 import numpy as np
@@ -194,15 +184,8 @@ class Compiler:
 
         Preprocessing and lowering to IR (step 1 above) are performed in the constructor.
         """
-        processed_program = self._preprocess(program)
-        self.ir_prog = ir.IRProgram(processed_program)
+        self.ir_prog = ir.IRProgram(program)
         self._proc_grouping = proc_grouping
-
-    def _preprocess(self, input_program):
-        """
-        flatten control flow and optionally lint
-        """
-        return input_program
 
     def run_ir_passes(self, passes: list):
         """
@@ -218,6 +201,16 @@ class Compiler:
             ir_pass.run_pass(self.ir_prog)
 
     def compile(self):
+        """
+        Compiler the program from the intermediate representation down to pulse-level 
+        assembly (i.e. a CompiledProgram object). This includes splitting up the program
+        statements into constituent distributed processor cores according to the 
+        proc_grouping provided at Compiler instantiation
+
+        Returns
+        -------
+            CompiledProgram object
+        """
         self._core_scoper = ir.CoreScoper(self.ir_prog.scope, self._proc_grouping)
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self._core_scoper.proc_groupings_flat}
         for blockname in self.ir_prog.blocknames_by_ind:
@@ -361,5 +354,6 @@ def load_compiled_program(filename):
     with open(filename) as f:
         progdict = json.load(f)
 
+    raise NotImplementedError
     return hw.FPGAConfig(**progdict['fpga_config'])
 

@@ -348,11 +348,11 @@ class MakeBasicBlocks(Pass):
 
 class ScopeProgram(Pass):
     """
-    Determines the scope of all blocks in the program graph. For instructions
+    Determines the scope of all basic blocks in the program graph. For instructions
     with a 'qubit' attribute, scope is determined using the 'qubit_grouping' 
     argument
 
-    Modifications to IRProgram:
+    Changes:
         - sets the "scope" attibute for all of the nodes
         - converts any qubits to lists of channels, store in scope attribute
           of instructions
@@ -411,7 +411,8 @@ class RegisterVarsAndFreqs(Pass):
     Note that frequencies used/defined in Gate instructions are NOT registered here
     but are registered in the ResolveGates pass.
 
-    Also scopes ALU instructions that use vars (todo: consider breaking this out)
+    Also scopes ALU instructions that use vars (todo: consider breaking this out), 
+    according to the declared scope of input/output variables.
     """
 
     def __init__(self, qchip: qc.QChip = None):
@@ -456,11 +457,12 @@ class ResolveGates(Pass):
     Resolves all Gate objects into constituent pulses, as determined by the 
     provided qchip object. 
 
-    Modifications to IRProgram:
+    Changes:
         - convert Gate objects to:
             Barrier(scope of gate)
-            Pulse0
+            Pulse0,
             Pulse1,
+            Delay,
             etc
         - named frequencies (e.g. freq: 'Q2.freq') are registered into ir_prog.freqs
           according to the qchip object (e.g. ir_prog.freqs['Q2.freq'] = 4.322352e9), 
@@ -528,7 +530,6 @@ class GenerateCFG(Pass):
     encoded in ir_prog.control_flow_graph. Conditional jumps associated with loops are NOT
     included.
     """
-
     def __init__(self):
         pass
 
@@ -556,10 +557,14 @@ class GenerateCFG(Pass):
 
 class ResolveHWVirtualZ(Pass):
     """
-    Apply BindPhase instructions:
+    Apply BindPhase instructions and resolve hardware (runtime) virtual-z gates.
+
+    Changes:
         - turn all VirtualZ instructions into register operations
-        - if force=True, force all pulse phases using this frequency 
+        - initialize bound vars to 0 (i.e. add SetVar instructions)
+        - force all pulse phases using the bound frequency 
           to that register
+
     Run this BEFORE ResolveVirtualZ
     """
     def __init__(self):
@@ -601,7 +606,10 @@ class ResolveHWVirtualZ(Pass):
 class ResolveVirtualZ(Pass):
     """
     For software VirtualZ (default) only. Resolve VirtualZ gates into
-    hardcoded phase offsets
+    hardcoded phase offsets. If there are any conditional VirtualZ gates, 
+    Z-gates on that phase MUST be encoded as registers in hardware
+    (using BindPhase). This pass will check for z-phase consistency between
+    predecessor nodes in the CFG.
 
     Requirements:
         - all blocks (and relevant instructions) are scoped
@@ -675,7 +683,14 @@ class ResolveFreqs(Pass):
 
 class ResolveFPROCChannels(Pass):
     """
-    Resolve references to named FPROC channels    
+    Resolve references to named FPROC channels according to the numerical ID
+    or HW channel names given in fpga_config.fproc_config
+
+    Changes:
+        - func_id attributes get lowered according to fpga_config.fproc_config
+        - Hold instructions are inserted to ensure that <Read, Jump, Alu>Fproc
+          instruction is executed after the most recent measurement on the given
+          channel is completed
     """
     
     def __init__(self, fpga_config: hw.FPGAConfig):
@@ -706,6 +721,19 @@ class ResolveFPROCChannels(Pass):
 
                             
 class Schedule(Pass):
+    """
+    Schedule all timed instructions. This includes Pulse and Hold/Idle instructions. Takes 
+    into account branching/control flow, as well as the execution time of untimed (normal)
+    instructions.
+
+    Changes:
+        - Hold instructions get resolved into Idle, with 't' attribute 
+        - Delay and Barrier instructions are resolved and removed
+        - Pulse instructions get assigned a 't' in units FPGA clocks
+        - Loop execution time is determined so the appropriate IncQclk
+          instructions can be added during compilation
+
+    """
 
     def __init__(self, fpga_config: hw.FPGAConfig, proc_grouping: list):
         self._fpga_config = fpga_config
@@ -832,6 +860,10 @@ class Schedule(Pass):
 
 
 class CoreScoper:
+    """
+    Class for grouping firmware output channels into distributed processor cores. Processor cores are named using
+    a tuple of channels controlled by that core (e.g. (Q0.qdrv, Q0.rdrv, Q0.rdlo))
+    """
 
     def __init__(self, qchip_or_dest_channels=None, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
         if isinstance(qchip_or_dest_channels, qc.QChip):
@@ -854,6 +886,19 @@ class CoreScoper:
         self.proc_groupings = proc_groupings
 
     def get_groups_bydest(self, dests):
+        """
+        Given a set of destination channels, returns a set of tuples indicating the processor cores used to 
+        control those channels
+
+        Parameters
+        ----------
+            dests: set
+                set of firmware output channels (e.g. {'Q0.qdrv', 'Q1.rdlo'})
+        Returns
+        -------
+            set
+                set of tuples that index all of the proc cores needed to control all of the channels in 'dests'
+        """
         groups = set()
         for dest in dests:
             groups.add(self.proc_groupings[dest])
