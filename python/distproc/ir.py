@@ -859,6 +859,86 @@ class Schedule(Pass):
         return nodename.split('_')[-1] == 'loopctrl'
 
 
+class LintSchedule(Pass):
+    """
+    Pass for checking that all timed instructions have been scheduled appropriately to
+    avoid execution stalling. Does NOT check for sequence correctness; i.e. a new pulse can
+    interrupt a previous pulse on the same channel.
+    """
+    def __init__(self, fpga_config: hw.FPGAConfig, proc_grouping: list):
+        self._fpga_config = fpga_config
+        self._start_nclks = 5
+        self._proc_grouping = proc_grouping
+
+    def run_pass(self, ir_prog: IRProgram):
+        self._core_scoper = CoreScoper(ir_prog.scope, self._proc_grouping)
+        for nodename in nx.topological_sort(ir_prog.control_flow_graph):
+            last_instr_end_t = {grp: self._start_nclks \
+                    for grp in self._core_scoper.get_groups_bydest(ir_prog.blocks[nodename]['scope'])}
+
+            for pred_node in ir_prog.control_flow_graph.predecessors(nodename):
+                for grp in last_instr_end_t:
+                    if grp in ir_prog.blocks[pred_node]['last_instr_end_t']:
+                        last_instr_end_t[grp] = max(last_instr_end_t[grp], ir_prog.blocks[pred_node]['last_instr_end_t'][grp])
+
+
+            self._lint_block(ir_prog.blocks[nodename]['instructions'], last_instr_end_t)
+
+            if isinstance(ir_prog.blocks[nodename]['instructions'][-1], iri.JumpCond) \
+                    and ir_prog.blocks[nodename]['instructions'][-1].jump_type == 'loopctrl':
+                loopname = ir_prog.blocks[nodename]['instructions'][-1].jump_label
+                ir_prog.blocks[nodename]['last_instr_end_t'] = {grp: ir_prog.loops[loopname].start_time \
+                        for grp in self._core_scoper.get_groups_bydest(ir_prog.blocks[nodename]['scope'])}
+
+            else:
+                ir_prog.blocks[nodename]['last_instr_end_t'] = last_instr_end_t
+
+        ir_prog.fpga_config = self._fpga_config
+
+    def _lint_block(self, instructions, last_instr_end_t):
+        i = 0
+        while i < len(instructions):
+            instr = instructions[i]
+            if instr.name == 'pulse':
+                last_instr_t = last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]]
+                if instr.start_time < last_instr_t:
+                    raise Exception(f'instruction: {instr} start time too early; must be >= {last_instr_t}')
+
+                last_instr_end_t[self._core_scoper.proc_groupings[instr.dest]] = instr.start_time \
+                        + self._fpga_config.pulse_load_clks
+
+            elif instr.name == 'alu' or instr.name == 'set_var':
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
+
+            elif instr.name in ['jump_fproc', 'read_fproc', 'alu_fproc']:
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.jump_fproc_clks
+
+            elif instr.name == 'jump_i':
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.jump_cond_clks
+
+            elif instr.name == 'jump_cond':
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.jump_cond_clks
+
+            elif instr.name == 'loop_end':
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    last_instr_end_t[grp] += self._fpga_config.alu_instr_clks
+
+            elif instr.name == 'idle':
+                for grp in self._core_scoper.get_groups_bydest(instr.scope):
+                    if instr.end_time < last_instr_end_t[grp]:
+                        raise Exception(f'instruction: {instr} end time too early; must be >= {last_instr_end_t[grp]}')
+                    last_instr_end_t[grp] = instr.end_time + self._fpga_config.pulse_load_clks
+
+            elif isinstance(instr, iri.Gate):
+                raise Exception('Must resolve gates first!')
+
+            i += 1
+
+
 class CoreScoper:
     """
     Class for grouping firmware output channels into distributed processor cores. Processor cores are named using

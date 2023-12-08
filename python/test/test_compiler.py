@@ -164,7 +164,9 @@ def test_pulse_compile_nogate():
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    passes = cm.get_default_passes(fpga_config, qchip)
+    passes.append(ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
+    compiler.run_ir_passes(passes)
     prog = compiler.compile()
     print(prog.program)
     return prog
@@ -259,7 +261,9 @@ def test_multrst_fproc_res_cfg():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    passes = cm.get_default_passes(fpga_config, qchip)
+    passes.append(ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
+    compiler.run_ir_passes(passes)
     prog = compiler.compile()
     print(prog.program)
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
@@ -547,3 +551,52 @@ def test_hw_virtualz():
             ferr.write(str(sorted_program))
 
         raise err 
+
+def test_user_schedule():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv', 'start_time': 5},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100, dtype=np.float32), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.rdrv', 'start_time': 8},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv', 'start_time': 11},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 1234234, 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q1.qdrv', 'start_time': 5}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program)
+    passes = cm.get_default_passes(fpga_config, qchip)
+    passes[-1] = ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')])
+    compiler.run_ir_passes(passes)
+    prog = compiler.compile()
+    print(prog.program)
+    return prog
+
+def test_user_wrong_schedule():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = {'alu_instr_clks': 2,
+                   'fpga_clk_period': 2.e-9,
+                   'jump_cond_clks': 3,
+                   'jump_fproc_clks': 4,
+                   'pulse_regwrite_clks': 1}
+    program = [{'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv', 'start_time': 5},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100, dtype=np.float32), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.rdrv', 'start_time': 6},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 'Q0.freq', 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q0.qdrv', 'start_time': 11},
+               {'name': 'pulse', 'phase': 'np.pi/2', 'freq': 1234234, 'env': np.ones(100), 
+                'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q1.qdrv', 'start_time': 5}]
+    fpga_config = hw.FPGAConfig(**fpga_config)
+    compiler = cm.Compiler(program)
+    passes = cm.get_default_passes(fpga_config, qchip)
+    passes[-1] = ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')])
+    with pytest.raises(Exception):
+        compiler.run_ir_passes(passes)
+    prog = compiler.compile()
+    print(prog.program)
+    return prog
