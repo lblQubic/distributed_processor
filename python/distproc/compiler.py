@@ -126,29 +126,53 @@ from collections import OrderedDict
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
 import distproc.hwconfig as hw
-import distproc.ir as ir
+import distproc.ir.ir as ir
+import distproc.ir.passes as passes
 
-RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
-               'jump_i', 'alu', 'declare', 'jump_label', 'done',
-               'jump_fproc', 'jump_cond', 'loop_end', 'loop']
-INITIAL_TSTART = 5
-DEFAULT_FREQNAME = 'freq'
-PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 
-def get_default_passes(fpga_config, qchip, \
-        qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),\
-        proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
-    return [ir.FlattenProgram(),
-            ir.MakeBasicBlocks(),
-            ir.ScopeProgram(qubit_grouping),
-            ir.RegisterVarsAndFreqs(qchip),
-            ir.ResolveGates(qchip, qubit_grouping),
-            ir.GenerateCFG(),
-            ir.ResolveHWVirtualZ(),
-            ir.ResolveVirtualZ(),
-            ir.ResolveFreqs(),
-            ir.ResolveFPROCChannels(fpga_config),
-            ir.Schedule(fpga_config, proc_grouping)]
+@define
+class CompilerFlags:
+    resolve_gates: bool = True
+    schedule: bool = True
+
+
+def get_passes(fpga_config: hw.FPGAConfig, qchip: qc.QChip = None, 
+               compiler_flags: CompilerFlags | dict = None,
+               qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),
+               proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
+
+    if compiler_flags is None:
+        compiler_flags = CompilerFlags()
+    elif isinstance(compiler_flags, dict):
+        compiler_flags = CompilerFlags(**compiler_flags)
+
+    cur_passes = [passes.FlattenProgram(),
+                  passes.MakeBasicBlocks()]
+
+    cur_passes.extend([passes.ScopeProgram(qubit_grouping),
+                       passes.RegisterVarsAndFreqs(qchip)])
+
+    if compiler_flags.resolve_gates:
+        if qchip is None:
+            raise Exception('qchip object required for ResolveGates pass')
+        cur_passes.append(passes.ResolveGates(qchip, qubit_grouping))
+
+    cur_passes.extend([passes.GenerateCFG(),
+                       passes.ResolveHWVirtualZ()])
+
+    cur_passes.extend([passes.ResolveVirtualZ(),
+                       passes.ResolveFreqs(),
+                       passes.ResolveFPROCChannels(fpga_config),
+                       passes.RescopeVars()])
+    
+    if compiler_flags.schedule:
+        cur_passes.append(passes.Schedule(fpga_config, proc_grouping))
+
+    else:
+        cur_passes.append(passes.LintSchedule(fpga_config, proc_grouping))
+
+    return cur_passes
+
 
 class Compiler:
     """
@@ -219,7 +243,7 @@ class Compiler:
         for proc_group in self._core_scoper.proc_groupings_flat:
             asm_progs[proc_group].append({'op': 'done_stb'})
 
-        return CompiledProgram(asm_progs, self.ir_prog.fpga_config)
+        return CompiledProgram(asm_progs)
 
     def _compile_block(self, asm_progs, instructions):
         proc_groups_bydest = self._core_scoper.proc_groupings

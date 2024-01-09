@@ -2,13 +2,18 @@ import pytest
 import numpy as np
 import ipdb
 import distproc.compiler as cm
-import distproc.ir as ir
-import distproc.ir_instructions as iri
+import distproc.ir.ir as ir
+import distproc.ir.passes as ps
+import distproc.ir.instructions as iri
 import distproc.assembler as am
 import distproc.hwconfig as hw
 import qubitconfig.qchip as qc
 import json
 import difflib
+try:
+    from rich import print
+except:
+    pass
 
 class ElementConfigTest(hw.ElementConfig):
     def __init__(self, samples_per_clk, interp_ratio):
@@ -58,7 +63,7 @@ def test_phase_resolve():
     program.append({'name':'X90', 'qubit': ['Q0']})
     program.append({'name':'X90', 'qubit': ['Q1']})
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     pulse_list = compiler.ir_prog.blocks['block_0']['instructions']
     assert pulse_list[0].phase == 0
     assert pulse_list[1].phase == 0
@@ -83,7 +88,7 @@ def test_basic_schedule():
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     pulse_list = compiler.ir_prog.blocks['block_0']['instructions']
     assert pulse_list[0].start_time == 5
     assert pulse_list[1].start_time == 5
@@ -109,7 +114,7 @@ def test_pulse_compile():
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
@@ -133,7 +138,7 @@ def test_pulse_compile_ir():
                 iri.Gate('read', 'Q0')]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
     with open('test_outputs/test_pulse_compile_out.txt', 'r') as f:
@@ -164,8 +169,9 @@ def test_pulse_compile_nogate():
                {'name':'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    passes = cm.get_default_passes(fpga_config, qchip)
-    passes.append(ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
+    passes = cm.get_passes(fpga_config, qchip, 
+                           compiler_flags={'schedule':True, 'resolve_gates': True})
+    passes.append(ps.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
     compiler.run_ir_passes(passes)
     prog = compiler.compile()
     print(prog.program)
@@ -232,7 +238,7 @@ def test_multrst_cfg():
                {'name': 'X90', 'qubit': ['Q1']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
     print(prog.program)
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
@@ -261,8 +267,8 @@ def test_multrst_fproc_res_cfg():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler = cm.Compiler(program)
-    passes = cm.get_default_passes(fpga_config, qchip)
-    passes.append(ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
+    passes = cm.get_passes(fpga_config, qchip)
+    passes.append(ps.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
     compiler.run_ir_passes(passes)
     prog = compiler.compile()
     print(prog.program)
@@ -300,7 +306,7 @@ def test_fproc_hold():
                 'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
                {'name': 'X90', 'qubit': ['Q1']}]
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
     print(prog.program)
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
@@ -333,7 +339,7 @@ def test_linear_compile():
                {'name': 'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
     print()
     print('lincomp_prog')
@@ -356,7 +362,7 @@ def test_linear_compile_globalasm():
     fpga_config = hw.FPGAConfig(**fpga_config)
     channel_configs = hw.load_channel_configs('../test/channel_config.json')
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     compiled_prog = compiler.compile()
     #compiled_prog = cm.CompiledProgram(compiler.asm_progs, fpga_config)
 
@@ -390,7 +396,7 @@ def test_simple_loop():
     fpga_config = hw.FPGAConfig(**fpga_config)
 
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
 
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
@@ -429,7 +435,7 @@ def test_compound_loop():
     fpga_config = hw.FPGAConfig(**fpga_config)
 
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
 
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
@@ -475,7 +481,7 @@ def test_nested_loop():
     fpga_config = hw.FPGAConfig(**fpga_config)
 
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     prog = compiler.compile()
 
     sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
@@ -525,7 +531,7 @@ def test_hw_virtualz():
                {'name': 'read', 'qubit': ['Q0']}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    compiler.run_ir_passes(cm.get_default_passes(fpga_config, qchip))
+    compiler.run_ir_passes(cm.get_passes(fpga_config, qchip))
     for statement in compiler.ir_prog.blocks['block_0']['instructions']:
         print(statement)
     prog = compiler.compile()
@@ -550,7 +556,7 @@ def test_hw_virtualz():
         with open('test_outputs/test_hw_virtualz_err.txt', 'w') as ferr:
             ferr.write(str(sorted_program))
 
-        raise err 
+        raise err
 
 def test_user_schedule():
     qchip = qc.QChip('qubitcfg.json')
@@ -569,8 +575,7 @@ def test_user_schedule():
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q1.qdrv', 'start_time': 5}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    passes = cm.get_default_passes(fpga_config, qchip)
-    passes[-1] = ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')])
+    passes = cm.get_passes(fpga_config, qchip, compiler_flags=cm.CompilerFlags(schedule=False))
     compiler.run_ir_passes(passes)
     prog = compiler.compile()
     print(prog.program)
@@ -593,10 +598,53 @@ def test_user_wrong_schedule():
                 'twidth': 24.e-9, 'amp':0.5, 'dest': 'Q1.qdrv', 'start_time': 5}]
     fpga_config = hw.FPGAConfig(**fpga_config)
     compiler = cm.Compiler(program)
-    passes = cm.get_default_passes(fpga_config, qchip)
-    passes[-1] = ir.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')])
+    passes = cm.get_passes(fpga_config, qchip, compiler_flags=cm.CompilerFlags(schedule=False))
     with pytest.raises(Exception):
         compiler.run_ir_passes(passes)
     prog = compiler.compile()
     print(prog.program)
     return prog
+
+def test_serialize_multrst():
+    qchip = qc.QChip('qubitcfg.json')
+    fpga_config = hw.FPGAConfig()
+
+    program = [{'name': 'X90', 'qubit': ['Q0']},
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 'Q0.meas',
+                'true': [],
+                'false': [{'name': 'X90', 'qubit': ['Q0']}], 'scope':['Q0']},
+               {'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': 'Q1.meas',
+                'true': [],
+                'false': [{'name': 'X90', 'qubit': ['Q1']}], 'scope':['Q1']},
+               {'name': 'X90', 'qubit': ['Q1']}]
+    passes = cm.get_passes(fpga_config, qchip)
+    passes.append(ps.LintSchedule(fpga_config, proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]))
+
+    # reserialzie at every pass
+    for irpass in passes:
+        compiler = cm.Compiler(program)
+        compiler.run_ir_passes([irpass])
+        program = compiler.ir_prog.serialize()
+
+    prog = compiler.compile()
+    #print(prog.program)
+    sorted_program = {key: prog.program[key] for key in sorted(prog.program.keys())}
+
+    channel_configs = hw.load_channel_configs('../test/channel_config.json')
+    globalasm = am.GlobalAssembler(prog, channel_configs, ElementConfigTest)
+    asm_prog = globalasm.get_assembled_program()
+
+    with open('test_outputs/test_multirst_fproc_res_cfg.txt', 'r') as f:
+        filein = f.read().rstrip('\n')
+
+    try:
+        assert str(sorted_program) == filein
+
+    except AssertionError as err:
+        with open('test_outputs/test_serialize_multrst_err.txt', 'w') as ferr:
+            ferr.write(str(sorted_program))
+
+        raise err
+    
+    return compiler.ir_prog.serialize()
+

@@ -1,5 +1,6 @@
 module toplevel_sim#(
     parameter DATA_WIDTH=32,
+    parameter N_QUBITS=8,
     parameter CMD_WIDTH=128,
     parameter CMD_ADDR_WIDTH=16,
     parameter REG_ADDR_WIDTH=4,
@@ -42,7 +43,6 @@ module toplevel_sim#(
         sync();
     pulse_iface #(.PHASE_WIDTH(PHASE_WIDTH), .FREQ_WIDTH(FREQ_WIDTH), 
         .ENV_WORD_WIDTH(ENV_WIDTH), .AMP_WIDTH(AMP_WIDTH), .CFG_WIDTH(CFG_WIDTH)) pulseout();
-
 
     assign fproc.data = fproc_data;
     assign fproc.ready = fproc_ready;
