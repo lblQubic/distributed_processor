@@ -7,52 +7,29 @@ module fproc_meas #(
     input[N_MEAS-1:0] meas_valid,
     fproc_iface.fproc core[N_CORES-1:0]);
 
-    reg[1:0] core_state[N_CORES-1:0];
-    reg[1:0] core_next_state[N_CORES-1:0];
-    reg[$clog2(N_MEAS)-1:0] meas_addr[N_CORES-1:0];
+    reg[N_CORES-1:0] core_arm_ready;
+
+    reg[$clog2(N_MEAS)-1:0] meas_read_addr[N_CORES-1:0];
+    reg[N_MEAS-1:0] meas_reg;
+
     localparam IDLE = 2'b0;
-    localparam WAIT_MEAS = 2'b01;
+    localparam READY = 2'b01;
+
+    always @(posedge clk) 
+        meas_reg <= (meas_reg & (~meas_valid)) | (meas & meas_valid);
 
     genvar i;
     generate 
         for(i = 0; i < N_CORES; i = i + 1) begin
             always @(posedge clk) begin
-                if(reset)
-                    core_state[i] = IDLE;
-                else
-                    core_state[i] = core_next_state[i];
-            end
+                // clock in enable/address  
+                core_arm_ready[i] <= core[i].enable;
+                meas_read_addr[i] <= core[i].id[$clog2(N_MEAS)-1:0];
 
-            always @(*) begin
-                case(core_state[i])
-                    IDLE : begin
-                        core[i].ready = 0;
-                        core[i].data = 0;
-                        if(core[i].enable) begin
-                            core_next_state[i] = WAIT_MEAS;
-                            meas_addr[i] = core[i].id[$clog2(N_MEAS)-1:0];
-                        end
-                        else
-                            core_next_state[i] = IDLE;
-                    end
-                    
-                    WAIT_MEAS : begin
-                        if(meas_valid[meas_addr[i]] == 1) begin
-                            core[i].ready = 1;
-                            core[i].data[0] = meas[meas_addr[i]];
-                            core_next_state[i] = IDLE;
-                        end
-                        else begin
-                            core[i].ready = 0;
-                            core[i].data[0] = 0;
-                            core_next_state[i] = WAIT_MEAS;
-                        end
-                    end
+                // clock out data/ready 
+                core[i].ready <= core_arm_ready[i];
+                core[i].data[0] <= meas_reg[meas_read_addr[i]];
 
-                    default : begin
-                        core_next_state[i] = IDLE;
-                    end
-                endcase
             end
         end
     endgenerate

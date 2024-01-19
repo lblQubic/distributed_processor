@@ -22,12 +22,39 @@ async def single_meas_test(dut):
     dut.reset.value = 1
     await RisingEdge(dut.clk)
     dut.reset.value = 0
+    dut.fproc_enable.value = 0
+    dut.meas.value = 1
+    dut.meas_valid.value = 1
+    await RisingEdge(dut.clk)
+    dut.fproc_enable.value = 1
+    dut.fproc_id[0].value = 0
+    await RisingEdge(dut.clk)
+    dut.fproc_enable.value = 1
+    dut.fproc_id[0].value = 2
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    assert dut.fproc_ready.value == 1
+    assert dut.fproc_data[0].value == 1
+
+@cocotb.test()
+async def single_meas_test_noen(dut):
+    """
+    same as above, but turn off enable after one clock
+    """
+    cocotb.start_soon(generate_clock(dut))
+    dut.reset.value = 1
+    await RisingEdge(dut.clk)
+    dut.reset.value = 0
+    dut.fproc_enable.value = 0
+    dut.meas.value = 1
+    dut.meas_valid.value = 1
+    await RisingEdge(dut.clk)
     dut.fproc_enable.value = 1
     dut.fproc_id[0].value = 0
     await RisingEdge(dut.clk)
     dut.fproc_enable.value = 0
-    dut.meas.value = 1
-    dut.meas_valid.value = 1
+    dut.fproc_id[0].value = 2
+    await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     assert dut.fproc_ready.value == 1
     assert dut.fproc_data[0].value == 1
@@ -38,9 +65,6 @@ async def offcore_meas_test(dut):
     dut.reset.value = 1
     await RisingEdge(dut.clk)
     dut.reset.value = 0
-    dut.fproc_enable.value = 4
-    dut.fproc_id[2].value = 1
-    await RisingEdge(dut.clk)
     dut.fproc_enable.value = 0
     dut.meas.value = 1
     dut.meas_valid.value = 1
@@ -48,6 +72,11 @@ async def offcore_meas_test(dut):
     dut.fproc_enable.value = 0
     dut.meas.value = 2
     dut.meas_valid.value = 2
+    await RisingEdge(dut.clk)
+    dut.fproc_enable.value = 4
+    dut.fproc_id[2].value = 1
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     assert dut.fproc_ready.value == 0b100
     assert dut.fproc_data[2].value == 1

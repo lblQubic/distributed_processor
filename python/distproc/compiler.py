@@ -103,16 +103,6 @@ Instruction dict format:
         {'name': declare, 'var': varname, 'dtype': int or phase or amp, 'scope': qubits}
 
 
-    Note about instructions using function processor (FPROC): these instructions are scheduled
-    immediately and use the next available function proc output. Which measurements are actually
-    used for this depend on the configuration of the function processor. For flexibility, we don't 
-    impose a particular configuration in this layer. It is the responsibilty of the programmer 
-    to understand the configuration and schedule these instructions using appropriate delays, 
-    etc as necessary.
-
-    The measure/store instruction assumes an func_id mapping between qubits and raw measurements;
-    this is not guaranteed to work across all FPROC implementations (TODO: maybe add software checks
-    for this...)
 """
 
 import numpy as np
@@ -136,27 +126,53 @@ from collections import OrderedDict
 import qubitconfig.qchip as qc
 import distproc.assembler as asm
 import distproc.hwconfig as hw
-import distproc.ir as ir
+import distproc.ir.ir as ir
+import distproc.ir.passes as passes
 
-RESRV_NAMES = ['branch_fproc', 'branch_var', 'barrier', 'delay', 'sync', 
-               'jump_i', 'alu', 'declare', 'jump_label', 'done',
-               'jump_fproc', 'jump_cond', 'loop_end', 'loop']
-INITIAL_TSTART = 5
-DEFAULT_FREQNAME = 'freq'
-PULSE_VALID_FIELDS = ['name', 'freq', 'phase', 'amp', 'twidth', 'env', 'dest']
 
-def get_default_passes(fpga_config, qchip, \
-        qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),\
-        proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
-    return [ir.ScopeProgram(qubit_grouping),
-            ir.RegisterVarsAndFreqs(qchip),
-            ir.ResolveGates(qchip, qubit_grouping),
-            ir.GenerateCFG(),
-            ir.ResolveHWVirtualZ(),
-            ir.ResolveVirtualZ(),
-            ir.ResolveFreqs(),
-            ir.ResolveFPROCChannels(fpga_config),
-            ir.Schedule(fpga_config, proc_grouping)]
+@define
+class CompilerFlags:
+    resolve_gates: bool = True
+    schedule: bool = True
+
+
+def get_passes(fpga_config: hw.FPGAConfig, qchip: qc.QChip = None, 
+               compiler_flags: CompilerFlags | dict = None,
+               qubit_grouping=('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo'),
+               proc_grouping=[('{qubit}.qdrv', '{qubit}.rdrv', '{qubit}.rdlo')]):
+
+    if compiler_flags is None:
+        compiler_flags = CompilerFlags()
+    elif isinstance(compiler_flags, dict):
+        compiler_flags = CompilerFlags(**compiler_flags)
+
+    cur_passes = [passes.FlattenProgram(),
+                  passes.MakeBasicBlocks()]
+
+    cur_passes.extend([passes.ScopeProgram(qubit_grouping),
+                       passes.RegisterVarsAndFreqs(qchip)])
+
+    if compiler_flags.resolve_gates:
+        if qchip is None:
+            raise Exception('qchip object required for ResolveGates pass')
+        cur_passes.append(passes.ResolveGates(qchip, qubit_grouping))
+
+    cur_passes.extend([passes.GenerateCFG(),
+                       passes.ResolveHWVirtualZ()])
+
+    cur_passes.extend([passes.ResolveVirtualZ(),
+                       passes.ResolveFreqs(),
+                       passes.ResolveFPROCChannels(fpga_config),
+                       passes.RescopeVars()])
+    
+    if compiler_flags.schedule:
+        cur_passes.append(passes.Schedule(fpga_config, proc_grouping))
+
+    else:
+        cur_passes.append(passes.LintSchedule(fpga_config, proc_grouping))
+
+    return cur_passes
+
 
 class Compiler:
     """
@@ -192,15 +208,8 @@ class Compiler:
 
         Preprocessing and lowering to IR (step 1 above) are performed in the constructor.
         """
-        processed_program = self._preprocess(program)
-        self.ir_prog = ir.IRProgram(processed_program)
+        self.ir_prog = ir.IRProgram(program)
         self._proc_grouping = proc_grouping
-
-    def _preprocess(self, input_program):
-        """
-        flatten control flow and optionally lint
-        """
-        return generate_flat_ir(input_program)
 
     def run_ir_passes(self, passes: list):
         """
@@ -216,6 +225,16 @@ class Compiler:
             ir_pass.run_pass(self.ir_prog)
 
     def compile(self):
+        """
+        Compiler the program from the intermediate representation down to pulse-level 
+        assembly (i.e. a CompiledProgram object). This includes splitting up the program
+        statements into constituent distributed processor cores according to the 
+        proc_grouping provided at Compiler instantiation
+
+        Returns
+        -------
+            CompiledProgram object
+        """
         self._core_scoper = ir.CoreScoper(self.ir_prog.scope, self._proc_grouping)
         asm_progs = {grp: [{'op': 'phase_reset'}] for grp in self._core_scoper.proc_groupings_flat}
         for blockname in self.ir_prog.blocknames_by_ind:
@@ -224,7 +243,7 @@ class Compiler:
         for proc_group in self._core_scoper.proc_groupings_flat:
             asm_progs[proc_group].append({'op': 'done_stb'})
 
-        return CompiledProgram(asm_progs, self.ir_prog.fpga_config)
+        return CompiledProgram(asm_progs)
 
     def _compile_block(self, asm_progs, instructions):
         proc_groups_bydest = self._core_scoper.proc_groupings
@@ -244,11 +263,18 @@ class Compiler:
 
                 if isinstance(env, dict):
                     if 'twidth' not in env['paradict'].keys():
+                        env = copy.deepcopy(env)
                         env['paradict']['twidth'] = instr.twidth
+                    elif env['paradict']['twidth'] != instr.twidth:
+                        raise Exception('Pulse twidth differs from envelope!')
 
-                asm_progs[proc_group].append(
-                        {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
-                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest})
+                asm_instr = {'op': 'pulse', 'freq': instr.freq, 'phase': instr.phase, 'amp': instr.amp,
+                         'env': env, 'start_time': instr.start_time, 'dest': instr.dest}
+
+                if instr.tag is not None:
+                    asm_instr['tag'] = instr.tag
+
+                asm_progs[proc_group].append(asm_instr)
 
             elif instr.name == 'jump_label':
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
@@ -270,38 +296,36 @@ class Compiler:
                     asm_progs[core].append({'op': 'reg_alu', 'in0': instr.value, 'in1_reg': instr.var,
                                             'alu_op': 'id0', 'out_reg': instr.var})
             elif instr.name == 'read_fproc':
-                statement = {'op': 'alu_fproc', 'in0': 0, 'alu_op': 'id1', 
-                             'func_id': instr.func_id, 'out_reg': instr.var}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'alu_fproc', 'in0': 0, 'alu_op': 'id1', 
+                             'func_id': instr.func_id, 'out_reg': instr.var})
 
             elif instr.name == 'alu_fproc':
-                statement = {'op': 'alu_fproc', 'in0': instr.lhs, 'alu_op': instr.op, 
-                             'func_id': instr.func_id, 'out_reg': instr.out}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'alu_fproc', 'in0': instr.lhs, 'alu_op': instr.op, 
+                             'func_id': instr.func_id, 'out_reg': instr.out})
 
             elif instr.name == 'jump_fproc':
-                statement = {'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
-                             'jump_label': instr.jump_label, 'func_id': instr.func_id}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'jump_fproc', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
+                             'jump_label': instr.jump_label, 'func_id': instr.func_id})
 
             elif instr.name == 'jump_cond':
-                statement = {'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
-                             'jump_label': instr.jump_label, 'in1_reg': instr.cond_rhs}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'jump_cond', 'in0': instr.cond_lhs, 'alu_op': instr.alu_cond, 
+                             'jump_label': instr.jump_label, 'in1_reg': instr.cond_rhs})
 
             elif instr.name == 'jump_i':
-                statement = {'op': 'jump_i', 'jump_label': instr.jump_label}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'jump_i', 'jump_label': instr.jump_label})
 
             elif instr.name == 'loop_end':
-                statement = {'op': 'inc_qclk', 'in0': -self.ir_prog.loops[instr.loop_label].delta_t}
                 for core in self._core_scoper.get_groups_bydest(instr.scope):
-                    asm_progs[core].append(statement)
+                    asm_progs[core].append({'op': 'inc_qclk', 'in0': -self.ir_prog.loops[instr.loop_label].delta_t})
+
+            elif instr.name == 'idle':
+                for core in self._core_scoper.get_groups_bydest(instr.scope):
+                    asm_progs[core].append({'op': 'idle', 'end_time': instr.end_time})
 
             else:
                 raise Exception(f'{instr.name} not yet implemented')
@@ -310,108 +334,6 @@ class Compiler:
         #todo: write method to deal with multiple jump labels in a row
         pass
 
-
-def generate_flat_ir(program, label_prefix=''):
-    """
-    Generates an intermediate representation with control flow resolved into simple 
-    conditional jump statements. This function is recursive to allow for nested control 
-    flow structures.
-
-    instruction format is the same as compiler input, with the following modifications:
-
-    branch instruction:
-        {'name': 'branch_fproc', alu_cond: <'le' or 'ge' or 'eq'>, 'cond_lhs': <var or ival>, 
-            'func_id': function_id, 'scope': <list_of_qubits> 'true': [instruction_list_true], 'false': [instruction_list_false]}
-    becomes:
-        {'name': 'jump_fproc', alu_cond: <'le' or 'ge' or 'eq'>, 'cond_lhs': <var or ival>, 
-            'func_id': function_id, 'scope': <list_of_qubits> 'jump_label': <jump_label_true>}
-        [instruction_list_false]
-        {'name': 'jump_i', 'jump_label': <jump_label_end>}
-        {'name': 'jump_label',  'label': <jump_label_true>}
-        [instruction_list_true]
-        {'name': 'jump_label',  'label': <jump_label_end>}
-
-    for 'branch_var', 'jump_fproc' becomes 'jump_cond', and 'func_id' is replaced with 'cond_rhs'
-
-    .....
-
-    loop:
-        {'name': 'loop', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>, 
-            'alu_cond': <'le' or 'ge' or 'eq'>, 'body': [instruction_list]}
-
-    becomes:
-        {'name': 'jump_label', 'label': <loop_label>}
-        {'name': 'barrier', 'scope': <list_of_qubits>}
-        [instruction_list]
-        {'name': 'loop_end', 'scope': <list_of_qubits>, 'loop_label': <loop_label>}
-        {'name': 'jump_cond', 'cond_lhs': <reg or ival>, 'cond_rhs': var_name, 'scope': <list_of_qubits>,
-         'jump_label': <loop_label>, 'jump_type': 'loopctrl'}
-        
-
-    TODO: consider sticking this in a class
-    """
-    flattened_program = []
-    branchind = 0
-    for i, statement in enumerate(program):
-        statement = copy.deepcopy(statement)
-        if statement['name'] in ['branch_fproc', 'branch_var']:
-            falseblock = statement['false']
-            trueblock = statement['true']
-
-            flattened_trueblock = generate_flat_ir(trueblock, label_prefix='true_'+label_prefix)
-            flattened_falseblock = generate_flat_ir(falseblock, label_prefix='false_'+label_prefix)
-
-            jump_label_false = '{}false_{}'.format(label_prefix, branchind)
-            jump_label_end = '{}end_{}'.format(label_prefix, branchind)
-
-            if statement['name'] == 'branch_fproc':
-                jump_statement = {'name': 'jump_fproc', 'alu_cond': statement['alu_cond'], 'cond_lhs': statement['cond_lhs'],
-                                  'func_id': statement['func_id'], 'scope': statement['scope']}
-            else:
-                jump_statement = {'name': 'jump_cond', 'alu_cond': statement['alu_cond'], 'cond_lhs': statement['cond_lhs'],
-                                  'cond_rhs': statement['cond_rhs'], 'scope': statement['scope']}
-
-            if len(flattened_trueblock) > 0:
-                jump_label_true = '{}true_{}'.format(label_prefix, branchind)
-                jump_statement['jump_label'] = jump_label_true
-            else:
-                jump_statement['jump_label'] = jump_label_end
-
-            flattened_program.append(jump_statement)
-
-            flattened_falseblock.insert(0, {'name': 'jump_label', 'label': jump_label_false, 'scope': statement['scope']})
-            flattened_falseblock.append({'name': 'jump_i', 'jump_label': jump_label_end,
-                                         'scope': statement['scope']})
-            flattened_program.extend(flattened_falseblock)
-
-            if len(flattened_trueblock) > 0:
-                flattened_trueblock.insert(0, {'name': 'jump_label', 'label': jump_label_true, 'scope': statement['scope']})
-            flattened_program.extend(flattened_trueblock)
-            flattened_program.append({'name': 'jump_label', 'label': jump_label_end, 'scope': statement['scope']})
-
-            branchind += 1
-
-        elif statement['name'] == 'loop':
-            body = statement['body']
-            flattened_body = generate_flat_ir(body, label_prefix='loop_body_'+label_prefix)
-            loop_label = '{}loop_{}_loopctrl'.format(label_prefix, branchind)
-
-            flattened_program.append({'name': 'jump_label', 'label': loop_label, 'scope': statement['scope']})
-            flattened_program.append({'name': 'barrier', 'qubit': statement['scope']})
-            flattened_program.extend(flattened_body)
-            flattened_program.append({'name': 'loop_end', 'loop_label': loop_label, 'scope': statement['scope']})
-            flattened_program.append({'name': 'jump_cond', 'cond_lhs': statement['cond_lhs'], 'cond_rhs': statement['cond_rhs'], 
-                                      'alu_cond': statement['alu_cond'], 'jump_label': loop_label, 'scope': statement['scope'],
-                                      'jump_type': 'loopctrl'})
-            branchind += 1
-
-        elif statement['name'] == 'alu_op':
-            statement = statement.copy()
-
-        else:
-            flattened_program.append(statement)
-
-    return flattened_program
 
 @define
 class CompiledProgram:
@@ -456,5 +378,6 @@ def load_compiled_program(filename):
     with open(filename) as f:
         progdict = json.load(f)
 
+    raise NotImplementedError
     return hw.FPGAConfig(**progdict['fpga_config'])
 

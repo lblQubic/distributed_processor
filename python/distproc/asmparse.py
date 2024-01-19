@@ -25,7 +25,7 @@ def cmdparse(cmdbuf):
     dt=numpy.dtype(numpy.uint32)
     dt=dt.newbyteorder('little')
     cmd=numpy.frombuffer(cmdbuf,dtype=dt)
-    outstr=[]
+    parsed_cmds=[]
     for i in range(len(cmd)//4):
         cmd128=0xffffffffffffffffffffffffffffffff
         for j in [3,2,1,0]:
@@ -39,8 +39,10 @@ def cmdparse(cmdbuf):
         env_word=(cmd128>>pulse_field_pos['env_word'])&0xffffff
         env_start=(env_word>>0)&0xfff
         env_length=(env_word>>12)&0xfff
-        outstr.append(f"{opcode=:05b},{cmdtime=:08x},{cfg=:01x},{amp=:04x},{freq=:05x},{phase=:05x},{env_start=:03x},{env_length=:03x}")
-    return outstr        
+        parsed_cmds.append({'opcode': opcode, 'cmdtime': cmdtime, 'amp': amp, 'freq': freq, 'phase': phase, 'env_start': env_start, 'env_length': env_length, 'cfg': cfg})
+        #(f"{opcode=:05b},{cmdtime=:08x},{cfg=:01x},{amp=:04x},{freq=:05x},{phase=:05x},{env_start=:03x},{env_length=:03x}")
+    return parsed_cmds
+
 def envparse(envbuf):
     """
     Parse envelope buffer generated from the assembler
